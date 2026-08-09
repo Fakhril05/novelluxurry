@@ -23,7 +23,6 @@ const navItems = [
 
 export default function Header() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);

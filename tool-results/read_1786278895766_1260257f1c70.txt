@@ -1,0 +1,652 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect } from 'react';
+     4→import { motion } from 'framer-motion';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  ArrowLeft,
+     8→  Truck,
+     9→  CreditCard,
+    10→  QrCode,
+    11→  Wallet,
+    12→  Building,
+    13→  Check,
+    14→  MapPin,
+    15→  Tag,
+    16→  Package,
+    17→} from 'lucide-react';
+    18→import { Button } from '@/components/ui/button';
+    19→import { Input } from '@/components/ui/input';
+    20→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    21→import { Label } from '@/components/ui/label';
+    22→import { Separator } from '@/components/ui/separator';
+    23→import { Card, CardContent } from '@/components/ui/card';
+    24→import { Badge } from '@/components/ui/badge';
+    25→import { ScrollArea } from '@/components/ui/scroll-area';
+    26→import { useCartStore } from '@/lib/cart-store';
+    27→import { useAppStore, formatPrice } from '@/lib/store';
+    28→import { t } from '@/lib/i18n';
+    29→import type { Locale } from '@/lib/i18n';
+    30→
+    31→const EXPEDITIONS = [
+    32→  { id: 'jne-regular', name: 'JNE Regular', price: 15000, icon: Truck, eta: '3-5 hari' },
+    33→  { id: 'jne-express', name: 'JNE Express', price: 25000, icon: Truck, eta: '1-2 hari' },
+    34→  { id: 'jne-sameday', name: 'JNE Same Day', price: 50000, icon: Truck, eta: 'Hari ini' },
+    35→];
+    36→
+    37→const PAYMENT_METHODS = [
+    38→  { id: 'bank-transfer', name: 'Transfer Bank', icon: Building, desc: 'BCA, BNI, Mandiri, BRI' },
+    39→  { id: 'qris', name: 'QRIS', icon: QrCode, desc: 'Scan QR untuk bayar' },
+    40→  { id: 'ewallet', name: 'E-Wallet', icon: Wallet, desc: 'GoPay, OVO, DANA, ShopeePay' },
+    41→  { id: 'virtual-account', name: 'Virtual Account', icon: CreditCard, desc: 'Bayar via VA' },
+    42→  { id: 'cod', name: 'COD (Bayar di Tempat)', icon: Package, desc: 'Bayar saat barang diterima' },
+    43→];
+    44→
+    45→const STEPS = [
+    46→  { key: 'address', labelId: 'checkout.address', icon: MapPin },
+    47→  { key: 'expedition', labelId: 'checkout.expedition', icon: Truck },
+    48→  { key: 'payment', labelId: 'checkout.payment', icon: CreditCard },
+    49→  { key: 'confirm', labelId: 'checkout.placeOrder', icon: Check },
+    50→];
+    51→
+    52→export default function CheckoutPage() {
+    53→  const { items, getTotalPrice, getDiscountSavings, clearCart } = useCartStore();
+    54→  const { locale, setPage, user, isAuthenticated } = useAppStore();
+    55→  const lang = (locale ?? 'id') as Locale;
+    56→
+    57→  // Form state
+    58→  const [form, setForm] = useState({
+    59→    name: '',
+    60→    phone: '',
+    61→    address: '',
+    62→    city: '',
+    63→    postalCode: '',
+    64→  });
+    65→  const [expedition, setExpedition] = useState('jne-regular');
+    66→  const [payment, setPayment] = useState('bank-transfer');
+    67→  const [voucherCode, setVoucherCode] = useState('');
+    68→  const [voucherLoading, setVoucherLoading] = useState(false);
+    69→  const [voucherDiscount, setVoucherDiscount] = useState(0);
+    70→  const [voucherApplied, setVoucherApplied] = useState(false);
+    71→  const [voucherError, setVoucherError] = useState('');
+    72→  const [submitting, setSubmitting] = useState(false);
+    73→  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+    74→
+    75→  const subtotal = getTotalPrice();
+    76→  const savings = getDiscountSavings();
+    77→  const shippingCost = EXPEDITIONS.find((e) => e.id === expedition)?.price ?? 0;
+    78→  const total = Math.max(0, subtotal - voucherDiscount + shippingCost);
+    79→
+    80→  // Pre-fill from user data
+    81→  useEffect(() => {
+    82→    if (isAuthenticated && user) {
+    83→      setForm((prev) => ({
+    84→        ...prev,
+    85→        name: user.name || '',
+    86→        phone: user.phone || '',
+    87→        address: user.address || '',
+    88→        city: user.city || '',
+    89→        postalCode: user.postalCode || '',
+    90→      }));
+    91→    }
+    92→  }, [isAuthenticated, user]);
+    93→
+    94→  const handleApplyVoucher = async () => {
+    95→    if (!voucherCode.trim()) return;
+    96→    setVoucherLoading(true);
+    97→    setVoucherError('');
+    98→    try {
+    99→      const res = await fetch('/api/vouchers/validate', {
+   100→        method: 'POST',
+   101→        headers: { 'Content-Type': 'application/json' },
+   102→        body: JSON.stringify({ code: voucherCode.trim().toUpperCase(), total: subtotal }),
+   103→      });
+   104→      const data = await res.json();
+   105→      if (data.success && data.discount > 0) {
+   106→        setVoucherDiscount(data.discount);
+   107→        setVoucherApplied(true);
+   108→        setVoucherError('');
+   109→        toast.success(
+   110→          lang === 'id'
+   111→            ? `Voucher berhasil! Hemat ${formatPrice(data.discount, lang)}`
+   112→            : `Voucher applied! Save ${formatPrice(data.discount, lang)}`
+   113→        );
+   114→      } else {
+   115→        setVoucherDiscount(0);
+   116→        setVoucherApplied(false);
+   117→        setVoucherError(data.message || (lang === 'id' ? 'Voucher tidak valid' : 'Invalid voucher'));
+   118→      }
+   119→    } catch {
+   120→      setVoucherError(lang === 'id' ? 'Gagal menerapkan voucher' : 'Failed to apply voucher');
+   121→    } finally {
+   122→      setVoucherLoading(false);
+   123→    }
+   124→  };
+   125→
+   126→  const validateForm = (): boolean => {
+   127→    const errors: Record<string, string> = {};
+   128→    if (!form.name.trim()) errors.name = lang === 'id' ? 'Nama wajib diisi' : 'Name is required';
+   129→    if (!form.phone.trim()) errors.phone = lang === 'id' ? 'Nomor telepon wajib diisi' : 'Phone is required';
+   130→    if (!form.address.trim()) errors.address = lang === 'id' ? 'Alamat wajib diisi' : 'Address is required';
+   131→    if (!form.city.trim()) errors.city = lang === 'id' ? 'Kota wajib diisi' : 'City is required';
+   132→    if (!form.postalCode.trim()) errors.postalCode = lang === 'id' ? 'Kode pos wajib diisi' : 'Postal code is required';
+   133→    setFormErrors(errors);
+   134→    return Object.keys(errors).length === 0;
+   135→  };
+   136→
+   137→  const handleSubmit = async () => {
+   138→    if (items.length === 0) {
+   139→      toast.error(lang === 'id' ? 'Keranjang kosong' : 'Cart is empty');
+   140→      return;
+   141→    }
+   142→    if (!validateForm()) {
+   143→      toast.error(lang === 'id' ? 'Lengkapi data pengiriman' : 'Please complete shipping information');
+   144→      return;
+   145→    }
+   146→
+   147→    setSubmitting(true);
+   148→    try {
+   149→      const orderData = {
+   150→        items: items.map((item) => ({
+   151→          bookId: item.book.id,
+   152→          title: item.book.title,
+   153→          quantity: item.quantity,
+   154→          price: item.book.discountPrice ?? item.book.price,
+   155→          format: item.book.format,
+   156→          coverImage: item.book.coverImage,
+   157→        })),
+   158→        shippingAddress: { ...form },
+   159→        expedition: expedition,
+   160→        shippingCost,
+   161→        paymentMethod: payment,
+   162→        subtotal,
+   163→        discount: savings + voucherDiscount,
+   164→        voucherCode: voucherApplied ? voucherCode.toUpperCase() : null,
+   165→        total,
+   166→      };
+   167→
+   168→      const res = await fetch('/api/orders', {
+   169→        method: 'POST',
+   170→        headers: { 'Content-Type': 'application/json' },
+   171→        body: JSON.stringify(orderData),
+   172→      });
+   173→
+   174→      const data = await res.json();
+   175→
+   176→      if (data.success) {
+   177→        toast.success(
+   178→          lang === 'id' ? 'Pesanan berhasil dibuat!' : 'Order placed successfully!',
+   179→          { description: data.orderNumber || '' }
+   180→        );
+   181→        clearCart();
+   182→        setPage('dashboard', { tab: 'orders' });
+   183→      } else {
+   184→        toast.error(data.message || (lang === 'id' ? 'Gagal membuat pesanan' : 'Failed to place order'));
+   185→      }
+   186→    } catch {
+   187→      toast.error(lang === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+   188→    } finally {
+   189→      setSubmitting(false);
+   190→    }
+   191→  };
+   192→
+   193→  if (items.length === 0) {
+   194→    return (
+   195→      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4">
+   196→        <motion.div
+   197→          initial={{ scale: 0.8, opacity: 0 }}
+   198→          animate={{ scale: 1, opacity: 1 }}
+   199→          className="flex h-24 w-24 items-center justify-center rounded-full bg-muted"
+   200→        >
+   201→          <Package className="h-12 w-12 text-muted-foreground/50" />
+   202→        </motion.div>
+   203→        <p className="text-muted-foreground font-medium">{t('cart.empty', lang)}</p>
+   204→        <Button
+   205→          variant="outline"
+   206→          onClick={() => setPage('catalog')}
+   207→          className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"
+   208→        >
+   209→          {t('cart.continue', lang)}
+   210→        </Button>
+   211→      </div>
+   212→    );
+   213→  }
+   214→
+   215→  const updateField = (field: string, value: string) => {
+   216→    setForm((prev) => ({ ...prev, [field]: value }));
+   217→    if (formErrors[field]) {
+   218→      setFormErrors((prev) => {
+   219→        const next = { ...prev };
+   220→        delete next[field];
+   221→        return next;
+   222→      });
+   223→    }
+   224→  };
+   225→
+   226→  return (
+   227→    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+   228→      {/* Back Button + Title */
+   229→      }
+   230→      <motion.div
+   231→        initial={{ opacity: 0, y: -10 }}
+   232→        animate={{ opacity: 1, y: 0 }}
+   233→        className="mb-6"
+   234→      >
+   235→        <button
+   236→          onClick={() => setPage('catalog')}
+   237→          className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+   238→        >
+   239→          <ArrowLeft className="h-4 w-4" />
+   240→          {t('general.back', lang)}
+   241→        </button>
+   242→        <h1 className="font-heading text-2xl font-bold sm:text-3xl">{t('checkout.title', lang)}</h1>
+   243→      </motion.div>
+   244→
+   245→      {/* Step Indicator */
+   246→      }
+   247→      <motion.div
+   248→        initial={{ opacity: 0, y: -5 }}
+   249→        animate={{ opacity: 1, y: 0 }}
+   250→        transition={{ delay: 0.05 }}
+   251→        className="mb-8"
+   252→      >
+   253→        <div className="flex items-center justify-center gap-0 sm:gap-2">
+   254→          {STEPS.map((step, idx) => {
+   255→            const Icon = step.icon;
+   256→            const isActive = idx === 0;
+   257→            return (
+   258→              <div key={step.key} className="flex items-center">
+   259→                <div className="flex flex-col items-center gap-1">
+   260→                  <div
+   261→                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors sm:h-9 sm:w-9 ${
+   262→                      isActive
+   263→                        ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-[#D4AF37]'
+   264→                        : 'border-muted-foreground/30 text-muted-foreground/50'
+   265→                    }`}
+   266→                  >
+   267→                    <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+   268→                  </div>
+   269→                  <span
+   270→                    className={`hidden text-[10px] sm:block sm:text-xs ${
+   271→                      isActive ? 'font-medium text-[#D4AF37]' : 'text-muted-foreground/50'
+   272→                    }`}
+   273→                  >
+   274→                    {t(step.labelId, lang)}
+   275→                  </span>
+   276→                </div>
+   277→                {idx < STEPS.length - 1 && (
+   278→                  <div className="mx-2 h-px w-8 bg-muted-foreground/20 sm:mx-4 sm:w-12 lg:w-16" />
+   279→                )}
+   280→              </div>
+   281→            );
+   282→          })}
+   283→        </div>
+   284→      </motion.div>
+   285→
+   286→      {/* Two-Column Layout */
+   287→      }
+   288→      <div className="grid gap-8 lg:grid-cols-3">
+   289→        {/* Left Column - Forms */
+   290→        }
+   291→        <div className="flex flex-col gap-6 lg:col-span-2">
+   292→          {/* Shipping Address */
+   293→          }
+   294→          <motion.div
+   295→            initial={{ opacity: 0, y: 15 }}
+   296→            animate={{ opacity: 1, y: 0 }}
+   297→            transition={{ delay: 0.1 }}
+   298→          >
+   299→            <Card className="overflow-hidden">
+   300→              <CardContent className="p-5 sm:p-6">
+   301→                <div className="mb-5 flex items-center gap-2.5">
+   302→                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#D4AF37]/10">
+   303→                    <MapPin className="h-4 w-4 text-[#D4AF37]" />
+   304→                  </div>
+   305→                  <h2 className="font-heading text-lg font-semibold">{t('checkout.address', lang)}</h2>
+   306→                </div>
+   307→                <div className="grid gap-4 sm:grid-cols-2">
+   308→                  <div className="space-y-1.5">
+   309→                    <Label htmlFor="name" className="text-sm font-medium">
+   310→                      {t('checkout.name', lang)} <span className="text-red-500">*</span>
+   311→                    </Label>
+   312→                    <Input
+   313→                      id="name"
+   314→                      value={form.name}
+   315→                      onChange={(e) => updateField('name', e.target.value)}
+   316→                      placeholder={lang === 'id' ? 'Masukkan nama lengkap' : 'Enter full name'}
+   317→                      className={`h-10 ${formErrors.name ? 'border-red-500' : ''}`}
+   318→                    />
+   319→                    {formErrors.name && (
+   320→                      <p className="text-xs text-red-500">{formErrors.name}</p>
+   321→                    )}
+   322→                  </div>
+   323→                  <div className="space-y-1.5">
+   324→                    <Label htmlFor="phone" className="text-sm font-medium">
+   325→                      {t('checkout.phone', lang)} <span className="text-red-500">*</span>
+   326→                    </Label>
+   327→                    <Input
+   328→                      id="phone"
+   329→                      value={form.phone}
+   330→                      onChange={(e) => updateField('phone', e.target.value)}
+   331→                      placeholder={lang === 'id' ? '08xxxxxxxxxx' : '08xxxxxxxxxx'}
+   332→                      className={`h-10 ${formErrors.phone ? 'border-red-500' : ''}`}
+   333→                    />
+   334→                    {formErrors.phone && (
+   335→                      <p className="text-xs text-red-500">{formErrors.phone}</p>
+   336→                    )}
+   337→                  </div>
+   338→                  <div className="space-y-1.5 sm:col-span-2">
+   339→                    <Label htmlFor="address" className="text-sm font-medium">
+   340→                      {t('checkout.addressField', lang)} <span className="text-red-500">*</span>
+   341→                    </Label>
+   342→                    <Input
+   343→                      id="address"
+   344→                      value={form.address}
+   345→                      onChange={(e) => updateField('address', e.target.value)}
+   346→                      placeholder={lang === 'id' ? 'Jl. Contoh No. 123, RT/RW, Kelurahan, Kecamatan' : 'Street, Ward, District'}
+   347→                      className={`h-10 ${formErrors.address ? 'border-red-500' : ''}`}
+   348→                    />
+   349→                    {formErrors.address && (
+   350→                      <p className="text-xs text-red-500">{formErrors.address}</p>
+   351→                    )}
+   352→                  </div>
+   353→                  <div className="space-y-1.5">
+   354→                    <Label htmlFor="city" className="text-sm font-medium">
+   355→                      {t('checkout.city', lang)} <span className="text-red-500">*</span>
+   356→                    </Label>
+   357→                    <Input
+   358→                      id="city"
+   359→                      value={form.city}
+   360→                      onChange={(e) => updateField('city', e.target.value)}
+   361→                      placeholder={lang === 'id' ? 'Jakarta Selatan' : 'South Jakarta'}
+   362→                      className={`h-10 ${formErrors.city ? 'border-red-500' : ''}`}
+   363→                    />
+   364→                    {formErrors.city && (
+   365→                      <p className="text-xs text-red-500">{formErrors.city}</p>
+   366→                    )}
+   367→                  </div>
+   368→                  <div className="space-y-1.5">
+   369→                    <Label htmlFor="postal" className="text-sm font-medium">
+   370→                      {t('checkout.postal', lang)} <span className="text-red-500">*</span>
+   371→                    </Label>
+   372→                    <Input
+   373→                      id="postal"
+   374→                      value={form.postalCode}
+   375→                      onChange={(e) => updateField('postalCode', e.target.value)}
+   376→                      placeholder="12345"
+   377→                      className={`h-10 ${formErrors.postalCode ? 'border-red-500' : ''}`}
+   378→                    />
+   379→                    {formErrors.postalCode && (
+   380→                      <p className="text-xs text-red-500">{formErrors.postalCode}</p>
+   381→                    )}
+   382→                  </div>
+   383→                </div>
+   384→              </CardContent>
+   385→            </Card>
+   386→          </motion.div>
+   387→
+   388→          {/* Expedition */
+   389→          }
+   390→          <motion.div
+   391→            initial={{ opacity: 0, y: 15 }}
+   392→            animate={{ opacity: 1, y: 0 }}
+   393→            transition={{ delay: 0.2 }}
+   394→          >
+   395→            <Card className="overflow-hidden">
+   396→              <CardContent className="p-5 sm:p-6">
+   397→                <div className="mb-5 flex items-center gap-2.5">
+   398→                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#D4AF37]/10">
+   399→                    <Truck className="h-4 w-4 text-[#D4AF37]" />
+   400→                  </div>
+   401→                  <h2 className="font-heading text-lg font-semibold">{t('checkout.expedition', lang)}</h2>
+   402→                </div>
+   403→                <RadioGroup value={expedition} onValueChange={setExpedition} className="grid gap-3">
+   404→                  {EXPEDITIONS.map((exp) => {
+   405→                    const isSelected = expedition === exp.id;
+   406→                    return (
+   407→                      <Label
+   408→                        key={exp.id}
+   409→                        htmlFor={exp.id}
+   410→                        className={`flex cursor-pointer items-center gap-4 rounded-lg border p-4 transition-all ${
+   411→                          isSelected
+   412→                            ? 'border-[#D4AF37] bg-[#D4AF37]/5 shadow-sm'
+   413→                            : 'border-border hover:border-[#D4AF37]/40'
+   414→                        }`}
+   415→                      >
+   416→                        <RadioGroupItem value={exp.id} id={exp.id} />
+   417→                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+   418→                          <Truck className={`h-5 w-5 ${isSelected ? 'text-[#D4AF37]' : 'text-muted-foreground'}`} />
+   419→                        </div>
+   420→                        <div className="flex-1">
+   421→                          <p className={`text-sm font-semibold ${isSelected ? 'text-[#D4AF37]' : ''}`}>
+   422→                            {exp.name}
+   423→                          </p>
+   424→                          <p className="text-xs text-muted-foreground">{exp.eta}</p>
+   425→                        </div>
+   426→                        <p className={`text-sm font-bold ${isSelected ? 'text-[#D4AF37]' : ''}`}>
+   427→                          {formatPrice(exp.price, lang)}
+   428→                        </p>
+   429→                      </Label>
+   430→                    );
+   431→                  })}
+   432→                </RadioGroup>
+   433→              </CardContent>
+   434→            </Card>
+   435→          </motion.div>
+   436→
+   437→          {/* Payment Method */
+   438→          }
+   439→          <motion.div
+   440→            initial={{ opacity: 0, y: 15 }}
+   441→            animate={{ opacity: 1, y: 0 }}
+   442→            transition={{ delay: 0.3 }}
+   443→          >
+   444→            <Card className="overflow-hidden">
+   445→              <CardContent className="p-5 sm:p-6">
+   446→                <div className="mb-5 flex items-center gap-2.5">
+   447→                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#D4AF37]/10">
+   448→                    <CreditCard className="h-4 w-4 text-[#D4AF37]" />
+   449→                  </div>
+   450→                  <h2 className="font-heading text-lg font-semibold">{t('checkout.payment', lang)}</h2>
+   451→                </div>
+   452→                <RadioGroup value={payment} onValueChange={setPayment} className="grid gap-3 sm:grid-cols-2">
+   453→                  {PAYMENT_METHODS.map((method) => {
+   454→                    const Icon = method.icon;
+   455→                    const isSelected = payment === method.id;
+   456→                    return (
+   457→                      <Label
+   458→                        key={method.id}
+   459→                        htmlFor={method.id}
+   460→                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all ${
+   461→                          isSelected
+   462→                            ? 'border-[#D4AF37] bg-[#D4AF37]/5 shadow-sm'
+   463→                            : 'border-border hover:border-[#D4AF37]/40'
+   464→                        }`}
+   465→                      >
+   466→                        <RadioGroupItem value={method.id} id={method.id} />
+   467→                        <div
+   468→                          className={`flex h-10 w-10 items-center justify-center rounded-full ${
+   469→                            isSelected ? 'bg-[#D4AF37]/10' : 'bg-muted'
+   470→                          }`}
+   471→                        >
+   472→                          <Icon
+   473→                            className={`h-5 w-5 ${
+   474→                              isSelected ? 'text-[#D4AF37]' : 'text-muted-foreground'
+   475→                            }`}
+   476→                          />
+   477→                        </div>
+   478→                        <div className="min-w-0">
+   479→                          <p
+   480→                            className={`text-sm font-semibold ${isSelected ? 'text-[#D4AF37]' : ''}`}
+   481→                          >
+   482→                            {method.name}
+   483→                          </p>
+   484→                          <p className="truncate text-xs text-muted-foreground">{method.desc}</p>
+   485→                        </div>
+   486→                      </Label>
+   487→                    );
+   488→                  })}
+   489→                </RadioGroup>
+   490→              </CardContent>
+   491→            </Card>
+   492→          </motion.div>
+   493→        </div>
+   494→
+   495→        {/* Right Column - Order Summary (Sticky) */
+   496→        }
+   497→        <div className="lg:col-span-1">
+   498→          <motion.div
+   499→            initial={{ opacity: 0, x: 20 }}
+   500→            animate={{ opacity: 1, x: 0 }}
+   501→            transition={{ delay: 0.15 }}
+   502→            className="lg:sticky lg:top-24"
+   503→          >
+   504→            <Card className="overflow-hidden">
+   505→              <CardContent className="p-5 sm:p-6">
+   506→                <h2 className="mb-4 font-heading text-lg font-semibold">
+   507→                  {t('checkout.orderSummary', lang)}
+   508→                </h2>
+   509→
+   510→                {/* Compact Item List */
+   511→                }
+   512→                <div className="mb-4 flex max-h-60 flex-col gap-3 overflow-y-auto pr-1">
+   513→                  {items.map((item) => {
+   514→                    const price = item.book.discountPrice ?? item.book.price;
+   515→                    return (
+   516→                      <div key={item.book.id} className="flex gap-3">
+   517→                        <div className="relative h-14 w-10 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+   518→                          <img
+   519→                            src={item.book.coverImage}
+   520→                            alt={item.book.title}
+   521→                            className="h-full w-full object-cover"
+   522→                          />
+   523→                        </div>
+   524→                        <div className="min-w-0 flex-1">
+   525→                          <p className="line-clamp-1 text-xs font-medium">{item.book.title}</p>
+   526→                          <p className="text-[10px] text-muted-foreground">
+   527→                            {item.book.format} × {item.quantity}
+   528→                          </p>
+   529→                          <p className="text-xs font-semibold text-[#D4AF37]">
+   530→                            {formatPrice(price * item.quantity, lang)}
+   531→                          </p>
+   532→                        </div>
+   533→                      </div>
+   534→                    );
+   535→                  })}
+   536→                </div>
+   537→
+   538→                <Separator className="my-4" />
+   539→
+   540→                {/* Voucher */
+   541→                }
+   542→                <div className="mb-4">
+   543→                  <div className="flex gap-2">
+   544→                    <div className="relative flex-1">
+   545→                      <Tag className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   546→                      <Input
+   547→                        value={voucherCode}
+   548→                        onChange={(e) => {
+   549→                          setVoucherCode(e.target.value);
+   550→                          if (voucherApplied) {
+   551→                            setVoucherApplied(false);
+   552→                            setVoucherDiscount(0);
+   553→                            setVoucherError('');
+   554→                          }
+   555→                        }}
+   556→                        placeholder={t('cart.voucher', lang)}
+   557→                        className="pl-8 h-9 text-sm"
+   558→                        disabled={voucherApplied}
+   559→                        onKeyDown={(e) => e.key === 'Enter' && handleApplyVoucher()}
+   560→                      />
+   561→                    </div>
+   562→                    <Button
+   563→                      variant="outline"
+   564→                      size="sm"
+   565→                      onClick={handleApplyVoucher}
+   566→                      disabled={voucherLoading || voucherApplied || !voucherCode.trim()}
+   567→                      className="h-9 border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10 shrink-0 px-3"
+   568→                    >
+   569→                      {voucherLoading
+   570→                        ? t('general.loading', lang)
+   571→                        : voucherApplied
+   572→                          ? '✓'
+   573→                          : t('cart.applyVoucher', lang)}
+   574→                    </Button>
+   575→                  </div>
+   576→                  {voucherError && (
+   577→                    <p className="mt-1 text-xs text-red-500">{voucherError}</p>
+   578→                  )}
+   579→                  {voucherApplied && voucherDiscount > 0 && (
+   580→                    <motion.p
+   581→                      initial={{ opacity: 0, y: -4 }}
+   582→                      animate={{ opacity: 1, y: 0 }}
+   583→                      className="mt-1 text-xs text-green-600 dark:text-green-400"
+   584→                    >
+   585→                      {lang === 'id' ? 'Voucher aktif' : 'Voucher active'}: -{formatPrice(voucherDiscount, lang)}
+   586→                    </motion.p>
+   587→                  )}
+   588→                </div>
+   589→
+   590→                <Separator className="my-4" />
+   591→
+   592→                {/* Price Breakdown */
+   593→                }
+   594→                <div className="flex flex-col gap-2.5">
+   595→                  <div className="flex items-center justify-between text-sm">
+   596→                    <span className="text-muted-foreground">{t('cart.subtotal', lang)}</span>
+   597→                    <span className="font-medium">{formatPrice(subtotal, lang)}</span>
+   598→                  </div>
+   599→                  {savings > 0 && (
+   600→                    <div className="flex items-center justify-between text-sm">
+   601→                      <span className="text-green-600 dark:text-green-400">{t('cart.discount', lang)}</span>
+   602→                      <span className="text-green-600 dark:text-green-400 font-medium">
+   603→                        -{formatPrice(savings, lang)}
+   604→                      </span>
+   605→                    </div>
+   606→                  )}
+   607→                  {voucherApplied && voucherDiscount > 0 && (
+   608→                    <div className="flex items-center justify-between text-sm">
+   609→                      <span className="text-green-600 dark:text-green-400">Voucher</span>
+   610→                      <span className="text-green-600 dark:text-green-400 font-medium">
+   611→                        -{formatPrice(voucherDiscount, lang)}
+   612→                      </span>
+   613→                    </div>
+   614→                  )}
+   615→                  <div className="flex items-center justify-between text-sm">
+   616→                    <span className="text-muted-foreground">{t('cart.shipping', lang)}</span>
+   617→                    <span className="font-medium">{formatPrice(shippingCost, lang)}</span>
+   618→                  </div>
+   619→
+   620→                  <Separator />
+   621→
+   622→                  <div className="flex items-center justify-between">
+   623→                    <span className="font-semibold">{t('cart.total', lang)}</span>
+   624→                    <span className="text-xl font-bold text-[#D4AF37]">{formatPrice(total, lang)}</span>
+   625→                  </div>
+   626→                </div>
+   627→
+   628→                {/* Place Order Button */
+   629→                }
+   630→                <Button
+   631→                  onClick={handleSubmit}
+   632→                  disabled={submitting}
+   633→                  className="mt-5 h-12 w-full bg-[#D4AF37] text-black font-semibold text-sm hover:bg-[#C4A030] disabled:opacity-60"
+   634→                >
+   635→                  {submitting ? (
+   636→                    <span className="flex items-center gap-2">
+   637→                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+   638→                      {t('general.loading', lang)}
+   639→                    </span>
+   640→                  ) : (
+   641→                    t('checkout.placeOrder', lang)
+   642→                  )}
+   643→                </Button>
+   644→              </CardContent>
+   645→            </Card>
+   646→          </motion.div>
+   647→        </div>
+   648→      </div>
+   649→    </div>
+   650→  );
+   651→}
+   652→

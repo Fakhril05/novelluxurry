@@ -1,0 +1,725 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useRef } from 'react';
+     4→import { motion, useInView } from 'framer-motion';
+     5→import {
+     6→  ArrowRight,
+     7→  Star,
+     8→  Sparkles,
+     9→  BookOpen,
+    10→  ChevronLeft,
+    11→  ChevronRight,
+    12→  Users,
+    13→  TrendingUp,
+    14→  Award,
+    15→  Tag,
+    16→  Gift,
+    17→  Quote,
+    18→} from 'lucide-react';
+    19→import { Button } from '@/components/ui/button';
+    20→import { Badge } from '@/components/ui/badge';
+    21→import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+    22→import { Input } from '@/components/ui/input';
+    23→import {
+    24→  Carousel,
+    25→  CarouselContent,
+    26→  CarouselItem,
+    27→  CarouselPrevious,
+    28→  CarouselNext,
+    29→} from '@/components/ui/carousel';
+    30→import { useAppStore, formatPrice } from '@/lib/store';
+    31→import { t } from '@/lib/i18n';
+    32→import BookCard from '@/components/BookCard';
+    33→import type { Book, Category, Testimonial } from '@/types';
+    34→import { toast } from 'sonner';
+    35→
+    36→/* ─── Animation helpers ─── */
+    37→const fadeUp = {
+    38→  hidden: { opacity: 0, y: 30 },
+    39→  visible: (i: number) => ({
+    40→    opacity: 1,
+    41→    y: 0,
+    42→    transition: { duration: 0.55, delay: i * 0.08, ease: [0.25, 0.46, 0.45, 0.94] },
+    43→  }),
+    44→};
+    45→
+    46→const fadeIn = {
+    47→  hidden: { opacity: 0 },
+    48→  visible: (i: number) => ({
+    49→    opacity: 1,
+    50→    transition: { duration: 0.6, delay: i * 0.1 },
+    51→  }),
+    52→};
+    53→
+    54→function SectionHeader({
+    55→  title,
+    56→  subtitle,
+    57→  action,
+    58→}: {
+    59→  title: string;
+    60→  subtitle: string;
+    61→  action?: { label: string; onClick: () => void };
+    62→}) {
+    63→  return (
+    64→    <motion.div
+    65→      initial="hidden"
+    66→      whileInView="visible"
+    67→      viewport={{ once: true, margin: '-80px' }}
+    68→      variants={fadeUp}
+    69→      custom={0}
+    70→      className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8"
+    71→    >
+    72→      <div>
+    73→        <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">{title}</h2>
+    74→        <p className="mt-2 text-muted-foreground text-sm sm:text-base">{subtitle}</p>
+    75→      </div>
+    76→      {action && (
+    77→        <Button
+    78→          variant="outline"
+    79→          onClick={action.onClick}
+    80→          className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-all shrink-0 h-10 px-5"
+    81→        >
+    82→          {action.label}
+    83→          <ArrowRight className="ml-2 h-4 w-4" />
+    84→        </Button>
+    85→      )}
+    86→    </motion.div>
+    87→  );
+    88→}
+    89→
+    90→/* ═══════════════════════════════════════════════════════════
+    91→   HORIZONTAL SCROLL ROW  (Bestsellers / New Arrivals)
+    92→   ═══════════════════════════════════════════════════════════ */
+    93→function HorizontalBookRow({
+    94→  books,
+    95→  title,
+    96→  subtitle,
+    97→  viewAllLabel,
+    98→  onViewAll,
+    99→}: {
+   100→  books: Book[];
+   101→  title: string;
+   102→  subtitle: string;
+   103→  viewAllLabel: string;
+   104→  onViewAll: () => void;
+   105→}) {
+   106→  const scrollRef = useRef<HTMLDivElement>(null);
+   107→
+   108→  const scroll = (dir: 'left' | 'right') => {
+   109→    if (!scrollRef.current) return;
+   110→    const amount = 340;
+   111→    scrollRef.current.scrollBy({
+   112→      left: dir === 'left' ? -amount : amount,
+   113→      behavior: 'smooth',
+   114→    });
+   115→  };
+   116→
+   117→  if (books.length === 0) return null;
+   118→
+   119→  return (
+   120→    <section className="py-16 sm:py-20">
+   121→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   122→        <SectionHeader
+   123→          title={title}
+   124→          subtitle={subtitle}
+   125→          action={{ label: viewAllLabel, onClick: onViewAll }}
+   126→        />
+   127→      </div>
+   128→
+   129→      <div className="relative group/row">
+   130→        {/* Left arrow */}
+   131→        <button
+   132→          onClick={() => scroll('left')}
+   133→          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-background/90 border border-border shadow-lg opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37] hidden sm:flex"
+   134→          aria-label="Scroll left"
+   135→        >
+   136→          <ChevronLeft className="h-5 w-5" />
+   137→        </button>
+   138→        {/* Right arrow */}
+   139→        <button
+   140→          onClick={() => scroll('right')}
+   141→          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-background/90 border border-border shadow-lg opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37] hidden sm:flex"
+   142→          aria-label="Scroll right"
+   143→        >
+   144→          <ChevronRight className="h-5 w-5" />
+   145→        </button>
+   146→
+   147→        <div
+   148→          ref={scrollRef}
+   149→          className="flex gap-5 overflow-x-auto scrollbar-hide px-4 sm:px-6 lg:px-8 pb-4 snap-x snap-mandatory"
+   150→        >
+   151→          {books.map((book, i) => (
+   152→            <div key={book.id} className="w-[180px] sm:w-[200px] shrink-0 snap-start">
+   153→              <BookCard book={book} index={i} />
+   154→            </div>
+   155→          ))}
+   156→        </div>
+   157→      </div>
+   158→    </section>
+   159→  );
+   160→}
+   161→
+   162→/* ═══════════════════════════════════════════════════════════
+   163→   MAIN HOMEPAGE COMPONENT
+   164→   ═══════════════════════════════════════════════════════════ */
+   165→export default function HomePage() {
+   166→  const { locale, setPage } = useAppStore();
+   167→
+   168→  // ── Data state ──
+   169→  const [books, setBooks] = useState<Book[]>([]);
+   170→  const [categories, setCategories] = useState<Category[]>([]);
+   171→  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+   172→  const [loading, setLoading] = useState(true);
+   173→
+   174→  // ── Testimonial carousel auto-play index ──
+   175→  const [activeIdx, setActiveIdx] = useState(0);
+   176→
+   177→  // ── Newsletter input ──
+   178→  const [email, setEmail] = useState('');
+   179→
+   180→  // ── Fetch data ──
+   181→  useEffect(() => {
+   182→    async function fetchData() {
+   183→      try {
+   184→        const [booksRes, catsRes, testRes] = await Promise.all([
+   185→          fetch('/api/books?limit=16'),
+   186→          fetch('/api/categories'),
+   187→          fetch('/api/testimonials'),
+   188→        ]);
+   189→        if (!booksRes.ok || !catsRes.ok || !testRes.ok) throw new Error('Fetch failed');
+   190→        const [booksData, catsData, testData] = await Promise.all([
+   191→          booksRes.json(),
+   192→          catsRes.json(),
+   193→          testRes.json(),
+   194→        ]);
+   195→        setBooks(booksData);
+   196→        setCategories(catsData);
+   197→        setTestimonials(testData);
+   198→      } catch (err) {
+   199→        console.error('Error loading homepage data:', err);
+   200→      } finally {
+   201→        setLoading(false);
+   202→      }
+   203→    }
+   204→    fetchData();
+   205→  }, []);
+   206→
+   207→  // ── Auto-play testimonial carousel ──
+   208→  useEffect(() => {
+   209→    if (testimonials.length <= 1) return;
+   210→    const interval = setInterval(() => {
+   211→      setActiveIdx((prev) => (prev + 1) % testimonials.length);
+   212→    }, 5000);
+   213→    return () => clearInterval(interval);
+   214→  }, [testimonials.length]);
+   215→
+   216→  // ── Derived data ──
+   217→  const bestsellers = books.filter((b) => b.isBestSeller);
+   218→  const newArrivals = books.filter((b) => b.isNewArrival);
+   219→
+   220→  // ── Loading skeleton ──
+   221→  if (loading) {
+   222→    return (
+   223→      <div className="min-h-screen flex items-center justify-center">
+   224→        <div className="flex flex-col items-center gap-4">
+   225→          <div className="h-12 w-12 rounded-full border-4 border-[#D4AF37]/20 border-t-[#D4AF37] animate-spin" />
+   226→          <p className="text-muted-foreground text-sm">{t('general.loading', locale)}</p>
+   227→        </div>
+   228→      </div>
+   229→    );
+   230→  }
+   231→
+   232→  return (
+   233→    <main>
+   234→      {/* ────────────────────────────────────────────────────
+   235→          1. HERO SECTION
+   236→          ──────────────────────────────────────────────────── */}
+   237→      <section className="relative min-h-screen flex items-center overflow-hidden">
+   238→        {/* Background */}
+   239→        <div className="absolute inset-0 z-0">
+   240→          <img
+   241→            src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1920&h=1080&fit=crop"
+   242→            alt="Luxury library"
+   243→            className="h-full w-full object-cover"
+   244→          />
+   245→          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/30" />
+   246→          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+   247→        </div>
+   248→
+   249→        {/* Content */}
+   250→        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pt-24 pb-16">
+   251→          <div className="max-w-2xl">
+   252→            {/* Gold pill */}
+   253→            <motion.div
+   254→              initial={{ opacity: 0, y: 20 }}
+   255→              animate={{ opacity: 1, y: 0 }}
+   256→              transition={{ duration: 0.5 }}
+   257→            >
+   258→              <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5 text-sm text-[#E8D48B]">
+   259→                <Sparkles className="h-3.5 w-3.5" />
+   260→                Noveluxe
+   261→              </div>
+   262→            </motion.div>
+   263→
+   264→            {/* Title */}
+   265→            <motion.h1
+   266→              initial={{ opacity: 0, y: 30 }}
+   267→              animate={{ opacity: 1, y: 0 }}
+   268→              transition={{ duration: 0.6, delay: 0.15 }}
+   269→              className="mt-6 font-heading text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl leading-[1.1]"
+   270→            >
+   271→              {t('hero.title', locale)}
+   272→            </motion.h1>
+   273→
+   274→            {/* Subtitle */}
+   275→            <motion.p
+   276→              initial={{ opacity: 0, y: 30 }}
+   277→              animate={{ opacity: 1, y: 0 }}
+   278→              transition={{ duration: 0.6, delay: 0.3 }}
+   279→              className="mt-5 max-w-xl text-lg text-white/70 leading-relaxed"
+   280→            >
+   281→              {t('hero.subtitle', locale)}
+   282→            </motion.p>
+   283→
+   284→            {/* CTA buttons */}
+   285→            <motion.div
+   286→              initial={{ opacity: 0, y: 30 }}
+   287→              animate={{ opacity: 1, y: 0 }}
+   288→              transition={{ duration: 0.6, delay: 0.45 }}
+   289→              className="mt-8 flex flex-col sm:flex-row gap-4"
+   290→            >
+   291→              <Button
+   292→                size="lg"
+   293→                onClick={() => setPage('catalog')}
+   294→                className="bg-[#D4AF37] hover:bg-[#B8960C] text-white h-12 px-8 text-base font-semibold shadow-lg shadow-[#D4AF37]/25 transition-all"
+   295→              >
+   296→                {t('hero.cta1', locale)}
+   297→                <ArrowRight className="ml-2 h-4 w-4" />
+   298→              </Button>
+   299→              <Button
+   300→                variant="outline"
+   301→                size="lg"
+   302→                onClick={() => setPage('catalog')}
+   303→                className="border-white/25 text-white hover:bg-white/10 h-12 px-8 text-base transition-all"
+   304→              >
+   305→                {t('hero.cta2', locale)}
+   306→              </Button>
+   307→            </motion.div>
+   308→
+   309→            {/* Stats */}
+   310→            <motion.div
+   311→              initial={{ opacity: 0, y: 30 }}
+   312→              animate={{ opacity: 1, y: 0 }}
+   313→              transition={{ duration: 0.6, delay: 0.6 }}
+   314→              className="mt-12 flex items-center gap-8 sm:gap-10 flex-wrap"
+   315→            >
+   316→              <div className="flex items-center gap-3">
+   317→                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
+   318→                  <Users className="h-5 w-5 text-[#D4AF37]" />
+   319→                </div>
+   320→                <div>
+   321→                  <p className="text-xl font-bold text-white">10K+</p>
+   322→                  <p className="text-xs text-white/50">{locale === 'id' ? 'Pembaca' : 'Readers'}</p>
+   323→                </div>
+   324→              </div>
+   325→              <div className="h-10 w-px bg-white/15" />
+   326→              <div className="flex items-center gap-3">
+   327→                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
+   328→                  <BookOpen className="h-5 w-5 text-[#D4AF37]" />
+   329→                </div>
+   330→                <div>
+   331→                  <p className="text-xl font-bold text-white">500+</p>
+   332→                  <p className="text-xs text-white/50">{locale === 'id' ? 'Judul' : 'Titles'}</p>
+   333→                </div>
+   334→              </div>
+   335→              <div className="h-10 w-px bg-white/15" />
+   336→              <div className="flex items-center gap-3">
+   337→                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
+   338→                  <Star className="h-5 w-5 text-[#D4AF37] fill-[#D4AF37]" />
+   339→                </div>
+   340→                <div>
+   341→                  <p className="text-xl font-bold text-white">4.9</p>
+   342→                  <p className="text-xs text-white/50">{locale === 'id' ? 'Rating' : 'Rating'}</p>
+   343→                </div>
+   344→              </div>
+   345→            </motion.div>
+   346→          </div>
+   347→        </div>
+   348→      </section>
+   349→
+   350→      {/* ────────────────────────────────────────────────────
+   351→          2. CATEGORIES SECTION
+   352→          ──────────────────────────────────────────────────── */}
+   353→      <CategoriesSection categories={categories} locale={locale} />
+   354→
+   355→      {/* ────────────────────────────────────────────────────
+   356→          3. BESTSELLERS SECTION
+   357→          ──────────────────────────────────────────────────── */}
+   358→      <HorizontalBookRow
+   359→        books={bestsellers}
+   360→        title={t('bestseller.title', locale)}
+   361→        subtitle={t('bestseller.subtitle', locale)}
+   362→        viewAllLabel={t('bestseller.viewAll', locale)}
+   363→        onViewAll={() => setPage('catalog', { sort: 'bestseller' })}
+   364→      />
+   365→
+   366→      {/* ────────────────────────────────────────────────────
+   367→          4. NEW ARRIVALS SECTION
+   368→          ──────────────────────────────────────────────────── */}
+   369→      <HorizontalBookRow
+   370→        books={newArrivals}
+   371→        title={t('newArrival.title', locale)}
+   372→        subtitle={t('newArrival.subtitle', locale)}
+   373→        viewAllLabel={t('general.viewAll', locale)}
+   374→        onViewAll={() => setPage('catalog', { sort: 'newest' })}
+   375→      />
+   376→
+   377→      {/* ────────────────────────────────────────────────────
+   378→          5. PROMO BANNER
+   379→          ──────────────────────────────────────────────────── */}
+   380→      <PromoBanner locale={locale} />
+   381→
+   382→      {/* ────────────────────────────────────────────────────
+   383→          6. TESTIMONIALS SECTION
+   384→          ──────────────────────────────────────────────────── */}
+   385→      <TestimonialsSection
+   386→        testimonials={testimonials}
+   387→        activeIdx={activeIdx}
+   388→        setActiveIdx={setActiveIdx}
+   389→        locale={locale}
+   390→      />
+   391→    </main>
+   392→  );
+   393→}
+   394→
+   395→/* ═══════════════════════════════════════════════════════════
+   396→   CATEGORIES SECTION COMPONENT
+   397→   ═══════════════════════════════════════════════════════════ */
+   398→function CategoriesSection({
+   399→  categories,
+   400→  locale,
+   401→}: {
+   402→  categories: Category[];
+   403→  locale: 'id' | 'en';
+   404→}) {
+   405→  const { setPage } = useAppStore();
+   406→  const ref = useRef<HTMLDivElement>(null);
+   407→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   408→
+   409→  if (categories.length === 0) return null;
+   410→
+   411→  return (
+   412→    <section ref={ref} className="py-16 sm:py-20 bg-secondary/40">
+   413→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   414→        <SectionHeader
+   415→          title={t('categories.title', locale)}
+   416→          subtitle={t('categories.subtitle', locale)}
+   417→        />
+   418→
+   419→        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
+   420→          {categories.map((cat, i) => (
+   421→            <motion.button
+   422→              key={cat.id}
+   423→              initial="hidden"
+   424→              animate={inView ? 'visible' : 'hidden'}
+   425→              variants={fadeUp}
+   426→              custom={i}
+   427→              onClick={() => setPage('catalog', { genre: cat.slug })}
+   428→              className="group relative overflow-hidden rounded-2xl border border-border bg-card text-left transition-all duration-300 hover:border-[#D4AF37]/40 hover:shadow-xl hover:shadow-[#D4AF37]/10 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   429→              aria-label={`Browse ${cat.name}`}
+   430→            >
+   431→              {/* Category image */}
+   432→              <div className="relative aspect-[4/3] overflow-hidden">
+   433→                <img
+   434→                  src={cat.image || '/images/category-placeholder.jpg'}
+   435→                  alt={cat.name}
+   436→                  loading="lazy"
+   437→                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+   438→                />
+   439→                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+   440→                <div className="absolute inset-0 bg-[#D4AF37]/0 group-hover:bg-[#D4AF37]/10 transition-colors duration-300" />
+   441→              </div>
+   442→
+   443→              {/* Text overlay */}
+   444→              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
+   445→                <h3 className="font-heading text-sm sm:text-base font-bold text-white leading-tight">
+   446→                  {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
+   447→                </h3>
+   448→                <p className="mt-1 text-xs text-white/70">
+   449→                  {cat._count?.books || 0} {locale === 'id' ? 'buku' : 'books'}
+   450→                </p>
+   451→              </div>
+   452→
+   453→              {/* Gold accent line */}
+   454→              <div className="absolute top-0 left-0 w-full h-0.5 bg-[#D4AF37] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
+   455→            </motion.button>
+   456→          ))}
+   457→        </div>
+   458→      </div>
+   459→    </section>
+   460→  );
+   461→}
+   462→
+   463→/* ═══════════════════════════════════════════════════════════
+   464→   PROMO BANNER COMPONENT
+   465→   ═══════════════════════════════════════════════════════════ */
+   466→function PromoBanner({ locale }: { locale: 'id' | 'en' }) {
+   467→  const { setPage } = useAppStore();
+   468→  const ref = useRef<HTMLDivElement>(null);
+   469→  const inView = useInView(ref, { once: true, margin: '-80px' });
+   470→
+   471→  const handleCopyCode = () => {
+   472→    navigator.clipboard.writeText('WELCOME10');
+   473→    toast.success(locale === 'id' ? 'Kode berhasil disalin!' : 'Code copied!');
+   474→  };
+   475→
+   476→  return (
+   477→    <section ref={ref} className="py-16 sm:py-20">
+   478→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   479→        <motion.div
+   480→          initial="hidden"
+   481→          animate={inView ? 'visible' : 'hidden'}
+   482→          variants={fadeIn}
+   483→          custom={0}
+   484→          className="relative overflow-hidden rounded-3xl"
+   485→        >
+   486→          {/* Gold gradient background */}
+   487→          <div className="absolute inset-0 bg-gradient-to-br from-[#D4AF37] via-[#E8D48B] to-[#B8960C]" />
+   488→          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-60" />
+   489→
+   490→          <div className="relative z-10 px-6 py-12 sm:px-12 sm:py-16 md:px-16 md:py-20 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+   491→            {/* Left - Icon & Text */}
+   492→            <div className="flex-1 text-center md:text-left">
+   493→              <div className="inline-flex items-center gap-2 rounded-full bg-black/15 px-3 py-1 mb-4">
+   494→                <Gift className="h-4 w-4 text-white" />
+   495→                <span className="text-xs font-semibold text-white uppercase tracking-wider">
+   496→                  {t('promo.title', locale)}
+   497→                </span>
+   498→              </div>
+   499→              <h2 className="font-heading text-3xl sm:text-4xl font-bold text-white leading-tight">
+   500→                {t('promo.subtitle', locale)}
+   501→              </h2>
+   502→              <p className="mt-3 text-white/80 text-sm sm:text-base max-w-md mx-auto md:mx-0">
+   503→                {t('promo.desc', locale)}
+   504→              </p>
+   505→
+   506→              <div className="mt-6 flex flex-col sm:flex-row items-center gap-4 justify-center md:justify-start">
+   507→                <Button
+   508→                  size="lg"
+   509→                  onClick={() => setPage('catalog')}
+   510→                  className="bg-black text-white hover:bg-black/80 h-12 px-8 text-base font-semibold transition-all"
+   511→                >
+   512→                  {t('hero.cta1', locale)}
+   513→                  <ArrowRight className="ml-2 h-4 w-4" />
+   514→                </Button>
+   515→
+   516→                {/* Promo code */}
+   517→                <button
+   518→                  onClick={handleCopyCode}
+   519→                  className="flex items-center gap-2 rounded-xl border-2 border-dashed border-white/50 bg-black/10 px-5 py-3 transition-all hover:border-white/80 hover:bg-black/20 group cursor-pointer"
+   520→                >
+   521→                  <Tag className="h-4 w-4 text-white/80" />
+   522→                  <span className="text-base sm:text-lg font-mono font-bold text-white tracking-wider">
+   523→                    WELCOME10
+   524→                  </span>
+   525→                  <span className="text-[10px] text-white/60 uppercase tracking-wider group-hover:text-white/80 transition-colors">
+   526→                    {locale === 'id' ? 'Salin' : 'Copy'}
+   527→                  </span>
+   528→                </button>
+   529→              </div>
+   530→            </div>
+   531→
+   532→            {/* Right - Decorative element */}
+   533→            <div className="hidden md:flex items-center justify-center shrink-0">
+   534→              <div className="relative">
+   535→                <div className="w-40 h-40 rounded-full bg-white/10 flex items-center justify-center animate-pulse-gold">
+   536→                  <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center">
+   537→                    <div className="text-center">
+   538→                      <p className="text-5xl font-bold text-white">10%</p>
+   539→                      <p className="text-xs text-white/80 font-semibold uppercase tracking-wider mt-1">
+   540→                        {t('promo.code', locale)}
+   541→                      </p>
+   542→                    </div>
+   543→                  </div>
+   544→                </div>
+   545→                {/* Decorative rings */}
+   546→                <div className="absolute -top-4 -right-4 h-8 w-8 rounded-full bg-white/10" />
+   547→                <div className="absolute -bottom-2 -left-2 h-6 w-6 rounded-full bg-white/10" />
+   548→                <div className="absolute top-1/2 -right-8 h-4 w-4 rounded-full bg-white/10" />
+   549→              </div>
+   550→            </div>
+   551→          </div>
+   552→        </motion.div>
+   553→      </div>
+   554→    </section>
+   555→  );
+   556→}
+   557→
+   558→/* ═══════════════════════════════════════════════════════════
+   559→   TESTIMONIALS SECTION COMPONENT
+   560→   ═══════════════════════════════════════════════════════════ */
+   561→function TestimonialsSection({
+   562→  testimonials,
+   563→  activeIdx,
+   564→  setActiveIdx,
+   565→  locale,
+   566→}: {
+   567→  testimonials: Testimonial[];
+   568→  activeIdx: number;
+   569→  setActiveIdx: (idx: number) => void;
+   570→  locale: 'id' | 'en';
+   571→}) {
+   572→  const ref = useRef<HTMLDivElement>(null);
+   573→  const inView = useInView(ref, { once: true, margin: '-80px' });
+   574→
+   575→  if (testimonials.length === 0) return null;
+   576→
+   577→  return (
+   578→    <section ref={ref} className="py-16 sm:py-20 bg-secondary/40">
+   579→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   580→        {/* Header */}
+   581→        <motion.div
+   582→          initial="hidden"
+   583→          animate={inView ? 'visible' : 'hidden'}
+   584→          variants={fadeUp}
+   585→          custom={0}
+   586→          className="text-center mb-12"
+   587→        >
+   588→          <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
+   589→            {t('testimonial.title', locale)}
+   590→          </h2>
+   591→          <p className="mt-2 text-muted-foreground text-sm sm:text-base">
+   592→            {t('testimonial.subtitle', locale)}
+   593→          </p>
+   594→        </motion.div>
+   595→
+   596→        {/* Desktop: Carousel with shadcn */}
+   597→        <div className="hidden md:block">
+   598→          <motion.div
+   599→            initial="hidden"
+   600→            animate={inView ? 'visible' : 'hidden'}
+   601→            variants={fadeIn}
+   602→            custom={1}
+   603→            className="relative"
+   604→          >
+   605→            <Carousel
+   606→              opts={{
+   607→                align: 'start',
+   608→                loop: true,
+   609→              }}
+   610→              className="w-full"
+   611→            >
+   612→              <CarouselContent className="-ml-4">
+   613→                {testimonials.map((test) => (
+   614→                  <CarouselItem key={test.id} className="pl-4 md:basis-1/2 lg:basis-1/3">
+   615→                    <TestimonialCard testimonial={test} locale={locale} />
+   616→                  </CarouselItem>
+   617→                ))}
+   618→              </CarouselContent>
+   619→              <CarouselPrevious className="-left-14 bg-background border-border hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37]" />
+   620→              <CarouselNext className="-right-14 bg-background border-border hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37]" />
+   621→            </Carousel>
+   622→          </motion.div>
+   623→        </div>
+   624→
+   625→        {/* Mobile: Single card with dots */}
+   626→        <div className="md:hidden">
+   627→          <motion.div
+   628→            initial="hidden"
+   629→            animate={inView ? 'visible' : 'hidden'}
+   630→            variants={fadeIn}
+   631→            custom={1}
+   632→          >
+   633→            <div className="relative overflow-hidden">
+   634→              <div
+   635→                className="flex transition-transform duration-500 ease-in-out"
+   636→                style={{ transform: `translateX(-${activeIdx * 100}%)` }}
+   637→              >
+   638→                {testimonials.map((test) => (
+   639→                  <div key={test.id} className="w-full shrink-0 px-1">
+   640→                    <TestimonialCard testimonial={test} locale={locale} />
+   641→                  </div>
+   642→                ))}
+   643→              </div>
+   644→            </div>
+   645→
+   646→            {/* Dots */}
+   647→            <div className="flex items-center justify-center gap-2 mt-6">
+   648→              {testimonials.map((_, i) => (
+   649→                <button
+   650→                  key={i}
+   651→                  onClick={() => setActiveIdx(i)}
+   652→                  className={`h-2.5 rounded-full transition-all duration-300 ${
+   653→                    i === activeIdx
+   654→                      ? 'w-8 bg-[#D4AF37]'
+   655→                      : 'w-2.5 bg-[#D4AF37]/30 hover:bg-[#D4AF37]/50'
+   656→                  }`}
+   657→                  aria-label={`Go to testimonial ${i + 1}`}
+   658→                />
+   659→              ))}
+   660→            </div>
+   661→          </motion.div>
+   662→        </div>
+   663→      </div>
+   664→    </section>
+   665→  );
+   666→}
+   667→
+   668→/* ═══════════════════════════════════════════════════════════
+   669→   SINGLE TESTIMONIAL CARD
+   670→   ═══════════════════════════════════════════════════════════ */
+   671→function TestimonialCard({
+   672→  testimonial,
+   673→  locale,
+   674→}: {
+   675→  testimonial: Testimonial;
+   676→  locale: 'id' | 'en';
+   677→}) {
+   678→  return (
+   679→    <div className="h-full rounded-2xl border border-border bg-card p-6 sm:p-8 transition-all duration-300 hover:border-[#D4AF37]/30 hover:shadow-lg hover:shadow-[#D4AF37]/5">
+   680→      {/* Quote icon */}
+   681→      <Quote className="h-8 w-8 text-[#D4AF37]/20 mb-4" />
+   682→
+   683→      {/* Stars */}
+   684→      <div className="flex items-center gap-0.5 mb-4">
+   685→        {Array.from({ length: 5 }).map((_, i) => (
+   686→          <Star
+   687→            key={i}
+   688→            className={`h-4 w-4 ${
+   689→              i < testimonial.rating
+   690→                ? 'fill-[#D4AF37] text-[#D4AF37]'
+   691→                : 'text-muted-foreground/25'
+   692→            }`}
+   693→          />
+   694→        ))}
+   695→      </div>
+   696→
+   697→      {/* Comment */}
+   698→      <p className="text-sm sm:text-base text-foreground/80 leading-relaxed line-clamp-4 mb-6">
+   699→        &ldquo;{testimonial.comment}&rdquo;
+   700→      </p>
+   701→
+   702→      {/* Author */}
+   703→      <div className="flex items-center gap-3">
+   704→        <Avatar className="h-10 w-10 border-2 border-[#D4AF37]/20">
+   705→          <AvatarImage src={testimonial.avatar || undefined} alt={testimonial.name} />
+   706→          <AvatarFallback className="bg-[#D4AF37]/10 text-[#D4AF37] text-sm font-bold">
+   707→            {testimonial.name
+   708→              .split(' ')
+   709→              .map((n) => n[0])
+   710→              .join('')
+   711→              .slice(0, 2)
+   712→              .toUpperCase()}
+   713→          </AvatarFallback>
+   714→        </Avatar>
+   715→        <div>
+   716→          <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
+   717→          <p className="text-xs text-muted-foreground">
+   718→            {locale === 'id' ? 'Pembaca Noveluxe' : 'Noveluxe Reader'}
+   719→          </p>
+   720→        </div>
+   721→      </div>
+   722→    </div>
+   723→  );
+   724→}
+   725→

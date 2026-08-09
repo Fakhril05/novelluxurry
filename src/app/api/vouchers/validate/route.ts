@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
     let disc = total * (voucher.discount / 100);
     if (voucher.maxDisc && disc > voucher.maxDisc) disc = voucher.maxDisc;
-    return NextResponse.json({ valid: true, discount: disc, code: voucher.code, percentage: voucher.discount });
+    return NextResponse.json({ success: true, discount: disc, code: voucher.code, percentage: voucher.discount, message: '' });
   } catch (error) {
     console.error('Voucher error:', error);
     return NextResponse.json({ error: 'Validasi gagal' }, { status: 500 });

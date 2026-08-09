@@ -1,6 +1,30 @@
 import { db } from '../src/lib/db';
+import * as crypto from 'crypto';
 
 async function main() {
+  // Create users
+  const adminHash = crypto.createHash('sha256').update('admin123').digest('hex');
+  const userHash = crypto.createHash('sha256').update('user123').digest('hex');
+  await db.user.create({
+    data: { email: 'admin@noveluxe.com', name: 'Admin Noveluxe', password: adminHash, role: 'admin', points: 5000 },
+  });
+  await db.user.create({
+    data: { email: 'user@example.com', name: 'Pembaca Setia', password: userHash, role: 'user', points: 1250 },
+  });
+
+  // Create vouchers
+  const now = new Date();
+  const nextYear = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+  await db.voucher.create({
+    data: { code: 'WELCOME10', discount: 10, minOrder: 50000, maxDisc: 25000, validFrom: now, validTo: nextYear, isActive: true, usageLimit: 1000, usedCount: 0 },
+  });
+  await db.voucher.create({
+    data: { code: 'NOVEL20', discount: 20, minOrder: 100000, maxDisc: 50000, validFrom: now, validTo: nextYear, isActive: true, usageLimit: 500, usedCount: 0 },
+  });
+  await db.voucher.create({
+    data: { code: 'FREEONGKIR', discount: 100, minOrder: 200000, maxDisc: 30000, validFrom: now, validTo: nextYear, isActive: true, usageLimit: 0, usedCount: 0 },
+  });
+
   // Create categories
   const categories = await Promise.all([
     db.category.create({

@@ -101,3 +101,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create book' }, { status: 500 });
   }
 }
+
+export async function PUT(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ error: 'Book ID is required' }, { status: 400 });
+    }
+    const body = await request.json();
+    const book = await db.book.update({
+      where: { id },
+      data: body,
+      include: { category: { select: { id: true, name: true, slug: true } } },
+    });
+    return NextResponse.json(book);
+  } catch (error) {
+    console.error('Error updating book:', error);
+    return NextResponse.json({ error: 'Failed to update book' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ error: 'Book ID is required' }, { status: 400 });
+    }
+    await db.book.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting book:', error);
+    return NextResponse.json({ error: 'Failed to delete book' }, { status: 500 });
+  }
+}

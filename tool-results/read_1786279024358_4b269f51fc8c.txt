@@ -1,0 +1,1626 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  LayoutDashboard,
+     7→  BookOpen,
+     8→  Users,
+     9→  ShoppingBag,
+    10→  DollarSign,
+    11→  TrendingUp,
+    12→  Plus,
+    13→  Pencil,
+    14→  Trash2,
+    15→  Eye,
+    16→  Package,
+    17→} from 'lucide-react';
+    18→import {
+    19→  AreaChart,
+    20→  Area,
+    21→  XAxis,
+    22→  YAxis,
+    23→  CartesianGrid,
+    24→  Tooltip,
+    25→  ResponsiveContainer,
+    26→} from 'recharts';
+    27→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    28→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    29→import {
+    30→  Table,
+    31→  TableBody,
+    32→  TableCell,
+    33→  TableHead,
+    34→  TableHeader,
+    35→  TableRow,
+    36→} from '@/components/ui/table';
+    37→import { Button } from '@/components/ui/button';
+    38→import { Input } from '@/components/ui/input';
+    39→import { Badge } from '@/components/ui/badge';
+    40→import {
+    41→  Dialog,
+    42→  DialogContent,
+    43→  DialogHeader,
+    44→  DialogTitle,
+    45→  DialogTrigger,
+    46→} from '@/components/ui/dialog';
+    47→import {
+    48→  AlertDialog,
+    49→  AlertDialogAction,
+    50→  AlertDialogCancel,
+    51→  AlertDialogContent,
+    52→  AlertDialogDescription,
+    53→  AlertDialogFooter,
+    54→  AlertDialogHeader,
+    55→  AlertDialogTitle,
+    56→  AlertDialogTrigger,
+    57→} from '@/components/ui/alert-dialog';
+    58→import {
+    59→  Select,
+    60→  SelectContent,
+    61→  SelectItem,
+    62→  SelectTrigger,
+    63→  SelectValue,
+    64→} from '@/components/ui/select';
+    65→import { Label } from '@/components/ui/label';
+    66→import { Textarea } from '@/components/ui/textarea';
+    67→import { Skeleton } from '@/components/ui/skeleton';
+    68→import { useAppStore, formatPrice } from '@/lib/store';
+    69→import { t } from '@/lib/i18n';
+    70→import type { Book, Category } from '@/types';
+    71→import { toast } from 'sonner';
+    72→
+    73→// --- Types ---
+    74→interface Order {
+    75→  id: string;
+    76→  orderNumber: string;
+    77→  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+    78→  total: number;
+    79→  userName: string;
+    80→  userEmail: string;
+    81→  itemCount: number;
+    82→  createdAt: string;
+    83→}
+    84→
+    85→interface AdminUser {
+    86→  id: string;
+    87→  name: string;
+    88→  email: string;
+    89→  points: number;
+    90→  _count?: { orders: number };
+    91→  createdAt: string;
+    92→}
+    93→
+    94→interface BookFormData {
+    95→  title: string;
+    96→  author: string;
+    97→  authorBio: string;
+    98→  isbn: string;
+    99→  synopsis: string;
+   100→  coverImage: string;
+   101→  price: string;
+   102→  discountPrice: string;
+   103→  stock: string;
+   104→  format: string;
+   105→  pages: string;
+   106→  publisher: string;
+   107→  language: string;
+   108→  publishedYear: string;
+   109→  categoryId: string;
+   110→  isBestSeller: boolean;
+   111→  isNewArrival: boolean;
+   112→  isFeatured: boolean;
+   113→}
+   114→
+   115→interface CategoryFormData {
+   116→  name: string;
+   117→  slug: string;
+   118→  description: string;
+   119→  image: string;
+   120→}
+   121→
+   122→// --- Mock Data ---
+   123→const MOCK_SALES_DATA = [
+   124→  { month: 'Jan', sales: 4200000 },
+   125→  { month: 'Feb', sales: 5800000 },
+   126→  { month: 'Mar', sales: 4900000 },
+   127→  { month: 'Apr', sales: 7200000 },
+   128→  { month: 'Mei', sales: 6100000 },
+   129→  { month: 'Jun', sales: 8400000 },
+   130→  { month: 'Jul', sales: 9200000 },
+   131→  { month: 'Agu', sales: 7800000 },
+   132→  { month: 'Sep', sales: 10500000 },
+   133→  { month: 'Okt', sales: 11200000 },
+   134→  { month: 'Nov', sales: 9800000 },
+   135→  { month: 'Des', sales: 12500000 },
+   136→];
+   137→
+   138→const STATUS_CONFIG: Record<string, { labelKey: string; color: string }> = {
+   139→  pending: {
+   140→    labelKey: 'dashboard.pending',
+   141→    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-300',
+   142→  },
+   143→  processing: {
+   144→    labelKey: 'dashboard.processing',
+   145→    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-300',
+   146→  },
+   147→  shipped: {
+   148→    labelKey: 'dashboard.shipped',
+   149→    color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-300',
+   150→  },
+   151→  delivered: {
+   152→    labelKey: 'dashboard.delivered',
+   153→    color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-300',
+   154→  },
+   155→  cancelled: {
+   156→    labelKey: 'dashboard.cancelled',
+   157→    color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-300',
+   158→  },
+   159→};
+   160→
+   161→const EMPTY_BOOK_FORM: BookFormData = {
+   162→  title: '',
+   163→  author: '',
+   164→  authorBio: '',
+   165→  isbn: '',
+   166→  synopsis: '',
+   167→  coverImage: '',
+   168→  price: '',
+   169→  discountPrice: '',
+   170→  stock: '',
+   171→  format: 'Paperback',
+   172→  pages: '',
+   173→  publisher: '',
+   174→  language: 'Indonesia',
+   175→  publishedYear: '',
+   176→  categoryId: '',
+   177→  isBestSeller: false,
+   178→  isNewArrival: false,
+   179→  isFeatured: false,
+   180→};
+   181→
+   182→const EMPTY_CATEGORY_FORM: CategoryFormData = {
+   183→  name: '',
+   184→  slug: '',
+   185→  description: '',
+   186→  image: '',
+   187→};
+   188→
+   189→// --- Helper ---
+   190→function formatDate(dateStr: string, locale: string) {
+   191→  const date = new Date(dateStr);
+   192→  return date.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+   193→    year: 'numeric',
+   194→    month: 'short',
+   195→    day: 'numeric',
+   196→  });
+   197→}
+   198→
+   199→// ============================================================================
+   200→// Dashboard/Stats Tab
+   201→// ============================================================================
+   202→function StatsTab({
+   203→  locale,
+   204→  books,
+   205→  orders,
+   206→  users,
+   207→}: {
+   208→  locale: string;
+   209→  books: Book[];
+   210→  orders: Order[];
+   211→  users: AdminUser[];
+   212→}) {
+   213→  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
+   214→  const totalSold = books.reduce((sum, b) => sum + b.soldCount, 0);
+   215→  const newOrders = orders.filter((o) => o.status === 'pending').length;
+   216→
+   217→  const statCards = [
+   218→    {
+   219→      label: locale === 'id' ? 'Total Penjualan' : 'Total Sales',
+   220→      value: totalSold.toLocaleString(),
+   221→      icon: TrendingUp,
+   222→      color: 'text-emerald-600',
+   223→      bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+   224→    },
+   225→    {
+   226→      label: locale === 'id' ? 'Total Pelanggan' : 'Total Customers',
+   227→      value: users.length.toLocaleString(),
+   228→      icon: Users,
+   229→      color: 'text-blue-600',
+   230→      bg: 'bg-blue-50 dark:bg-blue-900/20',
+   231→    },
+   232→    {
+   233→      label: locale === 'id' ? 'Pendapatan' : 'Revenue',
+   234→      value: formatPrice(totalRevenue, locale as 'id' | 'en'),
+   235→      icon: DollarSign,
+   236→      color: 'text-[#D4AF37]',
+   237→      bg: 'bg-[#D4AF37]/10',
+   238→    },
+   239→    {
+   240→      label: locale === 'id' ? 'Pesanan Baru' : 'New Orders',
+   241→      value: newOrders.toLocaleString(),
+   242→      icon: ShoppingBag,
+   243→      color: 'text-orange-600',
+   244→      bg: 'bg-orange-50 dark:bg-orange-900/20',
+   245→    },
+   246→  ];
+   247→
+   248→  const recentOrders = orders.slice(0, 5);
+   249→
+   250→  return (
+   251→    <div className="space-y-6">
+   252→      {/* Stat Cards */}
+   253→      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+   254→        {statCards.map((stat, idx) => {
+   255→          const Icon = stat.icon;
+   256→          return (
+   257→            <motion.div
+   258→              key={stat.label}
+   259→              initial={{ opacity: 0, y: 20 }}
+   260→              animate={{ opacity: 1, y: 0 }}
+   261→              transition={{ duration: 0.3, delay: idx * 0.1 }}
+   262→            >
+   263→              <Card className="relative overflow-hidden">
+   264→                <CardContent className="p-6">
+   265→                  <div className="flex items-center justify-between">
+   266→                    <div>
+   267→                      <p className="text-sm text-muted-foreground">{stat.label}</p>
+   268→                      <p className="text-2xl font-bold mt-1">{stat.value}</p>
+   269→                    </div>
+   270→                    <div className={`rounded-xl p-3 ${stat.bg}`}>
+   271→                      <Icon className={`h-6 w-6 ${stat.color}`} />
+   272→                    </div>
+   273→                  </div>
+   274→                </CardContent>
+   275→                <div className={`absolute bottom-0 left-0 right-0 h-1 ${stat.color.replace('text-', 'bg-').replace('-600', '-500')}`} />
+   276→              </Card>
+   277→            </motion.div>
+   278→          );
+   279→        })}
+   280→      </div>
+   281→
+   282→      {/* Sales Chart */}
+   283→      <Card>
+   284→        <CardHeader>
+   285→          <CardTitle className="font-heading text-lg">
+   286→            {locale === 'id' ? 'Grafik Penjualan' : 'Sales Chart'}
+   287→          </CardTitle>
+   288→        </CardHeader>
+   289→        <CardContent>
+   290→          <div className="h-[300px] w-full">
+   291→            <ResponsiveContainer width="100%" height="100%">
+   292→              <AreaChart data={MOCK_SALES_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+   293→                <defs>
+   294→                  <linearGradient id="goldGradient" x1="0" y1="0" x2="0" y2="1">
+   295→                    <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3} />
+   296→                    <stop offset="95%" stopColor="#D4AF37" stopOpacity={0.02} />
+   297→                  </linearGradient>
+   298→                </defs>
+   299→                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+   300→                <XAxis
+   301→                  dataKey="month"
+   302→                  tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+   303→                  axisLine={{ stroke: 'hsl(var(--border))' }}
+   304→                  tickLine={false}
+   305→                />
+   306→                <YAxis
+   307→                  tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+   308→                  axisLine={false}
+   309→                  tickLine={false}
+   310→                  tickFormatter={(v: number) =>
+   311→                    locale === 'id' ? `${(v / 1000000).toFixed(0)}jt` : `${(v / 1000000).toFixed(0)}M`
+   312→                  }
+   313→                />
+   314→                <Tooltip
+   315→                  contentStyle={{
+   316→                    backgroundColor: 'hsl(var(--card))',
+   317→                    border: '1px solid hsl(var(--border))',
+   318→                    borderRadius: '8px',
+   319→                    color: 'hsl(var(--foreground))',
+   320→                    fontSize: '13px',
+   321→                  }}
+   322→                  formatter={(value: number) => [formatPrice(value, locale as 'id' | 'en'), locale === 'id' ? 'Penjualan' : 'Sales']}
+   323→                />
+   324→                <Area
+   325→                  type="monotone"
+   326→                  dataKey="sales"
+   327→                  stroke="#D4AF37"
+   328→                  strokeWidth={2.5}
+   329→                  fill="url(#goldGradient)"
+   330→                />
+   331→              </AreaChart>
+   332→            </ResponsiveContainer>
+   333→          </div>
+   334→        </CardContent>
+   335→      </Card>
+   336→
+   337→      {/* Recent Orders */}
+   338→      <Card>
+   339→        <CardHeader>
+   340→          <CardTitle className="font-heading text-lg">
+   341→            {locale === 'id' ? 'Pesanan Terbaru' : 'Recent Orders'}
+   342→          </CardTitle>
+   343→        </CardHeader>
+   344→        <CardContent>
+   345→          <div className="max-h-96 overflow-y-auto">
+   346→            <Table>
+   347→              <TableHeader>
+   348→                <TableRow>
+   349→                  <TableHead>{locale === 'id' ? 'No. Pesanan' : 'Order No.'}</TableHead>
+   350→                  <TableHead className="hidden sm:table-cell">{locale === 'id' ? 'Pelanggan' : 'Customer'}</TableHead>
+   351→                  <TableHead>{locale === 'id' ? 'Total' : 'Total'}</TableHead>
+   352→                  <TableHead>{locale === 'id' ? 'Status' : 'Status'}</TableHead>
+   353→                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Tanggal' : 'Date'}</TableHead>
+   354→                </TableRow>
+   355→              </TableHeader>
+   356→              <TableBody>
+   357→                {recentOrders.length === 0 ? (
+   358→                  <TableRow>
+   359→                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+   360→                      {locale === 'id' ? 'Belum ada pesanan' : 'No orders yet'}
+   361→                    </TableCell>
+   362→                  </TableRow>
+   363→                ) : (
+   364→                  recentOrders.map((order) => {
+   365→                    const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+   366→                    return (
+   367→                      <TableRow key={order.id}>
+   368→                        <TableCell className="font-mono text-sm">{order.orderNumber}</TableCell>
+   369→                        <TableCell className="hidden sm:table-cell">{order.userName}</TableCell>
+   370→                        <TableCell className="font-semibold text-[#D4AF37]">
+   371→                          {formatPrice(order.total, locale as 'id' | 'en')}
+   372→                        </TableCell>
+   373→                        <TableCell>
+   374→                          <Badge variant="outline" className={cfg.color}>
+   375→                            {t(cfg.labelKey, locale as 'id' | 'en')}
+   376→                          </Badge>
+   377→                        </TableCell>
+   378→                        <TableCell className="hidden md:table-cell text-muted-foreground">
+   379→                          {formatDate(order.createdAt, locale)}
+   380→                        </TableCell>
+   381→                      </TableRow>
+   382→                    );
+   383→                  })
+   384→                )}
+   385→              </TableBody>
+   386→            </Table>
+   387→          </div>
+   388→        </CardContent>
+   389→      </Card>
+   390→    </div>
+   391→  );
+   392→}
+   393→
+   394→// ============================================================================
+   395→// Books Tab (CRUD)
+   396→// ============================================================================
+   397→function BooksTab({
+   398→  locale,
+   399→  books,
+   400→  categories,
+   401→  onRefresh,
+   402→}: {
+   403→  locale: string;
+   404→  books: Book[];
+   405→  categories: Category[];
+   406→  onRefresh: () => void;
+   407→}) {
+   408→  const [dialogOpen, setDialogOpen] = useState(false);
+   409→  const [editingBook, setEditingBook] = useState<Book | null>(null);
+   410→  const [form, setForm] = useState<BookFormData>(EMPTY_BOOK_FORM);
+   411→  const [saving, setSaving] = useState(false);
+   412→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   413→
+   414→  const openAddDialog = useCallback(() => {
+   415→    setEditingBook(null);
+   416→    setForm(EMPTY_BOOK_FORM);
+   417→    setDialogOpen(true);
+   418→  }, []);
+   419→
+   420→  const openEditDialog = useCallback((book: Book) => {
+   421→    setEditingBook(book);
+   422→    setForm({
+   423→      title: book.title,
+   424→      author: book.author,
+   425→      authorBio: book.authorBio || '',
+   426→      isbn: book.isbn || '',
+   427→      synopsis: book.synopsis || '',
+   428→      coverImage: book.coverImage,
+   429→      price: String(book.price),
+   430→      discountPrice: book.discountPrice ? String(book.discountPrice) : '',
+   431→      stock: String(book.stock),
+   432→      format: book.format,
+   433→      pages: book.pages ? String(book.pages) : '',
+   434→      publisher: book.publisher || '',
+   435→      language: book.language,
+   436→      publishedYear: book.publishedYear ? String(book.publishedYear) : '',
+   437→      categoryId: book.categoryId || '',
+   438→      isBestSeller: book.isBestSeller,
+   439→      isNewArrival: book.isNewArrival,
+   440→      isFeatured: book.isFeatured,
+   441→    });
+   442→    setDialogOpen(true);
+   443→  }, []);
+   444→
+   445→  const handleSave = useCallback(async () => {
+   446→    if (!form.title || !form.author || !form.price) {
+   447→      toast.error(locale === 'id' ? 'Judul, penulis, dan harga wajib diisi' : 'Title, author, and price are required');
+   448→      return;
+   449→    }
+   450→    setSaving(true);
+   451→    try {
+   452→      const payload = {
+   453→        ...form,
+   454→        price: Number(form.price),
+   455→        discountPrice: form.discountPrice ? Number(form.discountPrice) : null,
+   456→        stock: Number(form.stock),
+   457→        pages: form.pages ? Number(form.pages) : null,
+   458→        publishedYear: form.publishedYear ? Number(form.publishedYear) : null,
+   459→      };
+   460→
+   461→      if (editingBook) {
+   462→        const res = await fetch(`/api/books?id=${editingBook.id}`, {
+   463→          method: 'PUT',
+   464→          headers: { 'Content-Type': 'application/json' },
+   465→          body: JSON.stringify(payload),
+   466→        });
+   467→        if (res.ok) {
+   468→          toast.success(locale === 'id' ? 'Buku berhasil diperbarui' : 'Book updated successfully');
+   469→          setDialogOpen(false);
+   470→          onRefresh();
+   471→        } else {
+   472→          toast.error(locale === 'id' ? 'Gagal memperbarui buku' : 'Failed to update book');
+   473→        }
+   474→      } else {
+   475→        const res = await fetch('/api/books', {
+   476→          method: 'POST',
+   477→          headers: { 'Content-Type': 'application/json' },
+   478→          body: JSON.stringify(payload),
+   479→        });
+   480→        if (res.ok) {
+   481→          toast.success(locale === 'id' ? 'Buku berhasil ditambahkan' : 'Book added successfully');
+   482→          setDialogOpen(false);
+   483→          onRefresh();
+   484→        } else {
+   485→          toast.error(locale === 'id' ? 'Gagal menambahkan buku' : 'Failed to add book');
+   486→        }
+   487→      }
+   488→    } catch {
+   489→      toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+   490→    } finally {
+   491→      setSaving(false);
+   492→    }
+   493→  }, [form, editingBook, locale, onRefresh]);
+   494→
+   495→  const handleDelete = useCallback(async () => {
+   496→    if (!deletingId) return;
+   497→    try {
+   498→      const res = await fetch(`/api/books?id=${deletingId}`, { method: 'DELETE' });
+   499→      if (res.ok) {
+   500→        toast.success(locale === 'id' ? 'Buku berhasil dihapus' : 'Book deleted successfully');
+   501→        onRefresh();
+   502→      } else {
+   503→        toast.error(locale === 'id' ? 'Gagal menghapus buku' : 'Failed to delete book');
+   504→      }
+   505→    } catch {
+   506→      toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+   507→    } finally {
+   508→      setDeletingId(null);
+   509→    }
+   510→  }, [deletingId, locale, onRefresh]);
+   511→
+   512→  const getCategoryName = (catId: string | null) => {
+   513→    if (!catId) return '-';
+   514→    return categories.find((c) => c.id === catId)?.name || '-';
+   515→  };
+   516→
+   517→  return (
+   518→    <div className="space-y-4">
+   519→      <div className="flex items-center justify-between">
+   520→        <h2 className="font-heading text-xl font-bold">
+   521→          {locale === 'id' ? 'Kelola Buku' : 'Manage Books'}
+   522→        </h2>
+   523→        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   524→          <DialogTrigger asChild>
+   525→            <Button onClick={openAddDialog} className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white">
+   526→              <Plus className="h-4 w-4 mr-2" />
+   527→              {locale === 'id' ? 'Tambah Buku' : 'Add Book'}
+   528→            </Button>
+   529→          </DialogTrigger>
+   530→          <DialogContent className="max-h-[85vh] overflow-y-auto max-w-2xl">
+   531→            <DialogHeader>
+   532→              <DialogTitle className="font-heading">
+   533→                {editingBook
+   534→                  ? (locale === 'id' ? 'Edit Buku' : 'Edit Book')
+   535→                  : (locale === 'id' ? 'Tambah Buku Baru' : 'Add New Book')}
+   536→              </DialogTitle>
+   537→            </DialogHeader>
+   538→            <div className="grid gap-4 py-4">
+   539→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   540→                <div className="space-y-2">
+   541→                  <Label>{locale === 'id' ? 'Judul' : 'Title'} *</Label>
+   542→                  <Input
+   543→                    value={form.title}
+   544→                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+   545→                    placeholder={locale === 'id' ? 'Judul buku' : 'Book title'}
+   546→                  />
+   547→                </div>
+   548→                <div className="space-y-2">
+   549→                  <Label>{locale === 'id' ? 'Penulis' : 'Author'} *</Label>
+   550→                  <Input
+   551→                    value={form.author}
+   552→                    onChange={(e) => setForm((f) => ({ ...f, author: e.target.value }))}
+   553→                    placeholder={locale === 'id' ? 'Nama penulis' : 'Author name'}
+   554→                  />
+   555→                </div>
+   556→              </div>
+   557→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   558→                <div className="space-y-2">
+   559→                  <Label>ISBN</Label>
+   560→                  <Input
+   561→                    value={form.isbn}
+   562→                    onChange={(e) => setForm((f) => ({ ...f, isbn: e.target.value }))}
+   563→                    placeholder="978-xxx-xxx-xxx"
+   564→                  />
+   565→                </div>
+   566→                <div className="space-y-2">
+   567→                  <Label>{locale === 'id' ? 'Kategori' : 'Category'}</Label>
+   568→                  <Select
+   569→                    value={form.categoryId}
+   570→                    onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}
+   571→                  >
+   572→                    <SelectTrigger className="w-full">
+   573→                      <SelectValue placeholder={locale === 'id' ? 'Pilih kategori' : 'Select category'} />
+   574→                    </SelectTrigger>
+   575→                    <SelectContent>
+   576→                      {categories.map((cat) => (
+   577→                        <SelectItem key={cat.id} value={cat.id}>
+   578→                          {cat.name}
+   579→                        </SelectItem>
+   580→                      ))}
+   581→                    </SelectContent>
+   582→                  </Select>
+   583→                </div>
+   584→              </div>
+   585→              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   586→                <div className="space-y-2">
+   587→                  <Label>{locale === 'id' ? 'Harga' : 'Price'} (IDR) *</Label>
+   588→                  <Input
+   589→                    type="number"
+   590→                    value={form.price}
+   591→                    onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+   592→                    placeholder="89000"
+   593→                  />
+   594→                </div>
+   595→                <div className="space-y-2">
+   596→                  <Label>{locale === 'id' ? 'Harga Diskon' : 'Discount Price'}</Label>
+   597→                  <Input
+   598→                    type="number"
+   599→                    value={form.discountPrice}
+   600→                    onChange={(e) => setForm((f) => ({ ...f, discountPrice: e.target.value }))}
+   601→                    placeholder={locale === 'id' ? 'Opsional' : 'Optional'}
+   602→                  />
+   603→                </div>
+   604→                <div className="space-y-2">
+   605→                  <Label>{locale === 'id' ? 'Stok' : 'Stock'}</Label>
+   606→                  <Input
+   607→                    type="number"
+   608→                    value={form.stock}
+   609→                    onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
+   610→                    placeholder="100"
+   611→                  />
+   612→                </div>
+   613→              </div>
+   614→              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   615→                <div className="space-y-2">
+   616→                  <Label>{locale === 'id' ? 'Format' : 'Format'}</Label>
+   617→                  <Select
+   618→                    value={form.format}
+   619→                    onValueChange={(v) => setForm((f) => ({ ...f, format: v }))}
+   620→                  >
+   621→                    <SelectTrigger className="w-full">
+   622→                      <SelectValue />
+   623→                    </SelectTrigger>
+   624→                    <SelectContent>
+   625→                      <SelectItem value="Paperback">Paperback</SelectItem>
+   626→                      <SelectItem value="Hardcover">Hardcover</SelectItem>
+   627→                      <SelectItem value="Ebook">Ebook</SelectItem>
+   628→                    </SelectContent>
+   629→                  </Select>
+   630→                </div>
+   631→                <div className="space-y-2">
+   632→                  <Label>{locale === 'id' ? 'Halaman' : 'Pages'}</Label>
+   633→                  <Input
+   634→                    type="number"
+   635→                    value={form.pages}
+   636→                    onChange={(e) => setForm((f) => ({ ...f, pages: e.target.value }))}
+   637→                    placeholder="320"
+   638→                  />
+   639→                </div>
+   640→                <div className="space-y-2">
+   641→                  <Label>{locale === 'id' ? 'Bahasa' : 'Language'}</Label>
+   642→                  <Input
+   643→                    value={form.language}
+   644→                    onChange={(e) => setForm((f) => ({ ...f, language: e.target.value }))}
+   645→                    placeholder="Indonesia"
+   646→                  />
+   647→                </div>
+   648→              </div>
+   649→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   650→                <div className="space-y-2">
+   651→                  <Label>{locale === 'id' ? 'Penerbit' : 'Publisher'}</Label>
+   652→                  <Input
+   653→                    value={form.publisher}
+   654→                    onChange={(e) => setForm((f) => ({ ...f, publisher: e.target.value }))}
+   655→                    placeholder={locale === 'id' ? 'Nama penerbit' : 'Publisher name'}
+   656→                  />
+   657→                </div>
+   658→                <div className="space-y-2">
+   659→                  <Label>{locale === 'id' ? 'Tahun Terbit' : 'Published Year'}</Label>
+   660→                  <Input
+   661→                    type="number"
+   662→                    value={form.publishedYear}
+   663→                    onChange={(e) => setForm((f) => ({ ...f, publishedYear: e.target.value }))}
+   664→                    placeholder="2025"
+   665→                  />
+   666→                </div>
+   667→              </div>
+   668→              <div className="space-y-2">
+   669→                <Label>{locale === 'id' ? 'URL Cover Image' : 'Cover Image URL'}</Label>
+   670→                <Input
+   671→                  value={form.coverImage}
+   672→                  onChange={(e) => setForm((f) => ({ ...f, coverImage: e.target.value }))}
+   673→                  placeholder="https://..."
+   674→                />
+   675→              </div>
+   676→              <div className="space-y-2">
+   677→                <Label>{locale === 'id' ? 'Bio Penulis' : 'Author Bio'}</Label>
+   678→                <Textarea
+   679→                  value={form.authorBio}
+   680→                  onChange={(e) => setForm((f) => ({ ...f, authorBio: e.target.value }))}
+   681→                  placeholder={locale === 'id' ? 'Tentang penulis...' : 'About the author...'}
+   682→                  rows={2}
+   683→                />
+   684→              </div>
+   685→              <div className="space-y-2">
+   686→                <Label>{locale === 'id' ? 'Sinopsis' : 'Synopsis'}</Label>
+   687→                <Textarea
+   688→                  value={form.synopsis}
+   689→                  onChange={(e) => setForm((f) => ({ ...f, synopsis: e.target.value }))}
+   690→                  placeholder={locale === 'id' ? 'Sinopsis buku...' : 'Book synopsis...'}
+   691→                  rows={4}
+   692→                />
+   693→              </div>
+   694→              <div className="flex flex-wrap gap-3">
+   695→                <label className="flex items-center gap-2 text-sm cursor-pointer">
+   696→                  <input
+   697→                    type="checkbox"
+   698→                    checked={form.isBestSeller}
+   699→                    onChange={(e) => setForm((f) => ({ ...f, isBestSeller: e.target.checked }))}
+   700→                    className="rounded border-input accent-[#D4AF37]"
+   701→                  />
+   702→                  {locale === 'id' ? 'Terlaris' : 'Bestseller'}
+   703→                </label>
+   704→                <label className="flex items-center gap-2 text-sm cursor-pointer">
+   705→                  <input
+   706→                    type="checkbox"
+   707→                    checked={form.isNewArrival}
+   708→                    onChange={(e) => setForm((f) => ({ ...f, isNewArrival: e.target.checked }))}
+   709→                    className="rounded border-input accent-[#D4AF37]"
+   710→                  />
+   711→                  {locale === 'id' ? 'Baru' : 'New Arrival'}
+   712→                </label>
+   713→                <label className="flex items-center gap-2 text-sm cursor-pointer">
+   714→                  <input
+   715→                    type="checkbox"
+   716→                    checked={form.isFeatured}
+   717→                    onChange={(e) => setForm((f) => ({ ...f, isFeatured: e.target.checked }))}
+   718→                    className="rounded border-input accent-[#D4AF37]"
+   719→                  />
+   720→                  {locale === 'id' ? 'Unggulan' : 'Featured'}
+   721→                </label>
+   722→              </div>
+   723→              <div className="flex justify-end gap-3 pt-2">
+   724→                <Button variant="outline" onClick={() => setDialogOpen(false)}>
+   725→                  {t('general.cancel', locale as 'id' | 'en')}
+   726→                </Button>
+   727→                <Button
+   728→                  onClick={handleSave}
+   729→                  disabled={saving}
+   730→                  className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white"
+   731→                >
+   732→                  {saving
+   733→                    ? t('general.loading', locale as 'id' | 'en')
+   734→                    : t('general.save', locale as 'id' | 'en')}
+   735→                </Button>
+   736→              </div>
+   737→            </div>
+   738→          </DialogContent>
+   739→        </Dialog>
+   740→      </div>
+   741→
+   742→      {/* Books Table */}
+   743→      <Card>
+   744→        <CardContent className="p-0">
+   745→          <div className="max-h-[500px] overflow-y-auto">
+   746→            <Table>
+   747→              <TableHeader>
+   748→                <TableRow>
+   749→                  <TableHead>{locale === 'id' ? 'Cover' : 'Cover'}</TableHead>
+   750→                  <TableHead>{locale === 'id' ? 'Judul' : 'Title'}</TableHead>
+   751→                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Penulis' : 'Author'}</TableHead>
+   752→                  <TableHead className="hidden lg:table-cell">{locale === 'id' ? 'Kategori' : 'Category'}</TableHead>
+   753→                  <TableHead>{locale === 'id' ? 'Harga' : 'Price'}</TableHead>
+   754→                  <TableHead className="hidden sm:table-cell">{locale === 'id' ? 'Stok' : 'Stock'}</TableHead>
+   755→                  <TableHead>{locale === 'id' ? 'Status' : 'Status'}</TableHead>
+   756→                  <TableHead className="text-right">{locale === 'id' ? 'Aksi' : 'Actions'}</TableHead>
+   757→                </TableRow>
+   758→              </TableHeader>
+   759→              <TableBody>
+   760→                {books.length === 0 ? (
+   761→                  <TableRow>
+   762→                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+   763→                      {locale === 'id' ? 'Belum ada buku' : 'No books yet'}
+   764→                    </TableCell>
+   765→                  </TableRow>
+   766→                ) : (
+   767→                  books.map((book) => (
+   768→                    <TableRow key={book.id}>
+   769→                      <TableCell>
+   770→                        <div className="w-10 h-14 rounded overflow-hidden bg-muted flex-shrink-0">
+   771→                          {book.coverImage ? (
+   772→                            <img src={book.coverImage} alt={book.title} className="w-full h-full object-cover" />
+   773→                          ) : (
+   774→                            <div className="w-full h-full flex items-center justify-center">
+   775→                              <BookOpen className="h-4 w-4 text-muted-foreground" />
+   776→                            </div>
+   777→                          )}
+   778→                        </div>
+   779→                      </TableCell>
+   780→                      <TableCell>
+   781→                        <div className="font-medium max-w-[180px] truncate">{book.title}</div>
+   782→                      </TableCell>
+   783→                      <TableCell className="hidden md:table-cell text-muted-foreground">{book.author}</TableCell>
+   784→                      <TableCell className="hidden lg:table-cell">{getCategoryName(book.categoryId)}</TableCell>
+   785→                      <TableCell>
+   786→                        <div className="text-[#D4AF37] font-semibold">
+   787→                          {formatPrice(book.discountPrice || book.price, locale as 'id' | 'en')}
+   788→                        </div>
+   789→                        {book.discountPrice && (
+   790→                          <div className="text-xs text-muted-foreground line-through">
+   791→                            {formatPrice(book.price, locale as 'id' | 'en')}
+   792→                          </div>
+   793→                        )}
+   794→                      </TableCell>
+   795→                      <TableCell className="hidden sm:table-cell">
+   796→                        <span className={book.stock > 10 ? 'text-green-600' : book.stock > 0 ? 'text-yellow-600' : 'text-red-600'}>
+   797→                          {book.stock}
+   798→                        </span>
+   799→                      </TableCell>
+   800→                      <TableCell>
+   801→                        <div className="flex flex-wrap gap-1">
+   802→                          {book.isBestSeller && (
+   803→                            <Badge variant="outline" className="text-xs border-[#D4AF37] text-[#D4AF37]">
+   804→                              {t('badge.bestseller', locale as 'id' | 'en')}
+   805→                            </Badge>
+   806→                          )}
+   807→                          {book.isNewArrival && (
+   808→                            <Badge variant="outline" className="text-xs border-green-500 text-green-600">
+   809→                              {t('badge.new', locale as 'id' | 'en')}
+   810→                            </Badge>
+   811→                          )}
+   812→                          {!book.isBestSeller && !book.isNewArrival && (
+   813→                            <span className="text-xs text-muted-foreground">-</span>
+   814→                          )}
+   815→                        </div>
+   816→                      </TableCell>
+   817→                      <TableCell className="text-right">
+   818→                        <div className="flex items-center justify-end gap-1">
+   819→                          <Button
+   820→                            variant="ghost"
+   821→                            size="icon"
+   822→                            className="h-8 w-8"
+   823→                            onClick={() => openEditDialog(book)}
+   824→                          >
+   825→                            <Pencil className="h-4 w-4" />
+   826→                          </Button>
+   827→                          <AlertDialog open={deletingId === book.id} onOpenChange={(open) => { if (!open) setDeletingId(null); }}>
+   828→                            <AlertDialogTrigger asChild>
+   829→                              <Button
+   830→                                variant="ghost"
+   831→                                size="icon"
+   832→                                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+   833→                                onClick={() => setDeletingId(book.id)}
+   834→                              >
+   835→                                <Trash2 className="h-4 w-4" />
+   836→                              </Button>
+   837→                            </AlertDialogTrigger>
+   838→                            <AlertDialogContent>
+   839→                              <AlertDialogHeader>
+   840→                                <AlertDialogTitle>
+   841→                                  {locale === 'id' ? 'Hapus Buku?' : 'Delete Book?'}
+   842→                                </AlertDialogTitle>
+   843→                                <AlertDialogDescription>
+   844→                                  {locale === 'id'
+   845→                                    ? `Apakah Anda yakin ingin menghapus "${book.title}"? Tindakan ini tidak dapat dibatalkan.`
+   846→                                    : `Are you sure you want to delete "${book.title}"? This action cannot be undone.`}
+   847→                                </AlertDialogDescription>
+   848→                              </AlertDialogHeader>
+   849→                              <AlertDialogFooter>
+   850→                                <AlertDialogCancel>{t('general.cancel', locale as 'id' | 'en')}</AlertDialogCancel>
+   851→                                <AlertDialogAction
+   852→                                  onClick={handleDelete}
+   853→                                  className="bg-red-600 hover:bg-red-700"
+   854→                                >
+   855→                                  {locale === 'id' ? 'Hapus' : 'Delete'}
+   856→                                </AlertDialogAction>
+   857→                              </AlertDialogFooter>
+   858→                            </AlertDialogContent>
+   859→                          </AlertDialog>
+   860→                        </div>
+   861→                      </TableCell>
+   862→                    </TableRow>
+   863→                  ))
+   864→                )}
+   865→              </TableBody>
+   866→            </Table>
+   867→          </div>
+   868→        </CardContent>
+   869→      </Card>
+   870→    </div>
+   871→  );
+   872→}
+   873→
+   874→// ============================================================================
+   875→// Categories Tab (CRUD)
+   876→// ============================================================================
+   877→function CategoriesTab({
+   878→  locale,
+   879→  categories,
+   880→  onRefresh,
+   881→}: {
+   882→  locale: string;
+   883→  categories: Category[];
+   884→  onRefresh: () => void;
+   885→}) {
+   886→  const [dialogOpen, setDialogOpen] = useState(false);
+   887→  const [editingCat, setEditingCat] = useState<Category | null>(null);
+   888→  const [form, setForm] = useState<CategoryFormData>(EMPTY_CATEGORY_FORM);
+   889→  const [saving, setSaving] = useState(false);
+   890→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   891→
+   892→  const openAddDialog = useCallback(() => {
+   893→    setEditingCat(null);
+   894→    setForm(EMPTY_CATEGORY_FORM);
+   895→    setDialogOpen(true);
+   896→  }, []);
+   897→
+   898→  const openEditDialog = useCallback((cat: Category) => {
+   899→    setEditingCat(cat);
+   900→    setForm({
+   901→      name: cat.name,
+   902→      slug: cat.slug,
+   903→      description: cat.description || '',
+   904→      image: cat.image || '',
+   905→    });
+   906→    setDialogOpen(true);
+   907→  }, []);
+   908→
+   909→  const handleSave = useCallback(async () => {
+   910→    if (!form.name || !form.slug) {
+   911→      toast.error(locale === 'id' ? 'Nama dan slug wajib diisi' : 'Name and slug are required');
+   912→      return;
+   913→    }
+   914→    setSaving(true);
+   915→    try {
+   916→      const payload = {
+   917→        name: form.name,
+   918→        nameEn: form.name,
+   919→        slug: form.slug,
+   920→        description: form.description || null,
+   921→        image: form.image || null,
+   922→      };
+   923→
+   924→      if (editingCat) {
+   925→        const res = await fetch(`/api/categories?id=${editingCat.id}`, {
+   926→          method: 'PUT',
+   927→          headers: { 'Content-Type': 'application/json' },
+   928→          body: JSON.stringify(payload),
+   929→        });
+   930→        if (res.ok) {
+   931→          toast.success(locale === 'id' ? 'Kategori berhasil diperbarui' : 'Category updated');
+   932→          setDialogOpen(false);
+   933→          onRefresh();
+   934→        } else {
+   935→          toast.error(locale === 'id' ? 'Gagal memperbarui kategori' : 'Failed to update category');
+   936→        }
+   937→      } else {
+   938→        const res = await fetch('/api/categories', {
+   939→          method: 'POST',
+   940→          headers: { 'Content-Type': 'application/json' },
+   941→          body: JSON.stringify(payload),
+   942→        });
+   943→        if (res.ok) {
+   944→          toast.success(locale === 'id' ? 'Kategori berhasil ditambahkan' : 'Category added');
+   945→          setDialogOpen(false);
+   946→          onRefresh();
+   947→        } else {
+   948→          toast.error(locale === 'id' ? 'Gagal menambahkan kategori' : 'Failed to add category');
+   949→        }
+   950→      }
+   951→    } catch {
+   952→      toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+   953→    } finally {
+   954→      setSaving(false);
+   955→    }
+   956→  }, [form, editingCat, locale, onRefresh]);
+   957→
+   958→  const handleDelete = useCallback(async () => {
+   959→    if (!deletingId) return;
+   960→    try {
+   961→      const res = await fetch(`/api/categories?id=${deletingId}`, { method: 'DELETE' });
+   962→      if (res.ok) {
+   963→        toast.success(locale === 'id' ? 'Kategori berhasil dihapus' : 'Category deleted');
+   964→        onRefresh();
+   965→      } else {
+   966→        toast.error(locale === 'id' ? 'Gagal menghapus kategori' : 'Failed to delete category');
+   967→      }
+   968→    } catch {
+   969→      toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+   970→    } finally {
+   971→      setDeletingId(null);
+   972→    }
+   973→  }, [deletingId, locale, onRefresh]);
+   974→
+   975→  return (
+   976→    <div className="space-y-4">
+   977→      <div className="flex items-center justify-between">
+   978→        <h2 className="font-heading text-xl font-bold">
+   979→          {locale === 'id' ? 'Kelola Kategori' : 'Manage Categories'}
+   980→        </h2>
+   981→        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   982→          <DialogTrigger asChild>
+   983→            <Button onClick={openAddDialog} className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white">
+   984→              <Plus className="h-4 w-4 mr-2" />
+   985→              {locale === 'id' ? 'Tambah Kategori' : 'Add Category'}
+   986→            </Button>
+   987→          </DialogTrigger>
+   988→          <DialogContent>
+   989→            <DialogHeader>
+   990→              <DialogTitle className="font-heading">
+   991→                {editingCat
+   992→                  ? (locale === 'id' ? 'Edit Kategori' : 'Edit Category')
+   993→                  : (locale === 'id' ? 'Tambah Kategori Baru' : 'Add New Category')}
+   994→              </DialogTitle>
+   995→            </DialogHeader>
+   996→            <div className="grid gap-4 py-4">
+   997→              <div className="space-y-2">
+   998→                <Label>{locale === 'id' ? 'Nama Kategori' : 'Category Name'} *</Label>
+   999→                <Input
+  1000→                  value={form.name}
+  1001→                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+  1002→                  placeholder={locale === 'id' ? 'Contoh: Romansa' : 'e.g., Romance'}
+  1003→                />
+  1004→              </div>
+  1005→              <div className="space-y-2">
+  1006→                <Label>Slug *</Label>
+  1007→                <Input
+  1008→                  value={form.slug}
+  1009→                  onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
+  1010→                  placeholder={locale === 'id' ? 'contoh: romansa' : 'e.g., romance'}
+  1011→                />
+  1012→              </div>
+  1013→              <div className="space-y-2">
+  1014→                <Label>{locale === 'id' ? 'Deskripsi' : 'Description'}</Label>
+  1015→                <Textarea
+  1016→                  value={form.description}
+  1017→                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+  1018→                  placeholder={locale === 'id' ? 'Deskripsi kategori...' : 'Category description...'}
+  1019→                  rows={3}
+  1020→                />
+  1021→              </div>
+  1022→              <div className="space-y-2">
+  1023→                <Label>{locale === 'id' ? 'URL Gambar' : 'Image URL'}</Label>
+  1024→                <Input
+  1025→                  value={form.image}
+  1026→                  onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
+  1027→                  placeholder="https://..."
+  1028→                />
+  1029→              </div>
+  1030→              <div className="flex justify-end gap-3 pt-2">
+  1031→                <Button variant="outline" onClick={() => setDialogOpen(false)}>
+  1032→                  {t('general.cancel', locale as 'id' | 'en')}
+  1033→                </Button>
+  1034→                <Button
+  1035→                  onClick={handleSave}
+  1036→                  disabled={saving}
+  1037→                  className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white"
+  1038→                >
+  1039→                  {saving
+  1040→                    ? t('general.loading', locale as 'id' | 'en')
+  1041→                    : t('general.save', locale as 'id' | 'en')}
+  1042→                </Button>
+  1043→              </div>
+  1044→            </div>
+  1045→          </DialogContent>
+  1046→        </Dialog>
+  1047→      </div>
+  1048→
+  1049→      <Card>
+  1050→        <CardContent className="p-0">
+  1051→          <div className="max-h-[500px] overflow-y-auto">
+  1052→            <Table>
+  1053→              <TableHeader>
+  1054→                <TableRow>
+  1055→                  <TableHead>{locale === 'id' ? 'Nama' : 'Name'}</TableHead>
+  1056→                  <TableHead>Slug</TableHead>
+  1057→                  <TableHead className="hidden sm:table-cell">{locale === 'id' ? 'Deskripsi' : 'Description'}</TableHead>
+  1058→                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Buku' : 'Books'}</TableHead>
+  1059→                  <TableHead className="text-right">{locale === 'id' ? 'Aksi' : 'Actions'}</TableHead>
+  1060→                </TableRow>
+  1061→              </TableHeader>
+  1062→              <TableBody>
+  1063→                {categories.length === 0 ? (
+  1064→                  <TableRow>
+  1065→                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+  1066→                      {locale === 'id' ? 'Belum ada kategori' : 'No categories yet'}
+  1067→                    </TableCell>
+  1068→                  </TableRow>
+  1069→                ) : (
+  1070→                  categories.map((cat) => (
+  1071→                    <TableRow key={cat.id}>
+  1072→                      <TableCell className="font-medium">{cat.name}</TableCell>
+  1073→                      <TableCell className="text-muted-foreground font-mono text-sm">{cat.slug}</TableCell>
+  1074→                      <TableCell className="hidden sm:table-cell text-muted-foreground max-w-[200px] truncate">
+  1075→                        {cat.description || '-'}
+  1076→                      </TableCell>
+  1077→                      <TableCell className="hidden md:table-cell">
+  1078→                        <Badge variant="secondary">{cat._count?.books || 0}</Badge>
+  1079→                      </TableCell>
+  1080→                      <TableCell className="text-right">
+  1081→                        <div className="flex items-center justify-end gap-1">
+  1082→                          <Button
+  1083→                            variant="ghost"
+  1084→                            size="icon"
+  1085→                            className="h-8 w-8"
+  1086→                            onClick={() => openEditDialog(cat)}
+  1087→                          >
+  1088→                            <Pencil className="h-4 w-4" />
+  1089→                          </Button>
+  1090→                          <AlertDialog open={deletingId === cat.id} onOpenChange={(open) => { if (!open) setDeletingId(null); }}>
+  1091→                            <AlertDialogTrigger asChild>
+  1092→                              <Button
+  1093→                                variant="ghost"
+  1094→                                size="icon"
+  1095→                                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+  1096→                                onClick={() => setDeletingId(cat.id)}
+  1097→                              >
+  1098→                                <Trash2 className="h-4 w-4" />
+  1099→                              </Button>
+  1100→                            </AlertDialogTrigger>
+  1101→                            <AlertDialogContent>
+  1102→                              <AlertDialogHeader>
+  1103→                                <AlertDialogTitle>
+  1104→                                  {locale === 'id' ? 'Hapus Kategori?' : 'Delete Category?'}
+  1105→                                </AlertDialogTitle>
+  1106→                                <AlertDialogDescription>
+  1107→                                  {locale === 'id'
+  1108→                                    ? `Apakah Anda yakin ingin menghapus kategori "${cat.name}"?`
+  1109→                                    : `Are you sure you want to delete "${cat.name}" category?`}
+  1110→                                </AlertDialogDescription>
+  1111→                              </AlertDialogHeader>
+  1112→                              <AlertDialogFooter>
+  1113→                                <AlertDialogCancel>{t('general.cancel', locale as 'id' | 'en')}</AlertDialogCancel>
+  1114→                                <AlertDialogAction
+  1115→                                  onClick={handleDelete}
+  1116→                                  className="bg-red-600 hover:bg-red-700"
+  1117→                                >
+  1118→                                  {locale === 'id' ? 'Hapus' : 'Delete'}
+  1119→                                </AlertDialogAction>
+  1120→                              </AlertDialogFooter>
+  1121→                            </AlertDialogContent>
+  1122→                          </AlertDialog>
+  1123→                        </div>
+  1124→                      </TableCell>
+  1125→                    </TableRow>
+  1126→                  ))
+  1127→                )}
+  1128→              </TableBody>
+  1129→            </Table>
+  1130→          </div>
+  1131→        </CardContent>
+  1132→      </Card>
+  1133→    </div>
+  1134→  );
+  1135→}
+  1136→
+  1137→// ============================================================================
+  1138→// Orders Tab
+  1139→// ============================================================================
+  1140→function OrdersTab({
+  1141→  locale,
+  1142→  orders,
+  1143→  onRefresh,
+  1144→}: {
+  1145→  locale: string;
+  1146→  orders: Order[];
+  1147→  onRefresh: () => void;
+  1148→}) {
+  1149→  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  1150→
+  1151→  const handleStatusChange = useCallback(
+  1152→    async (orderId: string, newStatus: string) => {
+  1153→      setUpdatingId(orderId);
+  1154→      try {
+  1155→        const res = await fetch(`/api/orders?id=${orderId}`, {
+  1156→          method: 'PUT',
+  1157→          headers: { 'Content-Type': 'application/json' },
+  1158→          body: JSON.stringify({ status: newStatus }),
+  1159→        });
+  1160→        if (res.ok) {
+  1161→          toast.success(locale === 'id' ? 'Status pesanan diperbarui' : 'Order status updated');
+  1162→          onRefresh();
+  1163→        } else {
+  1164→          toast.error(locale === 'id' ? 'Gagal memperbarui status' : 'Failed to update status');
+  1165→        }
+  1166→      } catch {
+  1167→        toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+  1168→      } finally {
+  1169→        setUpdatingId(null);
+  1170→      }
+  1171→    },
+  1172→    [locale, onRefresh],
+  1173→  );
+  1174→
+  1175→  return (
+  1176→    <div className="space-y-4">
+  1177→      <h2 className="font-heading text-xl font-bold">
+  1178→        {locale === 'id' ? 'Semua Pesanan' : 'All Orders'}
+  1179→      </h2>
+  1180→
+  1181→      <Card>
+  1182→        <CardContent className="p-0">
+  1183→          <div className="max-h-[600px] overflow-y-auto">
+  1184→            <Table>
+  1185→              <TableHeader>
+  1186→                <TableRow>
+  1187→                  <TableHead>{locale === 'id' ? 'No. Pesanan' : 'Order No.'}</TableHead>
+  1188→                  <TableHead className="hidden sm:table-cell">{locale === 'id' ? 'Pelanggan' : 'Customer'}</TableHead>
+  1189→                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Item' : 'Items'}</TableHead>
+  1190→                  <TableHead>{locale === 'id' ? 'Total' : 'Total'}</TableHead>
+  1191→                  <TableHead>{locale === 'id' ? 'Status' : 'Status'}</TableHead>
+  1192→                  <TableHead className="hidden lg:table-cell">{locale === 'id' ? 'Tanggal' : 'Date'}</TableHead>
+  1193→                </TableRow>
+  1194→              </TableHeader>
+  1195→              <TableBody>
+  1196→                {orders.length === 0 ? (
+  1197→                  <TableRow>
+  1198→                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+  1199→                      {locale === 'id' ? 'Belum ada pesanan' : 'No orders yet'}
+  1200→                    </TableCell>
+  1201→                  </TableRow>
+  1202→                ) : (
+  1203→                  orders.map((order) => {
+  1204→                    const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+  1205→                    return (
+  1206→                      <TableRow key={order.id}>
+  1207→                        <TableCell className="font-mono text-sm">{order.orderNumber}</TableCell>
+  1208→                        <TableCell className="hidden sm:table-cell">
+  1209→                          <div>
+  1210→                            <div className="font-medium">{order.userName}</div>
+  1211→                            <div className="text-xs text-muted-foreground">{order.userEmail}</div>
+  1212→                          </div>
+  1213→                        </TableCell>
+  1214→                        <TableCell className="hidden md:table-cell">
+  1215→                          <div className="flex items-center gap-1 text-muted-foreground">
+  1216→                            <Package className="h-3.5 w-3.5" />
+  1217→                            <span>{order.itemCount}</span>
+  1218→                          </div>
+  1219→                        </TableCell>
+  1220→                        <TableCell className="font-semibold text-[#D4AF37]">
+  1221→                          {formatPrice(order.total, locale as 'id' | 'en')}
+  1222→                        </TableCell>
+  1223→                        <TableCell>
+  1224→                          <Select
+  1225→                            value={order.status}
+  1226→                            onValueChange={(v) => handleStatusChange(order.id, v)}
+  1227→                            disabled={updatingId === order.id}
+  1228→                          >
+  1229→                            <SelectTrigger className="w-[130px] h-8 text-xs">
+  1230→                              <Badge variant="outline" className={`${cfg.color} text-[10px] px-1.5 py-0`}
+  1231→                              >
+  1232→                                <SelectValue />
+  1233→                              </Badge>
+  1234→                            </SelectTrigger>
+  1235→                            <SelectContent>
+  1236→                              <SelectItem value="pending">
+  1237→                                {t('dashboard.pending', locale as 'id' | 'en')}
+  1238→                              </SelectItem>
+  1239→                              <SelectItem value="processing">
+  1240→                                {t('dashboard.processing', locale as 'id' | 'en')}
+  1241→                              </SelectItem>
+  1242→                              <SelectItem value="shipped">
+  1243→                                {t('dashboard.shipped', locale as 'id' | 'en')}
+  1244→                              </SelectItem>
+  1245→                              <SelectItem value="delivered">
+  1246→                                {t('dashboard.delivered', locale as 'id' | 'en')}
+  1247→                              </SelectItem>
+  1248→                              <SelectItem value="cancelled">
+  1249→                                {t('dashboard.cancelled', locale as 'id' | 'en')}
+  1250→                              </SelectItem>
+  1251→                            </SelectContent>
+  1252→                          </Select>
+  1253→                        </TableCell>
+  1254→                        <TableCell className="hidden lg:table-cell text-muted-foreground">
+  1255→                          {formatDate(order.createdAt, locale)}
+  1256→                        </TableCell>
+  1257→                      </TableRow>
+  1258→                    );
+  1259→                  })
+  1260→                )}
+  1261→              </TableBody>
+  1262→            </Table>
+  1263→          </div>
+  1264→        </CardContent>
+  1265→      </Card>
+  1266→    </div>
+  1267→  );
+  1268→}
+  1269→
+  1270→// ============================================================================
+  1271→// Users Tab
+  1272→// ============================================================================
+  1273→function UsersTab({
+  1274→  locale,
+  1275→  users,
+  1276→}: {
+  1277→  locale: string;
+  1278→  users: AdminUser[];
+  1279→}) {
+  1280→  return (
+  1281→    <div className="space-y-4">
+  1282→      <h2 className="font-heading text-xl font-bold">
+  1283→        {locale === 'id' ? 'Pelanggan' : 'Customers'}
+  1284→      </h2>
+  1285→
+  1286→      <Card>
+  1287→        <CardContent className="p-0">
+  1288→          <div className="max-h-[600px] overflow-y-auto">
+  1289→            <Table>
+  1290→              <TableHeader>
+  1291→                <TableRow>
+  1292→                  <TableHead>{locale === 'id' ? 'Nama' : 'Name'}</TableHead>
+  1293→                  <TableHead className="hidden sm:table-cell">Email</TableHead>
+  1294→                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Poin' : 'Points'}</TableHead>
+  1295→                  <TableHead>{locale === 'id' ? 'Pesanan' : 'Orders'}</TableHead>
+  1296→                  <TableHead className="hidden lg:table-cell">{locale === 'id' ? 'Bergabung' : 'Joined'}</TableHead>
+  1297→                </TableRow>
+  1298→              </TableHeader>
+  1299→              <TableBody>
+  1300→                {users.length === 0 ? (
+  1301→                  <TableRow>
+  1302→                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+  1303→                      {locale === 'id' ? 'Belum ada pelanggan' : 'No customers yet'}
+  1304→                    </TableCell>
+  1305→                  </TableRow>
+  1306→                ) : (
+  1307→                  users.map((u) => (
+  1308→                    <TableRow key={u.id}>
+  1309→                      <TableCell>
+  1310→                        <div className="flex items-center gap-3">
+  1311→                          <div className="h-8 w-8 rounded-full bg-[#D4AF37]/10 flex items-center justify-center flex-shrink-0">
+  1312→                            <span className="text-xs font-semibold text-[#D4AF37]">
+  1313→                              {u.name
+  1314→                                .split(' ')
+  1315→                                .map((n) => n[0])
+  1316→                                .join('')
+  1317→                                .toUpperCase()
+  1318→                                .slice(0, 2)}
+  1319→                            </span>
+  1320→                          </div>
+  1321→                          <span className="font-medium">{u.name}</span>
+  1322→                        </div>
+  1323→                      </TableCell>
+  1324→                      <TableCell className="hidden sm:table-cell text-muted-foreground">{u.email}</TableCell>
+  1325→                      <TableCell className="hidden md:table-cell">
+  1326→                        <span className="text-[#D4AF37] font-semibold">{u.points.toLocaleString()}</span>
+  1327→                        <span className="text-xs text-muted-foreground ml-1">{t('points.label', locale as 'id' | 'en')}</span>
+  1328→                      </TableCell>
+  1329→                      <TableCell>
+  1330→                        <Badge variant="secondary">{u._count?.orders || 0}</Badge>
+  1331→                      </TableCell>
+  1332→                      <TableCell className="hidden lg:table-cell text-muted-foreground">
+  1333→                        {formatDate(u.createdAt, locale)}
+  1334→                      </TableCell>
+  1335→                    </TableRow>
+  1336→                  ))
+  1337→                )}
+  1338→              </TableBody>
+  1339→            </Table>
+  1340→          </div>
+  1341→        </CardContent>
+  1342→      </Card>
+  1343→    </div>
+  1344→  );
+  1345→}
+  1346→
+  1347→// ============================================================================
+  1348→// Main AdminDashboard Component
+  1349→// ============================================================================
+  1350→export default function AdminDashboard() {
+  1351→  const { user, isAuthenticated, locale, pageParams, setPage } = useAppStore();
+  1352→
+  1353→  // Redirect if not admin
+  1354→  useEffect(() => {
+  1355→    if (!isAuthenticated || !user || user.role !== 'admin') {
+  1356→      setPage('home');
+  1357→    }
+  1358→  }, [isAuthenticated, user, setPage]);
+  1359→
+  1360→  const activeTab = pageParams.tab || 'stats';
+  1361→
+  1362→  // --- Data States ---
+  1363→  const [books, setBooks] = useState<Book[]>([]);
+  1364→  const [categories, setCategories] = useState<Category[]>([]);
+  1365→  const [orders, setOrders] = useState<Order[]>([]);
+  1366→  const [users, setUsers] = useState<AdminUser[]>([]);
+  1367→  const [loading, setLoading] = useState(true);
+  1368→
+  1369→  // --- Fetch Functions ---
+  1370→  const fetchBooks = useCallback(async () => {
+  1371→    try {
+  1372→      const res = await fetch('/api/books?limit=100');
+  1373→      if (res.ok) {
+  1374→        const data = await res.json();
+  1375→        setBooks(data.books || data || []);
+  1376→      }
+  1377→    } catch {
+  1378→      // silently fail
+  1379→    }
+  1380→  }, []);
+  1381→
+  1382→  const fetchCategories = useCallback(async () => {
+  1383→    try {
+  1384→      const res = await fetch('/api/categories');
+  1385→      if (res.ok) {
+  1386→        const data = await res.json();
+  1387→        setCategories(data.categories || data || []);
+  1388→      }
+  1389→    } catch {
+  1390→      // silently fail
+  1391→    }
+  1392→  }, []);
+  1393→
+  1394→  const fetchOrders = useCallback(async () => {
+  1395→    try {
+  1396→      const res = await fetch('/api/orders?limit=100');
+  1397→      if (res.ok) {
+  1398→        const data = await res.json();
+  1399→        setOrders(data.orders || data || []);
+  1400→      }
+  1401→    } catch {
+  1402→      // silently fail
+  1403→    }
+  1404→  }, []);
+  1405→
+  1406→  const fetchUsers = useCallback(async () => {
+  1407→    try {
+  1408→      const res = await fetch('/api/users');
+  1409→      if (res.ok) {
+  1410→        const data = await res.json();
+  1411→        setUsers(Array.isArray(data) ? data : data.users || []);
+  1412→      }
+  1413→    } catch {
+  1414→      // silently fail
+  1415→    }
+  1416→  }, []);
+  1417→
+  1418→  const loadAll = useCallback(async () => {
+  1419→    await Promise.all([fetchBooks(), fetchCategories(), fetchOrders(), fetchUsers()]);
+  1420→    setLoading(false);
+  1421→  }, [fetchBooks, fetchCategories, fetchOrders, fetchUsers]);
+  1422→
+  1423→  // eslint-disable-next-line react-hooks/set-state-in-effect
+  1424→  useEffect(() => { loadAll(); }, [loadAll]);
+  1425→
+  1426→  // --- Don't render until auth check is done ---
+  1427→  if (!isAuthenticated || !user || user.role !== 'admin') {
+  1428→    return null;
+  1429→  }
+  1430→
+  1431→  const handleTabChange = (value: string) => {
+  1432→ setPage('admin', { tab: value });
+  1433→  };
+  1434→
+  1435→  // --- Sidebar Tab Items ---
+  1436→  const tabItems = [
+  1437→    { value: 'stats', label: locale === 'id' ? 'Dashboard' : 'Dashboard', icon: LayoutDashboard },
+  1438→    { value: 'books', label: locale === 'id' ? 'Buku' : 'Books', icon: BookOpen },
+  1439→    { value: 'categories', label: locale === 'id' ? 'Kategori' : 'Categories', icon: Package },
+  1440→    { value: 'orders', label: locale === 'id' ? 'Pesanan' : 'Orders', icon: ShoppingBag },
+  1441→    { value: 'users', label: locale === 'id' ? 'Pengguna' : 'Users', icon: Users },
+  1442→  ];
+  1443→
+  1444→  return (
+  1445→    <motion.div
+  1446→      initial={{ opacity: 0, y: 20 }}
+  1447→      animate={{ opacity: 1, y: 0 }}
+  1448→      transition={{ duration: 0.4 }}
+  1449→      className="min-h-screen"
+  1450→    >
+  1451→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+  1452→        {/* Page Header */}
+  1453→        <div className="mb-8">
+  1454→          <h1 className="font-heading text-3xl font-bold text-foreground">
+  1455→            {t('nav.admin', locale)}
+  1456→          </h1>
+  1457→          <p className="mt-1 text-muted-foreground">
+  1458→            {locale === 'id'
+  1459→              ? 'Kelola toko, pesanan, dan pelanggan'
+  1460→              : 'Manage store, orders, and customers'}
+  1461→          </p>
+  1462→        </div>
+  1463→
+  1464→        {/* Loading State */}
+  1465→        {loading ? (
+  1466→          <div className="space-y-6">
+  1467→            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+  1468→              {Array.from({ length: 4 }).map((_, i) => (
+  1469→                <Skeleton key={i} className="h-28 rounded-xl" />
+  1470→              ))}
+  1471→            </div>
+  1472→            <Skeleton className="h-[300px] rounded-xl" />
+  1473→            <Skeleton className="h-[400px] rounded-xl" />
+  1474→          </div>
+  1475→        ) : (
+  1476→          <>
+  1477→            {/* Desktop: Sidebar Layout */}
+  1478→            <div className="hidden lg:grid lg:grid-cols-[240px_1fr] lg:gap-8">
+  1479→              {/* Sidebar */}
+  1480→              <aside className="space-y-1">
+  1481→                {tabItems.map((item) => {
+  1482→                  const Icon = item.icon;
+  1483→                  const isActive = activeTab === item.value;
+  1484→                  return (
+  1485→                    <button
+  1486→                      key={item.value}
+  1487→                      onClick={() => handleTabChange(item.value)}
+  1488→                      className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 ${
+  1489→                        isActive
+  1490→                          ? 'bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20'
+  1491→                          : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
+  1492→                      }`}
+  1493→                    >
+  1494→                      <Icon className="h-4 w-4" />
+  1495→                      <span>{item.label}</span>
+  1496→                      {item.value === 'orders' && orders.length > 0 && (
+  1497→                        <span
+  1498→                          className={`ml-auto text-xs rounded-full px-2 py-0.5 ${
+  1499→                            isActive
+  1500→                              ? 'bg-[#D4AF37] text-white'
+  1501→                              : 'bg-muted text-muted-foreground'
+  1502→                          }`}
+  1503→                        >
+  1504→                          {orders.length}
+  1505→                        </span>
+  1506→                      )}
+  1507→                    </button>
+  1508→                  );
+  1509→                })}
+  1510→              </aside>
+  1511→
+  1512→              {/* Content */}
+  1513→              <div>
+  1514→                <AnimatePresence mode="wait">
+  1515→                  {activeTab === 'stats' && (
+  1516→                    <motion.div
+  1517→                      key="stats"
+  1518→                      initial={{ opacity: 0, x: 20 }}
+  1519→                      animate={{ opacity: 1, x: 0 }}
+  1520→                      exit={{ opacity: 0, x: -20 }}
+  1521→                      transition={{ duration: 0.3 }}
+  1522→                    >
+  1523→                    <StatsTab locale={locale} books={books} orders={orders} users={users} />
+  1524→                    </motion.div>
+  1525→                  )}
+  1526→                  {activeTab === 'books' && (
+  1527→                    <motion.div
+  1528→                      key="books"
+  1529→                      initial={{ opacity: 0, x: 20 }}
+  1530→                      animate={{ opacity: 1, x: 0 }}
+  1531→                      exit={{ opacity: 0, x: -20 }}
+  1532→                      transition={{ duration: 0.3 }}
+  1533→                    >
+  1534→                      <BooksTab locale={locale} books={books} categories={categories} onRefresh={loadAll} />
+  1535→                    </motion.div>
+  1536→                  )}
+  1537→                  {activeTab === 'categories' && (
+  1538→                    <motion.div
+  1539→                      key="categories"
+  1540→                      initial={{ opacity: 0, x: 20 }}
+  1541→                      animate={{ opacity: 1, x: 0 }}
+  1542→                      exit={{ opacity: 0, x: -20 }}
+  1543→                      transition={{ duration: 0.3 }}
+  1544→                    >
+  1545→                      <CategoriesTab locale={locale} categories={categories} onRefresh={loadAll} />
+  1546→                    </motion.div>
+  1547→                  )}
+  1548→                  {activeTab === 'orders' && (
+  1549→                    <motion.div
+  1550→                      key="orders"
+  1551→                      initial={{ opacity: 0, x: 20 }}
+  1552→                      animate={{ opacity: 1, x: 0 }}
+  1553→                      exit={{ opacity: 0, x: -20 }}
+  1554→                      transition={{ duration: 0.3 }}
+  1555→                    >
+  1556→                      <OrdersTab locale={locale} orders={orders} onRefresh={loadAll} />
+  1557→                    </motion.div>
+  1558→                  )}
+  1559→                  {activeTab === 'users' && (
+  1560→                    <motion.div
+  1561→                      key="users"
+  1562→                      initial={{ opacity: 0, x: 20 }}
+  1563→                      animate={{ opacity: 1, x: 0 }}
+  1564→                      exit={{ opacity: 0, x: -20 }}
+  1565→                      transition={{ duration: 0.3 }}
+  1566→                    >
+  1567→                      <UsersTab locale={locale} users={users} />
+  1568→                    </motion.div>
+  1569→                  )}
+  1570→                </AnimatePresence>
+  1571→              </div>
+  1572→            </div>
+  1573→
+  1574→            {/* Mobile: Horizontal Tabs */}
+  1575→            <div className="lg:hidden">
+  1576→              <Tabs value={activeTab} onValueChange={handleTabChange}>
+  1577→                <TabsList className="w-full bg-muted/50 h-auto p-1 flex flex-wrap gap-1">
+  1578→                  {tabItems.map((item) => {
+  1579→                    const Icon = item.icon;
+  1580→                    return (
+  1581→                      <TabsTrigger
+  1582→                        key={item.value}
+  1583→                        value={item.value}
+  1584→                        className="flex items-center gap-1.5 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-white text-xs sm:text-sm"
+  1585→                      >
+  1586→                        <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+  1587→                        <span className="hidden sm:inline">{item.label}</span>
+  1588→                      </TabsTrigger>
+  1589→                    );
+  1590→                  })}
+  1591→                </TabsList>
+  1592→
+  1593→                <TabsContent value="stats">
+  1594→                  <div className="mt-4">
+  1595→                    <StatsTab locale={locale} books={books} orders={orders} users={users} />
+  1596→                  </div>
+  1597→                </TabsContent>
+  1598→                <TabsContent value="books">
+  1599→                  <div className="mt-4">
+  1600→                    <BooksTab locale={locale} books={books} categories={categories} onRefresh={loadAll} />
+  1601→                  </div>
+  1602→                </TabsContent>
+  1603→                <TabsContent value="categories">
+  1604→                  <div className="mt-4">
+  1605→                    <CategoriesTab locale={locale} categories={categories} onRefresh={loadAll} />
+  1606→                  </div>
+  1607→                </TabsContent>
+  1608→                <TabsContent value="orders">
+  1609→                  <div className="mt-4">
+  1610→                    <OrdersTab locale={locale} orders={orders} onRefresh={loadAll} />
+  1611→                  </div>
+  1612→                </TabsContent>
+  1613→                <TabsContent value="users">
+  1614→                  <div className="mt-4">
+  1615→                    <UsersTab locale={locale} users={users} />
+  1616→                  </div>
+  1617→                </TabsContent>
+  1618→              </Tabs>
+  1619→            </div>
+  1620→          </>
+  1621→        )}
+  1622→      </div>
+  1623→    </motion.div>
+  1624→  );
+  1625→}
+  1626→

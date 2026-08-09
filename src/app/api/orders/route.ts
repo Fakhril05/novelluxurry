@@ -5,8 +5,26 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
+    const orderId = searchParams.get('orderId');
+    const orderNumber = searchParams.get('orderNumber');
     const where: Record<string, unknown> = {};
     if (userId) where.userId = userId;
+    if (orderId) where.id = orderId;
+    if (orderNumber) where.orderNumber = orderNumber;
+
+    if (orderId || orderNumber) {
+      const order = await db.order.findFirst({
+        where,
+        include: {
+          items: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      });
+      if (!order) {
+        return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+      }
+      return NextResponse.json(order);
+    }
 
     const orders = await db.order.findMany({
       where,
@@ -62,7 +80,7 @@ export async function POST(request: NextRequest) {
       include: { items: true },
     });
 
-    return NextResponse.json(order, { status: 201 });
+    return NextResponse.json({ success: true, orderNumber: order.orderNumber, order }, { status: 201 });
   } catch (error) {
     console.error('Error creating order:', error);
     return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
@@ -71,10 +89,16 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { id, status } = await request.json();
+    const { searchParams } = new URL(request.url);
+    const queryId = searchParams.get('id');
+    const body = await request.json();
+    const id = queryId || body.id;
+    if (!id) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+    }
     const order = await db.order.update({
       where: { id },
-      data: { status },
+      data: { status: body.status },
     });
     return NextResponse.json(order);
   } catch (error) {
