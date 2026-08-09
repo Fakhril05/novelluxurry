@@ -63,7 +63,7 @@ export default function NotificationBell() {
             className="absolute right-0 top-12 w-80 sm:w-96 rounded-xl border border-border bg-background shadow-xl shadow-black/10 overflow-hidden"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <h3 className="text-sm font-semibold">{t('nav.notifications', locale) || (locale === 'id' ? 'Notifikasi' : 'Notifications')}</h3>
+              <h3 className="text-sm font-semibold">{locale === 'id' ? 'Notifikasi' : 'Notifications'}</h3>
               {unreadCount > 0 && (
                 <button onClick={markAllRead} className="text-xs text-[#D4AF37] hover:text-[#B8960C] transition-colors">
                   {locale === 'id' ? 'Tandai semua dibaca' : 'Mark all read'}

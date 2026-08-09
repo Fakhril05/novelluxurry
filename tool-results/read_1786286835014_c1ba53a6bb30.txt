@@ -1,0 +1,773 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useRef } from 'react';
+     4→import { motion, useInView } from 'framer-motion';
+     5→import {
+     6→  ArrowRight,
+     7→  Star,
+     8→  Sparkles,
+     9→  BookOpen,
+    10→  ChevronLeft,
+    11→  ChevronRight,
+    12→  Users,
+    13→  TrendingUp,
+    14→  Award,
+    15→  Tag,
+    16→  Gift,
+    17→  Quote,
+    18→} from 'lucide-react';
+    19→import { Button } from '@/components/ui/button';
+    20→import { Badge } from '@/components/ui/badge';
+    21→import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+    22→import { Input } from '@/components/ui/input';
+    23→import {
+    24→  Carousel,
+    25→  CarouselContent,
+    26→  CarouselItem,
+    27→  CarouselPrevious,
+    28→  CarouselNext,
+    29→} from '@/components/ui/carousel';
+    30→import { useAppStore, formatPrice } from '@/lib/store';
+    31→import { t } from '@/lib/i18n';
+    32→import BookCard from '@/components/BookCard';
+    33→import type { Book, Category, Testimonial } from '@/types';
+    34→import { toast } from 'sonner';
+    35→
+    36→/* ─── Animation helpers ─── */
+    37→const fadeUp = {
+    38→  hidden: { opacity: 0, y: 30 },
+    39→  visible: (i: number) => ({
+    40→    opacity: 1,
+    41→    y: 0,
+    42→    transition: { duration: 0.55, delay: i * 0.08, ease: [0.25, 0.46, 0.45, 0.94] },
+    43→  }),
+    44→};
+    45→
+    46→const fadeIn = {
+    47→  hidden: { opacity: 0 },
+    48→  visible: (i: number) => ({
+    49→    opacity: 1,
+    50→    transition: { duration: 0.6, delay: i * 0.1 },
+    51→  }),
+    52→};
+    53→
+    54→function SectionHeader({
+    55→  title,
+    56→  subtitle,
+    57→  action,
+    58→}: {
+    59→  title: string;
+    60→  subtitle: string;
+    61→  action?: { label: string; onClick: () => void };
+    62→}) {
+    63→  return (
+    64→    <motion.div
+    65→      initial="hidden"
+    66→      whileInView="visible"
+    67→      viewport={{ once: true, margin: '-80px' }}
+    68→      variants={fadeUp}
+    69→      custom={0}
+    70→      className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8"
+    71→    >
+    72→      <div>
+    73→        <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">{title}</h2>
+    74→        <p className="mt-2 text-muted-foreground text-sm sm:text-base">{subtitle}</p>
+    75→      </div>
+    76→      {action && (
+    77→        <Button
+    78→          variant="outline"
+    79→          onClick={action.onClick}
+    80→          className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-all shrink-0 h-10 px-5"
+    81→        >
+    82→          {action.label}
+    83→          <ArrowRight className="ml-2 h-4 w-4" />
+    84→        </Button>
+    85→      )}
+    86→    </motion.div>
+    87→  );
+    88→}
+    89→
+    90→/* ═══════════════════════════════════════════════════════════
+    91→   HORIZONTAL SCROLL ROW  (Bestsellers / New Arrivals)
+    92→   ═══════════════════════════════════════════════════════════ */
+    93→function HorizontalBookRow({
+    94→  books,
+    95→  title,
+    96→  subtitle,
+    97→  viewAllLabel,
+    98→  onViewAll,
+    99→}: {
+   100→  books: Book[];
+   101→  title: string;
+   102→  subtitle: string;
+   103→  viewAllLabel: string;
+   104→  onViewAll: () => void;
+   105→}) {
+   106→  const scrollRef = useRef<HTMLDivElement>(null);
+   107→
+   108→  const scroll = (dir: 'left' | 'right') => {
+   109→    if (!scrollRef.current) return;
+   110→    const amount = 340;
+   111→    scrollRef.current.scrollBy({
+   112→      left: dir === 'left' ? -amount : amount,
+   113→      behavior: 'smooth',
+   114→    });
+   115→  };
+   116→
+   117→  if (books.length === 0) return null;
+   118→
+   119→  return (
+   120→    <section className="py-16 sm:py-20">
+   121→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   122→        <SectionHeader
+   123→          title={title}
+   124→          subtitle={subtitle}
+   125→          action={{ label: viewAllLabel, onClick: onViewAll }}
+   126→        />
+   127→      </div>
+   128→
+   129→      <div className="relative group/row">
+   130→        {/* Left arrow */}
+   131→        <button
+   132→          onClick={() => scroll('left')}
+   133→          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-background/90 border border-border shadow-lg opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37] hidden sm:flex"
+   134→          aria-label="Scroll left"
+   135→        >
+   136→          <ChevronLeft className="h-5 w-5" />
+   137→        </button>
+   138→        {/* Right arrow */}
+   139→        <button
+   140→          onClick={() => scroll('right')}
+   141→          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-background/90 border border-border shadow-lg opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37] hidden sm:flex"
+   142→          aria-label="Scroll right"
+   143→        >
+   144→          <ChevronRight className="h-5 w-5" />
+   145→        </button>
+   146→
+   147→        <div
+   148→          ref={scrollRef}
+   149→          className="flex gap-5 overflow-x-auto scrollbar-hide px-4 sm:px-6 lg:px-8 pb-4 snap-x snap-mandatory"
+   150→        >
+   151→          {books.map((book, i) => (
+   152→            <div key={book.id} className="w-[180px] sm:w-[200px] shrink-0 snap-start">
+   153→              <BookCard book={book} index={i} />
+   154→            </div>
+   155→          ))}
+   156→        </div>
+   157→      </div>
+   158→    </section>
+   159→  );
+   160→}
+   161→
+   162→/* ═══════════════════════════════════════════════════════════
+   163→   MAIN HOMEPAGE COMPONENT
+   164→   ═══════════════════════════════════════════════════════════ */
+   165→export default function HomePage() {
+   166→  const { locale, setPage } = useAppStore();
+   167→
+   168→  // ── Data state ──
+   169→  const [books, setBooks] = useState<Book[]>([]);
+   170→  const [categories, setCategories] = useState<Category[]>([]);
+   171→  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+   172→  const [loading, setLoading] = useState(true);
+   173→
+   174→  // ── Testimonial carousel auto-play index ──
+   175→  const [activeIdx, setActiveIdx] = useState(0);
+   176→
+   177→  // ── Newsletter input ──
+   178→  const [email, setEmail] = useState('');
+   179→
+   180→  // ── Fetch data ──
+   181→  useEffect(() => {
+   182→    async function fetchData() {
+   183→      try {
+   184→        const [booksRes, catsRes, testRes] = await Promise.all([
+   185→          fetch('/api/books?limit=16'),
+   186→          fetch('/api/categories'),
+   187→          fetch('/api/testimonials'),
+   188→        ]);
+   189→        if (!booksRes.ok || !catsRes.ok || !testRes.ok) throw new Error('Fetch failed');
+   190→        const [booksData, catsData, testData] = await Promise.all([
+   191→          booksRes.json(),
+   192→          catsRes.json(),
+   193→          testRes.json(),
+   194→        ]);
+   195→        setBooks(booksData.books || []);
+   196→        setCategories(catsData);
+   197→        setTestimonials(testData);
+   198→      } catch (err) {
+   199→        console.error('Error loading homepage data:', err);
+   200→      } finally {
+   201→        setLoading(false);
+   202→      }
+   203→    }
+   204→    fetchData();
+   205→  }, []);
+   206→
+   207→  // ── Auto-play testimonial carousel ──
+   208→  useEffect(() => {
+   209→    if (testimonials.length <= 1) return;
+   210→    const interval = setInterval(() => {
+   211→      setActiveIdx((prev) => (prev + 1) % testimonials.length);
+   212→    }, 5000);
+   213→    return () => clearInterval(interval);
+   214→  }, [testimonials.length]);
+   215→
+   216→  // ── Derived data ──
+   217→  const bestsellers = books.filter((b) => b.isBestSeller);
+   218→  const newArrivals = books.filter((b) => b.isNewArrival);
+   219→
+   220→  // ── Loading skeleton ──
+   221→  if (loading) {
+   222→    return (
+   223→      <div className="min-h-screen flex items-center justify-center">
+   224→        <div className="flex flex-col items-center gap-4">
+   225→          <div className="h-12 w-12 rounded-full border-4 border-[#D4AF37]/20 border-t-[#D4AF37] animate-spin" />
+   226→          <p className="text-muted-foreground text-sm">{t('general.loading', locale)}</p>
+   227→        </div>
+   228→      </div>
+   229→    );
+   230→  }
+   231→
+   232→  return (
+   233→    <main>
+   234→      {/* ────────────────────────────────────────────────────
+   235→          1. HERO SECTION
+   236→          ──────────────────────────────────────────────────── */}
+   237→      <section className="relative min-h-screen flex items-center overflow-hidden">
+   238→        {/* Background */}
+   239→        <div className="absolute inset-0 z-0">
+   240→          <img
+   241→            src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1920&h=1080&fit=crop"
+   242→            alt="Luxury library"
+   243→            className="h-full w-full object-cover"
+   244→          />
+   245→          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/30" />
+   246→          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+   247→        </div>
+   248→
+   249→        {/* Radial gradient glow behind text */}
+   250→        <div
+   251→          className="absolute inset-0 z-[1] pointer-events-none"
+   252→          style={{
+   253→            background:
+   254→              'radial-gradient(ellipse at 35% 40%, rgba(212,175,55,0.15) 0%, transparent 70%)',
+   255→          }}
+   256→        />
+   257→
+   258→        {/* Floating gold particles */}
+   259→        <div className="absolute top-[15%] left-[10%] z-[2] h-2 w-2 rounded-full bg-[#D4AF37]/40 animate-float-subtle" />
+   260→        <div className="absolute top-[25%] right-[20%] z-[2] h-1.5 w-1.5 rounded-full bg-[#D4AF37]/30 animate-float-subtle [animation-delay:0.5s]" />
+   261→        <div className="absolute top-[60%] left-[8%] z-[2] h-1 w-1 rounded-full bg-[#E8D48B]/50 animate-float-subtle [animation-delay:1s]" />
+   262→        <div className="absolute top-[70%] right-[15%] z-[2] h-2.5 w-2.5 rounded-full bg-[#D4AF37]/25 animate-float-subtle [animation-delay:1.5s]" />
+   263→        <div className="absolute top-[40%] right-[35%] z-[2] h-1.5 w-1.5 rounded-full bg-[#D4AF37]/35 animate-float-subtle [animation-delay:2s]" />
+   264→        <div className="absolute top-[80%] left-[25%] z-[2] h-1 w-1 rounded-full bg-[#E8D48B]/40 animate-float-subtle [animation-delay:0.8s]" />
+   265→
+   266→        {/* Content */}
+   267→        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pt-24 pb-16">
+   268→          <motion.div
+   269→            initial={{ opacity: 0, y: 30 }}
+   270→            animate={{ opacity: 1, y: 0 }}
+   271→            transition={{ duration: 0.7, delay: 0.2 }}
+   272→          >
+   273→            <div className="max-w-2xl rounded-2xl border border-[#D4AF37]/15 p-6 sm:p-8 bg-black/10 backdrop-blur-[2px]">
+   274→              {/* Gold pill */}
+   275→              <motion.div
+   276→                initial={{ opacity: 0, y: 20 }}
+   277→                animate={{ opacity: 1, y: 0 }}
+   278→                transition={{ duration: 0.5 }}
+   279→              >
+   280→                <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5 text-sm text-[#E8D48B]">
+   281→                  <Sparkles className="h-3.5 w-3.5" />
+   282→                  Noveluxe
+   283→                </div>
+   284→              </motion.div>
+   285→
+   286→              {/* Title */}
+   287→              <motion.h1
+   288→                initial={{ opacity: 0, y: 30 }}
+   289→                animate={{ opacity: 1, y: 0 }}
+   290→                transition={{ duration: 0.6, delay: 0.15 }}
+   291→                className="mt-6 font-heading text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl leading-[1.1]"
+   292→              >
+   293→                {t('hero.title', locale)}
+   294→              </motion.h1>
+   295→
+   296→              {/* Decorative gold line divider */}
+   297→              <div className="mt-5 w-16 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/60 to-transparent" />
+   298→
+   299→              {/* Subtitle */}
+   300→              <motion.p
+   301→                initial={{ opacity: 0, y: 30 }}
+   302→                animate={{ opacity: 1, y: 0 }}
+   303→                transition={{ duration: 0.6, delay: 0.3 }}
+   304→                className="mt-4 max-w-xl text-lg text-white/70 leading-relaxed"
+   305→              >
+   306→                {t('hero.subtitle', locale)}
+   307→              </motion.p>
+   308→
+   309→              {/* CTA buttons */}
+   310→              <motion.div
+   311→                initial={{ opacity: 0, y: 30 }}
+   312→                animate={{ opacity: 1, y: 0 }}
+   313→                transition={{ duration: 0.6, delay: 0.45 }}
+   314→                className="mt-8 flex flex-col sm:flex-row gap-4"
+   315→              >
+   316→                <Button
+   317→                  size="lg"
+   318→                  onClick={() => setPage('catalog')}
+   319→                  className="bg-[#D4AF37] hover:bg-[#B8960C] text-white h-12 px-8 text-base font-semibold shadow-[0_0_30px_rgba(212,175,55,0.4)] hover:shadow-[0_0_40px_rgba(212,175,55,0.55)] transition-all"
+   320→                >
+   321→                  {t('hero.cta1', locale)}
+   322→                  <ArrowRight className="ml-2 h-4 w-4" />
+   323→                </Button>
+   324→                <Button
+   325→                  variant="outline"
+   326→                  size="lg"
+   327→                  onClick={() => setPage('catalog')}
+   328→                  className="border-[#D4AF37]/50 text-[#E8D48B] hover:bg-[#D4AF37]/15 hover:border-[#D4AF37] hover:shadow-[0_0_20px_rgba(212,175,55,0.25)] h-12 px-8 text-base transition-all"
+   329→                >
+   330→                  {t('hero.cta2', locale)}
+   331→                </Button>
+   332→              </motion.div>
+   333→
+   334→              {/* Stat badges */}
+   335→              <motion.div
+   336→                initial={{ opacity: 0, y: 20 }}
+   337→                animate={{ opacity: 1, y: 0 }}
+   338→                transition={{ duration: 0.6, delay: 0.55 }}
+   339→                className="mt-6 flex items-center gap-3"
+   340→              >
+   341→                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-xs font-medium text-[#E8D48B]">
+   342→                  <BookOpen className="h-3 w-3" />
+   343→                  18+ {locale === 'id' ? 'Judul' : 'Titles'}
+   344→                </span>
+   345→                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-xs font-medium text-[#E8D48B]">
+   346→                  <Users className="h-3 w-3" />
+   347→                  5000+ {locale === 'id' ? 'Pembeli' : 'Buyers'}
+   348→                </span>
+   349→              </motion.div>
+   350→            </div>
+   351→
+   352→            {/* Stats */}
+   353→            <motion.div
+   354→              initial={{ opacity: 0, y: 30 }}
+   355→              animate={{ opacity: 1, y: 0 }}
+   356→              transition={{ duration: 0.6, delay: 0.6 }}
+   357→              className="mt-10 flex items-center gap-8 sm:gap-10 flex-wrap px-2"
+   358→            >
+   359→              <div className="flex items-center gap-3">
+   360→                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
+   361→                  <Users className="h-5 w-5 text-[#D4AF37]" />
+   362→                </div>
+   363→                <div>
+   364→                  <p className="text-xl font-bold text-white">10K+</p>
+   365→                  <p className="text-xs text-white/50">{locale === 'id' ? 'Pembaca' : 'Readers'}</p>
+   366→                </div>
+   367→              </div>
+   368→              <div className="h-10 w-px bg-white/15" />
+   369→              <div className="flex items-center gap-3">
+   370→                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
+   371→                  <BookOpen className="h-5 w-5 text-[#D4AF37]" />
+   372→                </div>
+   373→                <div>
+   374→                  <p className="text-xl font-bold text-white">500+</p>
+   375→                  <p className="text-xs text-white/50">{locale === 'id' ? 'Judul' : 'Titles'}</p>
+   376→                </div>
+   377→              </div>
+   378→              <div className="h-10 w-px bg-white/15" />
+   379→              <div className="flex items-center gap-3">
+   380→                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
+   381→                  <Star className="h-5 w-5 text-[#D4AF37] fill-[#D4AF37]" />
+   382→                </div>
+   383→                <div>
+   384→                  <p className="text-xl font-bold text-white">4.9</p>
+   385→                  <p className="text-xs text-white/50">{locale === 'id' ? 'Rating' : 'Rating'}</p>
+   386→                </div>
+   387→              </div>
+   388→            </motion.div>
+   389→          </motion.div>
+   390→        </div>
+   391→      </section>
+   392→
+   393→      {/* ────────────────────────────────────────────────────
+   394→          2. CATEGORIES SECTION
+   395→          ──────────────────────────────────────────────────── */}
+   396→      <CategoriesSection categories={categories} locale={locale} />
+   397→
+   398→      {/* ────────────────────────────────────────────────────
+   399→          3. BESTSELLERS SECTION
+   400→          ──────────────────────────────────────────────────── */}
+   401→      <HorizontalBookRow
+   402→        books={bestsellers}
+   403→        title={t('bestseller.title', locale)}
+   404→        subtitle={t('bestseller.subtitle', locale)}
+   405→        viewAllLabel={t('bestseller.viewAll', locale)}
+   406→        onViewAll={() => setPage('catalog', { sort: 'bestseller' })}
+   407→      />
+   408→
+   409→      {/* ────────────────────────────────────────────────────
+   410→          4. NEW ARRIVALS SECTION
+   411→          ──────────────────────────────────────────────────── */}
+   412→      <HorizontalBookRow
+   413→        books={newArrivals}
+   414→        title={t('newArrival.title', locale)}
+   415→        subtitle={t('newArrival.subtitle', locale)}
+   416→        viewAllLabel={t('general.viewAll', locale)}
+   417→        onViewAll={() => setPage('catalog', { sort: 'newest' })}
+   418→      />
+   419→
+   420→      {/* ────────────────────────────────────────────────────
+   421→          5. PROMO BANNER
+   422→          ──────────────────────────────────────────────────── */}
+   423→      <PromoBanner locale={locale} />
+   424→
+   425→      {/* ────────────────────────────────────────────────────
+   426→          6. TESTIMONIALS SECTION
+   427→          ──────────────────────────────────────────────────── */}
+   428→      <TestimonialsSection
+   429→        testimonials={testimonials}
+   430→        activeIdx={activeIdx}
+   431→        setActiveIdx={setActiveIdx}
+   432→        locale={locale}
+   433→      />
+   434→    </main>
+   435→  );
+   436→}
+   437→
+   438→/* ═══════════════════════════════════════════════════════════
+   439→   CATEGORIES SECTION COMPONENT
+   440→   ═══════════════════════════════════════════════════════════ */
+   441→function CategoriesSection({
+   442→  categories,
+   443→  locale,
+   444→}: {
+   445→  categories: Category[];
+   446→  locale: 'id' | 'en';
+   447→}) {
+   448→  const { setPage } = useAppStore();
+   449→  const ref = useRef<HTMLDivElement>(null);
+   450→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   451→
+   452→  if (categories.length === 0) return null;
+   453→
+   454→  return (
+   455→    <section ref={ref} className="py-16 sm:py-20 bg-secondary/40">
+   456→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   457→        <SectionHeader
+   458→          title={t('categories.title', locale)}
+   459→          subtitle={t('categories.subtitle', locale)}
+   460→        />
+   461→
+   462→        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
+   463→          {categories.map((cat, i) => (
+   464→            <motion.button
+   465→              key={cat.id}
+   466→              initial="hidden"
+   467→              animate={inView ? 'visible' : 'hidden'}
+   468→              variants={fadeUp}
+   469→              custom={i}
+   470→              onClick={() => setPage('catalog', { genre: cat.slug })}
+   471→              className="group relative overflow-hidden rounded-2xl border border-border bg-card text-left transition-all duration-300 hover:border-[#D4AF37]/40 hover:shadow-xl hover:shadow-[#D4AF37]/10 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   472→              aria-label={`Browse ${cat.name}`}
+   473→            >
+   474→              {/* Category image */}
+   475→              <div className="relative aspect-[4/3] overflow-hidden">
+   476→                <img
+   477→                  src={cat.image || '/images/category-placeholder.jpg'}
+   478→                  alt={cat.name}
+   479→                  loading="lazy"
+   480→                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+   481→                />
+   482→                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+   483→                <div className="absolute inset-0 bg-[#D4AF37]/0 group-hover:bg-[#D4AF37]/10 transition-colors duration-300" />
+   484→              </div>
+   485→
+   486→              {/* Text overlay */}
+   487→              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
+   488→                <h3 className="font-heading text-sm sm:text-base font-bold text-white leading-tight">
+   489→                  {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
+   490→                </h3>
+   491→                <p className="mt-1 text-xs text-white/70">
+   492→                  {cat._count?.books || 0} {locale === 'id' ? 'buku' : 'books'}
+   493→                </p>
+   494→              </div>
+   495→
+   496→              {/* Gold accent line */}
+   497→              <div className="absolute top-0 left-0 w-full h-0.5 bg-[#D4AF37] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
+   498→            </motion.button>
+   499→          ))}
+   500→        </div>
+   501→      </div>
+   502→    </section>
+   503→  );
+   504→}
+   505→
+   506→/* ═══════════════════════════════════════════════════════════
+   507→   PROMO BANNER COMPONENT
+   508→   ═══════════════════════════════════════════════════════════ */
+   509→function PromoBanner({ locale }: { locale: 'id' | 'en' }) {
+   510→  const { setPage } = useAppStore();
+   511→  const ref = useRef<HTMLDivElement>(null);
+   512→  const inView = useInView(ref, { once: true, margin: '-80px' });
+   513→
+   514→  const handleCopyCode = () => {
+   515→    navigator.clipboard.writeText('WELCOME10');
+   516→    toast.success(locale === 'id' ? 'Kode berhasil disalin!' : 'Code copied!');
+   517→  };
+   518→
+   519→  return (
+   520→    <section ref={ref} className="py-16 sm:py-20">
+   521→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   522→        {/* Gradient border wrapper with glow */}
+   523→        <div className="relative rounded-[1.6rem] p-[2px] bg-gradient-to-br from-[#D4AF37] via-[#E8D48B] to-[#B8960C] shadow-[0_0_50px_rgba(212,175,55,0.3)]">
+   524→          {/* Glass effect outer ring */}
+   525→          <div className="absolute -inset-4 rounded-[2.2rem] bg-gradient-to-br from-[#D4AF37]/10 via-transparent to-[#D4AF37]/5 blur-xl pointer-events-none" />
+   526→        <motion.div
+   527→          initial="hidden"
+   528→          animate={inView ? 'visible' : 'hidden'}
+   529→          variants={fadeIn}
+   530→          custom={0}
+   531→          className="relative overflow-hidden rounded-[calc(1.6rem-2px)]"
+   532→        >
+   533→          {/* Gold gradient background */}
+   534→          <div className="absolute inset-0 bg-gradient-to-br from-[#D4AF37] via-[#E8D48B] to-[#B8960C]" />
+   535→          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-60" />
+   536→
+   537→          <div className="relative z-10 px-6 py-12 sm:px-12 sm:py-16 md:px-16 md:py-20 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+   538→            {/* Left - Icon & Text */}
+   539→            <div className="flex-1 text-center md:text-left">
+   540→              <div className="inline-flex items-center gap-2 rounded-full bg-black/15 px-3 py-1 mb-4">
+   541→                <Gift className="h-4 w-4 text-white" />
+   542→                <span className="text-xs font-semibold text-white uppercase tracking-wider">
+   543→                  {t('promo.title', locale)}
+   544→                </span>
+   545→              </div>
+   546→              <h2 className="font-heading text-3xl sm:text-4xl font-bold text-white leading-tight">
+   547→                {t('promo.subtitle', locale)}
+   548→              </h2>
+   549→              <p className="mt-3 text-white/80 text-sm sm:text-base max-w-md mx-auto md:mx-0">
+   550→                {t('promo.desc', locale)}
+   551→              </p>
+   552→
+   553→              <div className="mt-6 flex flex-col sm:flex-row items-center gap-4 justify-center md:justify-start">
+   554→                <Button
+   555→                  size="lg"
+   556→                  onClick={() => setPage('catalog')}
+   557→                  className="bg-black text-white hover:bg-black/80 h-12 px-8 text-base font-semibold transition-all"
+   558→                >
+   559→                  {t('hero.cta1', locale)}
+   560→                  <ArrowRight className="ml-2 h-4 w-4" />
+   561→                </Button>
+   562→
+   563→                {/* Promo code */}
+   564→                <button
+   565→                  onClick={handleCopyCode}
+   566→                  className="flex items-center gap-2 rounded-xl border-2 border-dashed border-white/50 bg-black/10 px-5 py-3 transition-all hover:border-white/80 hover:bg-black/20 group cursor-pointer"
+   567→                >
+   568→                  <Tag className="h-4 w-4 text-white/80" />
+   569→                  <span className="text-base sm:text-lg font-mono font-bold text-white tracking-wider">
+   570→                    WELCOME10
+   571→                  </span>
+   572→                  <span className="text-[10px] text-white/60 uppercase tracking-wider group-hover:text-white/80 transition-colors">
+   573→                    {locale === 'id' ? 'Salin' : 'Copy'}
+   574→                  </span>
+   575→                </button>
+   576→              </div>
+   577→            </div>
+   578→
+   579→            {/* Right - Decorative element */}
+   580→            <div className="hidden md:flex items-center justify-center shrink-0">
+   581→              <div className="relative">
+   582→                <div className="w-40 h-40 rounded-full bg-white/10 flex items-center justify-center animate-pulse-gold">
+   583→                  <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center">
+   584→                    <div className="text-center">
+   585→                      <p className="text-5xl font-bold text-white">10%</p>
+   586→                      <p className="text-xs text-white/80 font-semibold uppercase tracking-wider mt-1">
+   587→                        {t('promo.code', locale)}
+   588→                      </p>
+   589→                    </div>
+   590→                  </div>
+   591→                </div>
+   592→                {/* Decorative rings */}
+   593→                <div className="absolute -top-4 -right-4 h-8 w-8 rounded-full bg-white/10" />
+   594→                <div className="absolute -bottom-2 -left-2 h-6 w-6 rounded-full bg-white/10" />
+   595→                <div className="absolute top-1/2 -right-8 h-4 w-4 rounded-full bg-white/10" />
+   596→              </div>
+   597→            </div>
+   598→          </div>
+   599→        </motion.div>
+   600→        </div>
+   601→      </div>
+   602→    </section>
+   603→  );
+   604→}
+   605→
+   606→/* ═══════════════════════════════════════════════════════════
+   607→   TESTIMONIALS SECTION COMPONENT
+   608→   ═══════════════════════════════════════════════════════════ */
+   609→function TestimonialsSection({
+   610→  testimonials,
+   611→  activeIdx,
+   612→  setActiveIdx,
+   613→  locale,
+   614→}: {
+   615→  testimonials: Testimonial[];
+   616→  activeIdx: number;
+   617→  setActiveIdx: (idx: number) => void;
+   618→  locale: 'id' | 'en';
+   619→}) {
+   620→  const ref = useRef<HTMLDivElement>(null);
+   621→  const inView = useInView(ref, { once: true, margin: '-80px' });
+   622→
+   623→  if (testimonials.length === 0) return null;
+   624→
+   625→  return (
+   626→    <section ref={ref} className="py-16 sm:py-20 bg-secondary/40">
+   627→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   628→        {/* Header */}
+   629→        <motion.div
+   630→          initial="hidden"
+   631→          animate={inView ? 'visible' : 'hidden'}
+   632→          variants={fadeUp}
+   633→          custom={0}
+   634→          className="text-center mb-12"
+   635→        >
+   636→          <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
+   637→            {t('testimonial.title', locale)}
+   638→          </h2>
+   639→          <p className="mt-2 text-muted-foreground text-sm sm:text-base">
+   640→            {t('testimonial.subtitle', locale)}
+   641→          </p>
+   642→        </motion.div>
+   643→
+   644→        {/* Desktop: Carousel with shadcn */}
+   645→        <div className="hidden md:block">
+   646→          <motion.div
+   647→            initial="hidden"
+   648→            animate={inView ? 'visible' : 'hidden'}
+   649→            variants={fadeIn}
+   650→            custom={1}
+   651→            className="relative"
+   652→          >
+   653→            <Carousel
+   654→              opts={{
+   655→                align: 'start',
+   656→                loop: true,
+   657→              }}
+   658→              className="w-full"
+   659→            >
+   660→              <CarouselContent className="-ml-4">
+   661→                {testimonials.map((test) => (
+   662→                  <CarouselItem key={test.id} className="pl-4 md:basis-1/2 lg:basis-1/3">
+   663→                    <TestimonialCard testimonial={test} locale={locale} />
+   664→                  </CarouselItem>
+   665→                ))}
+   666→              </CarouselContent>
+   667→              <CarouselPrevious className="-left-14 bg-background border-border hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37]" />
+   668→              <CarouselNext className="-right-14 bg-background border-border hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37]" />
+   669→            </Carousel>
+   670→          </motion.div>
+   671→        </div>
+   672→
+   673→        {/* Mobile: Single card with dots */}
+   674→        <div className="md:hidden">
+   675→          <motion.div
+   676→            initial="hidden"
+   677→            animate={inView ? 'visible' : 'hidden'}
+   678→            variants={fadeIn}
+   679→            custom={1}
+   680→          >
+   681→            <div className="relative overflow-hidden">
+   682→              <div
+   683→                className="flex transition-transform duration-500 ease-in-out"
+   684→                style={{ transform: `translateX(-${activeIdx * 100}%)` }}
+   685→              >
+   686→                {testimonials.map((test) => (
+   687→                  <div key={test.id} className="w-full shrink-0 px-1">
+   688→                    <TestimonialCard testimonial={test} locale={locale} />
+   689→                  </div>
+   690→                ))}
+   691→              </div>
+   692→            </div>
+   693→
+   694→            {/* Dots */}
+   695→            <div className="flex items-center justify-center gap-2 mt-6">
+   696→              {testimonials.map((_, i) => (
+   697→                <button
+   698→                  key={i}
+   699→                  onClick={() => setActiveIdx(i)}
+   700→                  className={`h-2.5 rounded-full transition-all duration-300 ${
+   701→                    i === activeIdx
+   702→                      ? 'w-8 bg-[#D4AF37]'
+   703→                      : 'w-2.5 bg-[#D4AF37]/30 hover:bg-[#D4AF37]/50'
+   704→                  }`}
+   705→                  aria-label={`Go to testimonial ${i + 1}`}
+   706→                />
+   707→              ))}
+   708→            </div>
+   709→          </motion.div>
+   710→        </div>
+   711→      </div>
+   712→    </section>
+   713→  );
+   714→}
+   715→
+   716→/* ═══════════════════════════════════════════════════════════
+   717→   SINGLE TESTIMONIAL CARD
+   718→   ═══════════════════════════════════════════════════════════ */
+   719→function TestimonialCard({
+   720→  testimonial,
+   721→  locale,
+   722→}: {
+   723→  testimonial: Testimonial;
+   724→  locale: 'id' | 'en';
+   725→}) {
+   726→  return (
+   727→    <div className="h-full rounded-2xl border border-border bg-card p-6 sm:p-8 transition-all duration-300 hover:border-[#D4AF37]/30 hover:shadow-lg hover:shadow-[#D4AF37]/5">
+   728→      {/* Quote icon */}
+   729→      <Quote className="h-8 w-8 text-[#D4AF37]/20 mb-4" />
+   730→
+   731→      {/* Stars */}
+   732→      <div className="flex items-center gap-0.5 mb-4">
+   733→        {Array.from({ length: 5 }).map((_, i) => (
+   734→          <Star
+   735→            key={i}
+   736→            className={`h-4 w-4 ${
+   737→              i < testimonial.rating
+   738→                ? 'fill-[#D4AF37] text-[#D4AF37]'
+   739→                : 'text-muted-foreground/25'
+   740→            }`}
+   741→          />
+   742→        ))}
+   743→      </div>
+   744→
+   745→      {/* Comment */}
+   746→      <p className="text-sm sm:text-base text-foreground/80 leading-relaxed line-clamp-4 mb-6">
+   747→        &ldquo;{testimonial.comment}&rdquo;
+   748→      </p>
+   749→
+   750→      {/* Author */}
+   751→      <div className="flex items-center gap-3">
+   752→        <Avatar className="h-10 w-10 border-2 border-[#D4AF37]/20">
+   753→          <AvatarImage src={testimonial.avatar || undefined} alt={testimonial.name} />
+   754→          <AvatarFallback className="bg-[#D4AF37]/10 text-[#D4AF37] text-sm font-bold">
+   755→            {testimonial.name
+   756→              .split(' ')
+   757→              .map((n) => n[0])
+   758→              .join('')
+   759→              .slice(0, 2)
+   760→              .toUpperCase()}
+   761→          </AvatarFallback>
+   762→        </Avatar>
+   763→        <div>
+   764→          <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
+   765→          <p className="text-xs text-muted-foreground">
+   766→            {locale === 'id' ? 'Pembaca Noveluxe' : 'Noveluxe Reader'}
+   767→          </p>
+   768→        </div>
+   769→      </div>
+   770→    </div>
+   771→  );
+   772→}
+   773→

@@ -55,6 +55,13 @@ export default function LiveChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const locale = useAppStore((s) => s.locale);
 
+  // Listen for external open events (from floating button)
+  useEffect(() => {
+    const handler = () => { setIsOpen(true); setIsMinimized(false); };
+    window.addEventListener('open-live-chat', handler);
+    return () => window.removeEventListener('open-live-chat', handler);
+  }, []);
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isTyping]);

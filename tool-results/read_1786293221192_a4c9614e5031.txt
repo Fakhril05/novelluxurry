@@ -1,0 +1,1179 @@
+    50→ *   'tracking.searchPlaceholder': 'Enter order number (e.g. NVX-XXXX)',
+    51→ *   'tracking.searchButton': 'Track',
+    52→ *   'tracking.noOrder': 'Order Not Found',
+    53→ *   'tracking.noOrderDesc': 'Please double-check the order number you entered.',
+    54→ *   'tracking.orderSummary': 'Order Summary',
+    55→ *   'tracking.orderNumber': 'Order Number',
+    56→ *   'tracking.orderDate': 'Order Date',
+    57→ *   'tracking.orderStatus': 'Status',
+    58→ *   'tracking.progress': 'Order Progress',
+    59→ *   'tracking.stepPlaced': 'Order Placed',
+    60→ *   'tracking.stepPlacedDesc': 'Your order has been placed and is awaiting payment.',
+    61→ *   'tracking.stepConfirmed': 'Payment Confirmed',
+    62→ *   'tracking.stepConfirmedDesc': 'Payment has been confirmed. Your order is being prepared.',
+    63→ *   'tracking.stepProcessing': 'Processing',
+    64→ *   'tracking.stepProcessingDesc': 'Your order is being packed and prepared for shipment.',
+    65→ *   'tracking.stepShipped': 'Shipped',
+    66→ *   'tracking.stepShippedDesc': 'Your order has been shipped and is on its way to you.',
+    67→ *   'tracking.stepDelivered': 'Delivered',
+    68→ *   'tracking.stepDeliveredDesc': 'Your order has been delivered. Thank you for shopping!',
+    69→ *   'tracking.stepCancelled': 'Cancelled',
+    70→ *   'tracking.stepCancelledDesc': 'This order has been cancelled.',
+    71→ *   'tracking.items': 'Order Items',
+    72→ *   'tracking.shippingAddress': 'Shipping Address',
+    73→ *   'tracking.paymentMethod': 'Payment Method',
+    74→ *   'tracking.backToOrders': 'Back to Orders',
+    75→ *   'tracking.searchTitle': 'Track Your Order',
+    76→ *   'tracking.searchSubtitle': 'Enter your order number to view shipping status.',
+    77→ *   'tracking.searching': 'Searching for order...',
+    78→ *   'tracking.subtotal': 'Subtotal',
+    79→ *   'tracking.shipping': 'Shipping',
+    80→ *   'tracking.discount': 'Discount',
+    81→ *   'tracking.total': 'Total',
+    82→ *   'tracking.quantity': 'Qty',
+    83→ *   'tracking.notFoundTitle': 'Order Not Found',
+    84→ *   'tracking.notFoundDesc': 'The order with this ID could not be found. It may have been removed or the ID is incorrect.',
+    85→ *   'tracking.tryAgain': 'Try Again',
+    86→ *   'tracking.receiver': 'Receiver',
+    87→ *   'tracking.phone': 'Phone',
+    88→ *   'tracking.address': 'Address',
+    89→ *   'tracking.city': 'City',
+    90→ *   'tracking.expedition': 'Expedition',
+    91→ */
+    92→
+    93→'use client';
+    94→
+    95→import { useState, useEffect, useCallback } from 'react';
+    96→import { motion } from 'framer-motion';
+    97→import {
+    98→  ShoppingBag,
+    99→  CreditCard,
+   100→  Package,
+   101→  Truck,
+   102→  CheckCircle,
+   103→  XCircle,
+   104→  ArrowLeft,
+   105→  MapPin,
+   106→  Phone,
+   107→  FileText,
+   108→  Search,
+   109→} from 'lucide-react';
+   110→import { Button } from '@/components/ui/button';
+   111→import { Input } from '@/components/ui/input';
+   112→import { Card, CardContent, CardHeader } from '@/components/ui/card';
+   113→import { Badge } from '@/components/ui/badge';
+   114→import { Skeleton } from '@/components/ui/skeleton';
+   115→import { Separator } from '@/components/ui/separator';
+   116→import {
+   117→  Breadcrumb,
+   118→  BreadcrumbItem,
+   119→  BreadcrumbLink,
+   120→  BreadcrumbList,
+   121→  BreadcrumbPage,
+   122→  BreadcrumbSeparator,
+   123→} from '@/components/ui/breadcrumb';
+   124→import { useAppStore, formatPrice } from '@/lib/store';
+   125→import { t } from '@/lib/i18n';
+   126→import type { LucideIcon } from 'lucide-react';
+   127→
+   128→// --- Types ---
+   129→interface OrderItem {
+   130→  id: string;
+   131→  bookId: string;
+   132→  title: string;
+   133→  price: number;
+   134→  quantity: number;
+   135→  format: string;
+   136→}
+   137→
+   138→interface OrderData {
+   139→  id: string;
+   140→  orderNumber: string;
+   141→  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+   142→  subtotal: number;
+   143→  shippingCost: number;
+   144→  discount: number;
+   145→  total: number;
+   146→  shippingName: string | null;
+   147→  shippingPhone: string | null;
+   148→  shippingAddr: string | null;
+   149→  shippingCity: string | null;
+   150→  shippingCode: string | null;
+   151→  expedition: string | null;
+   152→  paymentMethod: string | null;
+   153→  createdAt: string;
+   154→  updatedAt: string;
+   155→  items: OrderItem[];
+   156→}
+   157→
+   158→// --- Status Badge Config ---
+   159→const STATUS_CONFIG: Record<
+   160→  string,
+   161→  { labelKey: string; color: string }
+   162→> = {
+   163→  pending: {
+   164→    labelKey: 'dashboard.pending',
+   165→    color:
+   166→      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-300',
+   167→  },
+   168→  processing: {
+   169→    labelKey: 'dashboard.processing',
+   170→    color:
+   171→      'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-300',
+   172→  },
+   173→  shipped: {
+   174→    labelKey: 'dashboard.shipped',
+   175→    color:
+   176→      'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-300',
+   177→  },
+   178→  delivered: {
+   179→    labelKey: 'dashboard.delivered',
+   180→    color:
+   181→      'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-300',
+   182→  },
+   183→  cancelled: {
+   184→    labelKey: 'dashboard.cancelled',
+   185→    color:
+   186→      'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-300',
+   187→  },
+   188→};
+   189→
+   190→// --- Timeline Step Config ---
+   191→interface TimelineStep {
+   192→  key: string;
+   193→  titleKey: string;
+   194→  descKey: string;
+   195→  icon: LucideIcon;
+   196→  isCompleted: (status: string) => boolean;
+   197→  isActive: (status: string) => boolean;
+   198→  isHidden: (status: string) => boolean;
+   199→}
+   200→
+   201→const TIMELINE_STEPS: TimelineStep[] = [
+   202→  {
+   203→    key: 'placed',
+   204→    titleKey: 'tracking.stepPlaced',
+   205→    descKey: 'tracking.stepPlacedDesc',
+   206→    icon: ShoppingBag,
+   207→    isCompleted: () => true,
+   208→    isActive: (status) => status === 'pending',
+   209→    isHidden: () => false,
+   210→  },
+   211→  {
+   212→    key: 'confirmed',
+   213→    titleKey: 'tracking.stepConfirmed',
+   214→    descKey: 'tracking.stepConfirmedDesc',
+   215→    icon: CreditCard,
+   216→    isCompleted: (status) => status !== 'pending' && status !== 'cancelled',
+   217→    isActive: (status) => status === 'processing',
+   218→    isHidden: (status) => status === 'cancelled',
+   219→  },
+   220→  {
+   221→    key: 'processing',
+   222→    titleKey: 'tracking.stepProcessing',
+   223→    descKey: 'tracking.stepProcessingDesc',
+   224→    icon: Package,
+   225→    isCompleted: (status) => ['processing', 'shipped', 'delivered'].includes(status),
+   226→    isActive: (status) => status === 'processing',
+   227→    isHidden: (status) => status === 'cancelled',
+   228→  },
+   229→  {
+   230→    key: 'shipped',
+   231→    titleKey: 'tracking.stepShipped',
+   232→    descKey: 'tracking.stepShippedDesc',
+   233→    icon: Truck,
+   234→    isCompleted: (status) => ['shipped', 'delivered'].includes(status),
+   235→    isActive: (status) => status === 'shipped',
+   236→    isHidden: (status) => status === 'cancelled',
+   237→  },
+   238→  {
+   239→    key: 'delivered',
+   240→    titleKey: 'tracking.stepDelivered',
+   241→    descKey: 'tracking.stepDeliveredDesc',
+   242→    icon: CheckCircle,
+   243→    isCompleted: (status) => status === 'delivered',
+   244→    isActive: (status) => status === 'delivered',
+   245→    isHidden: (status) => status === 'cancelled',
+   246→  },
+   247→  {
+   248→    key: 'cancelled',
+   249→    titleKey: 'tracking.stepCancelled',
+   250→    descKey: 'tracking.stepCancelledDesc',
+   251→    icon: XCircle,
+   252→    isCompleted: (status) => status === 'cancelled',
+   253→    isActive: (status) => status === 'cancelled',
+   254→    isHidden: (status) => status !== 'cancelled',
+   255→  },
+   256→];
+   257→
+   258→// --- Animation Variants ---
+   259→const fadeInUp = {
+   260→  hidden: { opacity: 0, y: 20 },
+   261→  visible: { opacity: 1, y: 0 },
+   262→};
+   263→
+   264→const staggerContainer = {
+   265→  hidden: { opacity: 0 },
+   266→  visible: {
+   267→    opacity: 1,
+   268→    transition: { staggerChildren: 0.08 },
+   269→  },
+   270→};
+   271→
+   272→// --- Helpers ---
+   273→function formatDate(dateStr: string, locale: 'id' | 'en'): string {
+   274→  const date = new Date(dateStr);
+   275→  return date.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+   276→    year: 'numeric',
+   277→    month: 'long',
+   278→    day: 'numeric',
+   279→  });
+   280→}
+   281→
+   282→function formatDateTime(dateStr: string, locale: 'id' | 'en'): string {
+   283→  const date = new Date(dateStr);
+   284→  return date.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+   285→    year: 'numeric',
+   286→    month: 'long',
+   287→    day: 'numeric',
+   288→    hour: '2-digit',
+   289→    minute: '2-digit',
+   290→  });
+   291→}
+   292→
+   293→function getPaymentLabel(method: string | null, locale: 'id' | 'en'): string {
+   294→  if (!method) return '-';
+   295→  const labels: Record<string, { id: string; en: string }> = {
+   296→    'bank-transfer': { id: 'Transfer Bank', en: 'Bank Transfer' },
+   297→    qris: { id: 'QRIS', en: 'QRIS' },
+   298→    'e-wallet': { id: 'E-Wallet', en: 'E-Wallet' },
+   299→    'virtual-account': { id: 'Virtual Account', en: 'Virtual Account' },
+   300→    cod: { id: 'COD (Bayar di Tempat)', en: 'COD (Cash on Delivery)' },
+   301→  };
+   302→  return labels[method]?.[locale] || method;
+   303→}
+   304→
+   305→// --- Component ---
+   306→export default function OrderTrackingPage() {
+   307→  const { pageParams, locale, setPage } = useAppStore();
+   308→  const orderId = pageParams.orderId || null;
+   309→
+   310→  const [order, setOrder] = useState<OrderData | null>(null);
+   311→  const [loading, setLoading] = useState(true);
+   312→  const [error, setError] = useState(false);
+   313→
+   314→  // --- Search state (when no orderId) ---
+   315→  const [searchQuery, setSearchQuery] = useState('');
+   316→  const [searching, setSearching] = useState(false);
+   317→  const [searchError, setSearchError] = useState(false);
+   318→
+   319→  const fetchOrder = useCallback(
+   320→    async (id: string) => {
+   321→      setLoading(true);
+   322→      setError(false);
+   323→      try {
+   324→        const res = await fetch(`/api/orders?orderId=${id}`);
+   325→        if (res.ok) {
+   326→          const data = await res.json();
+   327→          if (data.error) {
+   328→            setError(true);
+   329→            setOrder(null);
+   330→          } else {
+   331→            setOrder(data);
+   332→          }
+   333→        } else {
+   334→          setError(true);
+   335→          setOrder(null);
+   336→        }
+   337→      } catch {
+   338→        setError(true);
+   339→        setOrder(null);
+   340→      } finally {
+   341→        setLoading(false);
+   342→      }
+   343→    },
+   344→    []
+   345→  );
+   346→
+   347→  useEffect(() => {
+   348→    if (orderId) {
+   349→      fetchOrder(orderId);
+   350→    } else {
+   351→      setLoading(false);
+   352→    }
+   353→  }, [orderId, fetchOrder]);
+   354→
+   355→  const handleSearch = async (e: React.FormEvent) => {
+   356→    e.preventDefault();
+   357→    const trimmed = searchQuery.trim();
+   358→    if (!trimmed) return;
+   359→
+   360→    setSearching(true);
+   361→    setSearchError(false);
+   362→    try {
+   363→      const res = await fetch(`/api/orders?orderNumber=${encodeURIComponent(trimmed)}`);
+   364→      if (res.ok) {
+   365→        const data = await res.json();
+   366→        if (data.error || !data.id) {
+   367→          setSearchError(true);
+   368→          setOrder(null);
+   369→        } else {
+   370→          setSearchError(false);
+   371→          setOrder(data);
+   372→        }
+   373→      } else {
+   374→        setSearchError(true);
+   375→        setOrder(null);
+   376→      }
+   377→    } catch {
+   378→      setSearchError(true);
+   379→      setOrder(null);
+   380→    } finally {
+   381→      setSearching(false);
+   382→    }
+   383→  };
+   384→
+   385→  const handleBack = () => {
+   386→    setPage('dashboard', { tab: 'orders' });
+   387→  };
+   388→
+   389→  const statusCfg = order ? STATUS_CONFIG[order.status] || STATUS_CONFIG.pending : null;
+   390→
+   391→  // ==================== RENDER ====================
+   392→
+   393→  // --- Loading Skeleton ---
+   394→  if (loading) {
+   395→    return (
+   396→      <div className="min-h-screen bg-background">
+   397→        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   398→          <motion.div
+   399→            initial="hidden"
+   400→            animate="visible"
+   401→            variants={staggerContainer}
+   402→            className="space-y-6"
+   403→          >
+   404→            {/* Breadcrumb skeleton */}
+   405→            <motion.div variants={fadeInUp} className="flex items-center gap-2">
+   406→              <Skeleton className="h-4 w-12" />
+   407→              <Skeleton className="h-4 w-4" />
+   408→              <Skeleton className="h-4 w-16" />
+   409→              <Skeleton className="h-4 w-4" />
+   410→              <Skeleton className="h-4 w-28" />
+   411→            </motion.div>
+   412→
+   413→            {/* Back button skeleton */}
+   414→            <motion.div variants={fadeInUp}>
+   415→              <Skeleton className="h-9 w-40" />
+   416→            </motion.div>
+   417→
+   418→            {/* Order summary skeleton */}
+   419→            <motion.div variants={fadeInUp}>
+   420→              <Card className="border-border/50">
+   421→                <CardContent className="p-6 space-y-4">
+   422→                  <div className="flex flex-wrap items-center justify-between gap-3">
+   423→                    <div className="space-y-2">
+   424→                      <Skeleton className="h-5 w-40" />
+   425→                      <Skeleton className="h-4 w-28" />
+   426→                    </div>
+   427→                    <Skeleton className="h-7 w-24 rounded-full" />
+   428→                  </div>
+   429→                  <Separator />
+   430→                  <div className="grid gap-4 sm:grid-cols-3">
+   431→                    <Skeleton className="h-16 w-full rounded-lg" />
+   432→                    <Skeleton className="h-16 w-full rounded-lg" />
+   433→                    <Skeleton className="h-16 w-full rounded-lg" />
+   434→                  </div>
+   435→                </CardContent>
+   436→              </Card>
+   437→            </motion.div>
+   438→
+   439→            {/* Timeline skeleton */}
+   440→            <motion.div variants={fadeInUp}>
+   441→              <Skeleton className="h-6 w-40 mb-4" />
+   442→              <Card className="border-border/50">
+   443→                <CardContent className="p-6">
+   444→                  <div className="space-y-6">
+   445→                    {Array.from({ length: 4 }).map((_, i) => (
+   446→                      <div key={i} className="flex gap-4">
+   447→                        <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+   448→                        <div className="flex-1 space-y-2">
+   449→                          <Skeleton className="h-4 w-36" />
+   450→                          <Skeleton className="h-3 w-24" />
+   451→                          <Skeleton className="h-3 w-full" />
+   452→                        </div>
+   453→                      </div>
+   454→                    ))}
+   455→                  </div>
+   456→                </CardContent>
+   457→              </Card>
+   458→            </motion.div>
+   459→
+   460→            {/* Items skeleton */}
+   461→            <motion.div variants={fadeInUp}>
+   462→              <Skeleton className="h-6 w-32 mb-4" />
+   463→              <Card className="border-border/50">
+   464→                <CardContent className="p-6 space-y-4">
+   465→                  {Array.from({ length: 2 }).map((_, i) => (
+   466→                    <div key={i} className="flex items-center justify-between">
+   467→                      <div className="space-y-2">
+   468→                        <Skeleton className="h-4 w-48" />
+   469→                        <Skeleton className="h-3 w-24" />
+   470→                      </div>
+   471→                      <Skeleton className="h-4 w-20" />
+   472→                    </div>
+   473→                  ))}
+   474→                </CardContent>
+   475→              </Card>
+   476→            </motion.div>
+   477→
+   478→            {/* Shipping & Payment skeleton */}
+   479→            <div className="grid gap-6 sm:grid-cols-2">
+   480→              <motion.div variants={fadeInUp}>
+   481→                <Skeleton className="h-6 w-36 mb-4" />
+   482→                <Card className="border-border/50">
+   483→                  <CardContent className="p-6 space-y-3">
+   484→                    <Skeleton className="h-4 w-32" />
+   485→                    <Skeleton className="h-4 w-full" />
+   486→                    <Skeleton className="h-4 w-24" />
+   487→                  </CardContent>
+   488→                </Card>
+   489→              </motion.div>
+   490→              <motion.div variants={fadeInUp}>
+   491→                <Skeleton className="h-6 w-36 mb-4" />
+   492→                <Card className="border-border/50">
+   493→                  <CardContent className="p-6 space-y-3">
+   494→                    <Skeleton className="h-4 w-28" />
+   495→                    <Skeleton className="h-4 w-36" />
+   496→                  </CardContent>
+   497→                </Card>
+   498→              </motion.div>
+   499→            </div>
+   500→          </motion.div>
+   501→        </div>
+   502→      </div>
+   503→    );
+   504→  }
+   505→
+   506→  // --- Search Form (no orderId in params) ---
+   507→  if (!orderId && !order) {
+   508→    return (
+   509→      <div className="min-h-screen bg-background">
+   510→        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   511→          <motion.div
+   512→            initial="hidden"
+   513→            animate="visible"
+   514→            variants={staggerContainer}
+   515→          >
+   516→            {/* Breadcrumb */}
+   517→            <motion.div variants={fadeInUp} className="mb-6">
+   518→              <Breadcrumb>
+   519→                <BreadcrumbList>
+   520→                  <BreadcrumbItem>
+   521→                    <BreadcrumbLink
+   522→                      href="#"
+   523→                      onClick={(e) => {
+   524→                        e.preventDefault();
+   525→                        setPage('home');
+   526→                      }}
+   527→                      className="text-muted-foreground hover:text-foreground transition-colors"
+   528→                    >
+   529→                      {t('nav.home', locale)}
+   530→                    </BreadcrumbLink>
+   531→                  </BreadcrumbItem>
+   532→                  <BreadcrumbSeparator />
+   533→                  <BreadcrumbItem>
+   534→                    <BreadcrumbPage className="text-foreground font-medium">
+   535→                      {t('tracking.title', locale)}
+   536→                    </BreadcrumbPage>
+   537→                  </BreadcrumbItem>
+   538→                </BreadcrumbList>
+   539→              </Breadcrumb>
+   540→            </motion.div>
+   541→
+   542→            {/* Search Card */}
+   543→            <motion.div variants={fadeInUp}>
+   544→              <Card className="border-border/50 overflow-hidden">
+   545→                <div className="bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent p-8 text-center">
+   546→                  <motion.div
+   547→                    initial={{ scale: 0.8, opacity: 0 }}
+   548→                    animate={{ scale: 1, opacity: 1 }}
+   549→                    transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+   550→                    className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/20"
+   551→                  >
+   552→                    <Search className="h-8 w-8 text-[#D4AF37]" />
+   553→                  </motion.div>
+   554→                  <h1 className="font-heading text-2xl font-bold text-foreground mb-2">
+   555→                    {t('tracking.searchTitle', locale)}
+   556→                  </h1>
+   557→                  <p className="text-sm text-muted-foreground">
+   558→                    {t('tracking.searchSubtitle', locale)}
+   559→                  </p>
+   560→                </div>
+   561→                <CardContent className="p-6">
+   562→                  <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
+   563→                    <Input
+   564→                      value={searchQuery}
+   565→                      onChange={(e) => setSearchQuery(e.target.value)}
+   566→                      placeholder={t('tracking.searchPlaceholder', locale)}
+   567→                      className="flex-1 h-11"
+   568→                    />
+   569→                    <Button
+   570→                      type="submit"
+   571→                      disabled={searching || !searchQuery.trim()}
+   572→                      className="h-11 bg-[#D4AF37] text-white hover:bg-[#B8960C] px-8 shrink-0"
+   573→                    >
+   574→                      {searching ? (
+   575→                        <motion.div
+   576→                          animate={{ rotate: 360 }}
+   577→                          transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+   578→                        >
+   579→                          <Search className="h-4 w-4" />
+   580→                        </motion.div>
+   581→                      ) : (
+   582→                        <Search className="h-4 w-4 mr-2" />
+   583→                      )}
+   584→                      {t('tracking.searchButton', locale)}
+   585→                    </Button>
+   586→                  </form>
+   587→
+   588→                  {searchError && (
+   589→                    <motion.div
+   590→                      initial={{ opacity: 0, y: -5 }}
+   591→                      animate={{ opacity: 1, y: 0 }}
+   592→                      className="mt-4 flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 p-3"
+   593→                    >
+   594→                      <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+   595→                      <p className="text-sm text-red-700 dark:text-red-400">
+   596→                        {t('tracking.noOrder', locale)}
+   597→                      </p>
+   598→                    </motion.div>
+   599→                  )}
+   600→                </CardContent>
+   601→              </Card>
+   602→            </motion.div>
+   603→          </motion.div>
+   604→        </div>
+   605→      </div>
+   606→    );
+   607→  }
+   608→
+   609→  // --- Error State (order not found) ---
+   610→  if (error || (!order && orderId)) {
+   611→    return (
+   612→      <div className="min-h-screen bg-background">
+   613→        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   614→          <motion.div
+   615→            initial="hidden"
+   616→            animate="visible"
+   617→            variants={staggerContainer}
+   618→          >
+   619→            {/* Breadcrumb */}
+   620→            <motion.div variants={fadeInUp} className="mb-6">
+   621→              <Breadcrumb>
+   622→                <BreadcrumbList>
+   623→                  <BreadcrumbItem>
+   624→                    <BreadcrumbLink
+   625→                      href="#"
+   626→                      onClick={(e) => {
+   627→                        e.preventDefault();
+   628→                        setPage('home');
+   629→                      }}
+   630→                      className="text-muted-foreground hover:text-foreground transition-colors"
+   631→                    >
+   632→                      {t('nav.home', locale)}
+   633→                    </BreadcrumbLink>
+   634→                  </BreadcrumbItem>
+   635→                  <BreadcrumbSeparator />
+   636→                  <BreadcrumbItem>
+   637→                    <BreadcrumbLink
+   638→                      href="#"
+   639→                      onClick={(e) => {
+   640→                        e.preventDefault();
+   641→                        setPage('dashboard', { tab: 'orders' });
+   642→                      }}
+   643→                      className="text-muted-foreground hover:text-foreground transition-colors"
+   644→                    >
+   645→                      {t('nav.orders', locale)}
+   646→                    </BreadcrumbLink>
+   647→                  </BreadcrumbItem>
+   648→                  <BreadcrumbSeparator />
+   649→                  <BreadcrumbItem>
+   650→                    <BreadcrumbPage className="text-foreground font-medium">
+   651→                      {t('tracking.notFoundTitle', locale)}
+   652→                    </BreadcrumbPage>
+   653→                  </BreadcrumbItem>
+   654→                </BreadcrumbList>
+   655→              </Breadcrumb>
+   656→            </motion.div>
+   657→
+   658→            <motion.div variants={fadeInUp}>
+   659→              <Card className="border-border/50">
+   660→                <CardContent className="py-16 flex flex-col items-center text-center">
+   661→                  <motion.div
+   662→                    initial={{ scale: 0.8, opacity: 0 }}
+   663→                    animate={{ scale: 1, opacity: 1 }}
+   664→                    transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
+   665→                    className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted"
+   666→                  >
+   667→                    <FileText className="h-8 w-8 text-muted-foreground" />
+   668→                  </motion.div>
+   669→                  <h2 className="font-heading text-xl font-semibold text-foreground mb-2">
+   670→                    {t('tracking.notFoundTitle', locale)}
+   671→                  </h2>
+   672→                  <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+   673→                    {t('tracking.notFoundDesc', locale)}
+   674→                  </p>
+   675→                  <div className="flex gap-3">
+   676→                    <Button
+   677→                      variant="outline"
+   678→                      onClick={handleBack}
+   679→                      className="border-border"
+   680→                    >
+   681→                      <ArrowLeft className="h-4 w-4 mr-2" />
+   682→                      {t('tracking.backToOrders', locale)}
+   683→                    </Button>
+   684→                    <Button
+   685→                      onClick={() => fetchOrder(orderId)}
+   686→                      className="bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+   687→                    >
+   688→                      {t('tracking.tryAgain', locale)}
+   689→                    </Button>
+   690→                  </div>
+   691→                </CardContent>
+   692→              </Card>
+   693→            </motion.div>
+   694→          </motion.div>
+   695→        </div>
+   696→      </div>
+   697→    );
+   698→  }
+   699→
+   700→  // --- Main Order Tracking View ---
+   701→  if (!order) return null;
+   702→
+   703→  const visibleSteps = TIMELINE_STEPS.filter(
+   704→    (step) => !step.isHidden(order.status)
+   705→  );
+   706→
+   707→  return (
+   708→    <div className="min-h-screen bg-background">
+   709→      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   710→        <motion.div
+   711→          initial="hidden"
+   712→          animate="visible"
+   713→          variants={staggerContainer}
+   714→          className="space-y-6"
+   715→        >
+   716→          {/* Breadcrumb */}
+   717→          <motion.div variants={fadeInUp}>
+   718→            <Breadcrumb>
+   719→              <BreadcrumbList>
+   720→                <BreadcrumbItem>
+   721→                  <BreadcrumbLink
+   722→                    href="#"
+   723→                    onClick={(e) => {
+   724→                      e.preventDefault();
+   725→                      setPage('home');
+   726→                    }}
+   727→                    className="text-muted-foreground hover:text-foreground transition-colors"
+   728→                  >
+   729→                    {t('nav.home', locale)}
+   730→                  </BreadcrumbLink>
+   731→                </BreadcrumbItem>
+   732→                <BreadcrumbSeparator />
+   733→                <BreadcrumbItem>
+   734→                  <BreadcrumbLink
+   735→                    href="#"
+   736→                    onClick={(e) => {
+   737→                      e.preventDefault();
+   738→                      setPage('dashboard', { tab: 'orders' });
+   739→                    }}
+   740→                    className="text-muted-foreground hover:text-foreground transition-colors"
+   741→                  >
+   742→                    {t('nav.orders', locale)}
+   743→                  </BreadcrumbLink>
+   744→                </BreadcrumbItem>
+   745→                <BreadcrumbSeparator />
+   746→                <BreadcrumbItem>
+   747→                  <BreadcrumbPage className="text-foreground font-medium font-mono text-sm">
+   748→                    {order.orderNumber}
+   749→                  </BreadcrumbPage>
+   750→                </BreadcrumbItem>
+   751→              </BreadcrumbList>
+   752→            </Breadcrumb>
+   753→          </motion.div>
+   754→
+   755→          {/* Back Button */}
+   756→          <motion.div variants={fadeInUp}>
+   757→            <Button
+   758→              variant="ghost"
+   759→              onClick={handleBack}
+   760→              className="-ml-2 text-muted-foreground hover:text-foreground hover:bg-muted"
+   761→            >
+   762→              <ArrowLeft className="h-4 w-4 mr-2" />
+   763→              {t('tracking.backToOrders', locale)}
+   764→            </Button>
+   765→          </motion.div>
+   766→
+   767→          {/* ========== 1. Order Summary Card ========== */}
+   768→          <motion.div variants={fadeInUp}>
+   769→            <Card className="border-border/50 overflow-hidden">
+   770→              <div className="bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent p-5">
+   771→                <h2 className="font-heading text-lg font-semibold text-foreground">
+   772→                  {t('tracking.orderSummary', locale)}
+   773→                </h2>
+   774→              </div>
+   775→              <CardContent className="p-5 sm:p-6">
+   776→                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+   777→                  <div className="space-y-1">
+   778→                    <div className="flex items-center gap-2">
+   779→                      <FileText className="h-4 w-4 text-muted-foreground" />
+   780→                      <span className="text-sm text-muted-foreground">
+   781→                        {t('tracking.orderNumber', locale)}
+   782→                      </span>
+   783→                    </div>
+   784→                    <p className="font-mono text-lg font-bold text-foreground">
+   785→                      {order.orderNumber}
+   786→                    </p>
+   787→                  </div>
+   788→                  <div className="text-right space-y-1">
+   789→                    <p className="text-xs text-muted-foreground">
+   790→                      {t('tracking.orderDate', locale)}
+   791→                    </p>
+   792→                    <p className="text-sm font-medium text-foreground">
+   793→                      {formatDate(order.createdAt, locale)}
+   794→                    </p>
+   795→                  </div>
+   796→                </div>
+   797→
+   798→                <Separator className="mb-4" />
+   799→
+   800→                <div className="grid gap-4 sm:grid-cols-3">
+   801→                  {/* Status */}
+   802→                  <div className="rounded-lg bg-muted/50 p-3">
+   803→                    <p className="text-xs text-muted-foreground mb-1.5">
+   804→                      {t('tracking.orderStatus', locale)}
+   805→                    </p>
+   806→                    {statusCfg && (
+   807→                      <Badge
+   808→                        variant="outline"
+   809→                        className={`${statusCfg.color} text-xs font-semibold border`}
+   810→                      >
+   811→                        {t(statusCfg.labelKey, locale)}
+   812→                      </Badge>
+   813→                    )}
+   814→                  </div>
+   815→
+   816→                  {/* Items Count */}
+   817→                  <div className="rounded-lg bg-muted/50 p-3">
+   818→                    <p className="text-xs text-muted-foreground mb-1.5">
+   819→                      {t('tracking.items', locale)}
+   820→                    </p>
+   821→                    <p className="text-sm font-semibold text-foreground">
+   822→                      {order.items.length}{' '}
+   823→                      {locale === 'id'
+   824→                        ? order.items.length > 1
+   825→                          ? 'item'
+   826→                          : 'item'
+   827→                        : order.items.length > 1
+   828→                          ? 'items'
+   829→                          : 'item'}
+   830→                    </p>
+   831→                  </div>
+   832→
+   833→                  {/* Total */}
+   834→                  <div className="rounded-lg bg-muted/50 p-3">
+   835→                    <p className="text-xs text-muted-foreground mb-1.5">
+   836→                      {t('tracking.total', locale)}
+   837→                    </p>
+   838→                    <p className="text-base font-bold text-[#D4AF37]">
+   839→                      {formatPrice(order.total, locale)}
+   840→                    </p>
+   841→                  </div>
+   842→                </div>
+   843→              </CardContent>
+   844→            </Card>
+   845→          </motion.div>
+   846→
+   847→          {/* ========== 2. Timeline / Stepper ========== */}
+   848→          <motion.div variants={fadeInUp}>
+   849→            <h2 className="font-heading text-lg font-semibold text-foreground mb-4">
+   850→              {t('tracking.progress', locale)}
+   851→            </h2>
+   852→            <Card className="border-border/50">
+   853→              <CardContent className="p-5 sm:p-6">
+   854→                <div className="relative">
+   855→                  {visibleSteps.map((step, idx) => {
+   856→                    const Icon = step.icon;
+   857→                    const completed = step.isCompleted(order.status);
+   858→                    const active = step.isActive(order.status);
+   859→                    const isLast = idx === visibleSteps.length - 1;
+   860→
+   861→                    return (
+   862→                      <div key={step.key} className="relative flex gap-4">
+   863→                        {/* Vertical Line */}
+   864→                        {!isLast && (
+   865→                          <div
+   866→                            className="absolute left-5 top-12 w-0.5 h-[calc(100%-2rem)]"
+   867→                            style={{
+   868→                              backgroundColor:
+   869→                                completed
+   870→                                  ? '#D4AF37'
+   871→                                  : 'hsl(var(--border))',
+   872→                              opacity: completed ? 0.4 : 0.3,
+   873→                            }}
+   874→                          />
+   875→                        )}
+   876→
+   877→                        {/* Icon Circle */}
+   878→                        <div className="relative z-10 shrink-0">
+   879→                          <motion.div
+   880→                            initial={{ scale: 0.8, opacity: 0 }}
+   881→                            animate={{ scale: 1, opacity: 1 }}
+   882→                            transition={{ delay: idx * 0.1, type: 'spring', stiffness: 200 }}
+   883→                            className={`
+   884→                              flex h-10 w-10 items-center justify-center rounded-full
+   885→                              transition-colors duration-300
+   886→                              ${
+   887→                                order.status === 'cancelled' && step.key === 'cancelled'
+   888→                                  ? 'bg-red-100 dark:bg-red-900/30 ring-2 ring-red-400 dark:ring-red-600'
+   889→                                  : completed
+   890→                                    ? 'bg-[#D4AF37] text-white'
+   891→                                    : 'bg-muted text-muted-foreground'
+   892→                              }
+   893→                            `}
+   894→                          >
+   895→                            <Icon className="h-5 w-5" />
+   896→                          </motion.div>
+   897→                          {/* Pulse ring on active step */}
+   898→                          {active && order.status !== 'cancelled' && (
+   899→                            <motion.div
+   900→                              className="absolute inset-0 rounded-full border-2 border-[#D4AF37]"
+   901→                              animate={{ scale: [1, 1.35, 1], opacity: [0.6, 0, 0.6] }}
+   902→                              transition={{
+   903→                                duration: 2,
+   904→                                repeat: Infinity,
+   905→                                ease: 'easeInOut',
+   906→                              }}
+   907→                            />
+   908→                          )}
+   909→                          {active && order.status === 'cancelled' && (
+   910→                            <motion.div
+   911→                              className="absolute inset-0 rounded-full border-2 border-red-400 dark:border-red-600"
+   912→                              animate={{ scale: [1, 1.35, 1], opacity: [0.6, 0, 0.6] }}
+   913→                              transition={{
+   914→                                duration: 2,
+   915→                                repeat: Infinity,
+   916→                                ease: 'easeInOut',
+   917→                              }}
+   918→                            />
+   919→                          )}
+   920→                        </div>
+   921→
+   922→                        {/* Content */}
+   923→                        <div className="pb-8 min-w-0 flex-1">
+   924→                          <div className="flex flex-wrap items-center gap-2 mb-0.5">
+   925→                            <h3
+   926→                              className={`
+   927→                                text-sm font-semibold transition-colors
+   928→                                ${
+   929→                                  order.status === 'cancelled' && step.key === 'cancelled'
+   930→                                    ? 'text-red-600 dark:text-red-400'
+   931→                                    : completed
+   932→                                      ? 'text-foreground'
+   933→                                      : 'text-muted-foreground'
+   934→                                }
+   935→                              `}
+   936→                            >
+   937→                              {t(step.titleKey, locale)}
+   938→                            </h3>
+   939→                            {completed && order.status !== 'cancelled' && (
+   940→                              <CheckCircle className="h-3.5 w-3.5 text-[#D4AF37]" />
+   941→                            )}
+   942→                            {order.status === 'cancelled' && step.key === 'cancelled' && (
+   943→                              <XCircle className="h-3.5 w-3.5 text-red-500" />
+   944→                            )}
+   945→                          </div>
+   946→
+   947→                          {/* Date/time for active step */}
+   948→                          {active && (
+   949→                            <p className="text-xs text-muted-foreground mb-1">
+   950→                              {formatDateTime(order.updatedAt, locale)}
+   951→                            </p>
+   952→                          )}
+   953→                          {completed && !active && (
+   954→                            <p className="text-xs text-muted-foreground mb-1">
+   955→                              {formatDateTime(order.createdAt, locale)}
+   956→                            </p>
+   957→                          )}
+   958→
+   959→                          <p
+   960→                            className={`
+   961→                              text-xs leading-relaxed
+   962→                              ${completed ? 'text-muted-foreground' : 'text-muted-foreground/60'}
+   963→                            `}
+   964→                          >
+   965→                            {t(step.descKey, locale)}
+   966→                          </p>
+   967→                        </div>
+   968→                      </div>
+   969→                    );
+   970→                  })}
+   971→                </div>
+   972→              </CardContent>
+   973→            </Card>
+   974→          </motion.div>
+   975→
+   976→          {/* ========== 3. Order Items ========== */}
+   977→          <motion.div variants={fadeInUp}>
+   978→            <h2 className="font-heading text-lg font-semibold text-foreground mb-4">
+   979→              {t('tracking.items', locale)}
+   980→            </h2>
+   981→            <Card className="border-border/50">
+   982→              <CardContent className="p-5 sm:p-6">
+   983→                <div className="space-y-0 divide-y divide-border/50">
+   984→                  {order.items.map((item, idx) => (
+   985→                    <motion.div
+   986→                      key={item.id || idx}
+   987→                      initial={{ opacity: 0, x: -10 }}
+   988→                      animate={{ opacity: 1, x: 0 }}
+   989→                      transition={{ delay: idx * 0.05 }}
+   990→                      className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
+   991→                    >
+   992→                      <div className="min-w-0 flex-1">
+   993→                        <p className="text-sm font-medium text-foreground truncate">
+   994→                          {item.title}
+   995→                        </p>
+   996→                        <div className="flex items-center gap-2 mt-1">
+   997→                          {item.format && (
+   998→                            <Badge
+   999→                              variant="secondary"
+  1000→                              className="text-[10px] px-1.5 py-0 h-5 font-normal"
+  1001→                            >
+  1002→                              {item.format}
+  1003→                            </Badge>
+  1004→                          )}
+  1005→                          <span className="text-xs text-muted-foreground">
+  1006→                            {formatPrice(item.price, locale)}
+  1007→                          </span>
+  1008→                          <span className="text-xs text-muted-foreground">×</span>
+  1009→                          <span className="text-xs text-muted-foreground">
+  1010→                            {item.quantity}
+  1011→                          </span>
+  1012→                        </div>
+  1013→                      </div>
+  1014→                      <span className="text-sm font-semibold text-foreground shrink-0">
+  1015→                        {formatPrice(item.price * item.quantity, locale)}
+  1016→                      </span>
+  1017→                    </motion.div>
+  1018→                  ))}
+  1019→                </div>
+  1020→
+  1021→                <Separator className="my-4" />
+  1022→
+  1023→                {/* Price Summary */}
+  1024→                <div className="space-y-2">
+  1025→                  <div className="flex items-center justify-between text-sm">
+  1026→                    <span className="text-muted-foreground">
+  1027→                      {t('tracking.subtotal', locale)}
+  1028→                    </span>
+  1029→                    <span className="text-foreground">
+  1030→                      {formatPrice(order.subtotal, locale)}
+  1031→                    </span>
+  1032→                  </div>
+  1033→                  <div className="flex items-center justify-between text-sm">
+  1034→                    <span className="text-muted-foreground">
+  1035→                      {t('tracking.shipping', locale)}
+  1036→                    </span>
+  1037→                    <span className="text-foreground">
+  1038→                      {formatPrice(order.shippingCost, locale)}
+  1039→                    </span>
+  1040→                  </div>
+  1041→                  {order.discount > 0 && (
+  1042→                    <div className="flex items-center justify-between text-sm">
+  1043→                      <span className="text-muted-foreground">
+  1044→                        {t('tracking.discount', locale)}
+  1045→                      </span>
+  1046→                      <span className="text-green-600 dark:text-green-400">
+  1047→                        -{formatPrice(order.discount, locale)}
+  1048→                      </span>
+  1049→                    </div>
+  1050→                  )}
+  1051→                  <Separator />
+  1052→                  <div className="flex items-center justify-between">
+  1053→                    <span className="text-sm font-semibold text-foreground">
+  1054→                      {t('tracking.total', locale)}
+  1055→                    </span>
+  1056→                    <span className="text-lg font-bold text-[#D4AF37]">
+  1057→                      {formatPrice(order.total, locale)}
+  1058→                    </span>
+  1059→                  </div>
+  1060→                </div>
+  1061→              </CardContent>
+  1062→            </Card>
+  1063→          </motion.div>
+  1064→
+  1065→          {/* ========== 4 & 5. Shipping Address & Payment Method ========== */}
+  1066→          <div className="grid gap-6 sm:grid-cols-2">
+  1067→            {/* Shipping Address */}
+  1068→            <motion.div variants={fadeInUp}>
+  1069→              <h2 className="font-heading text-lg font-semibold text-foreground mb-4">
+  1070→                {t('tracking.shippingAddress', locale)}
+  1071→              </h2>
+  1072→              <Card className="border-border/50">
+  1073→                <CardContent className="p-5 space-y-3">
+  1074→                  <div className="flex items-start gap-3">
+  1075→                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+  1076→                      <MapPin className="h-4 w-4 text-muted-foreground" />
+  1077→                    </div>
+  1078→                    <div className="min-w-0">
+  1079→                      <p className="text-xs text-muted-foreground uppercase tracking-wider">
+  1080→                        {t('tracking.receiver', locale)}
+  1081→                      </p>
+  1082→                      <p className="text-sm font-medium text-foreground">
+  1083→                        {order.shippingName || '-'}
+  1084→                      </p>
+  1085→                    </div>
+  1086→                  </div>
+  1087→
+  1088→                  {order.shippingPhone && (
+  1089→                    <div className="flex items-start gap-3">
+  1090→                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+  1091→                        <Phone className="h-4 w-4 text-muted-foreground" />
+  1092→                      </div>
+  1093→                      <div className="min-w-0">
+  1094→                        <p className="text-xs text-muted-foreground uppercase tracking-wider">
+  1095→                          {t('tracking.phone', locale)}
+  1096→                        </p>
+  1097→                        <p className="text-sm font-medium text-foreground">
+  1098→                          {order.shippingPhone}
+  1099→                        </p>
+  1100→                      </div>
+  1101→                    </div>
+  1102→                  )}
+  1103→
+  1104→                  <div className="flex items-start gap-3">
+  1105→                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+  1106→                      <MapPin className="h-4 w-4 text-muted-foreground" />
+  1107→                    </div>
+  1108→                    <div className="min-w-0">
+  1109→                      <p className="text-xs text-muted-foreground uppercase tracking-wider">
+  1110→                        {t('tracking.address', locale)}
+  1111→                      </p>
+  1112→                      <p className="text-sm text-foreground leading-relaxed">
+  1113→                        {order.shippingAddr || '-'}
+  1114→                      </p>
+  1115→                      {order.shippingCity && (
+  1116→                        <p className="text-sm text-muted-foreground">
+  1117→                          {order.shippingCity}
+  1118→                          {order.shippingCode ? ` ${order.shippingCode}` : ''}
+  1119→                        </p>
+  1120→                      )}
+  1121→                    </div>
+  1122→                  </div>
+  1123→
+  1124→                  {order.expedition && (
+  1125→                    <div className="flex items-start gap-3">
+  1126→                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+  1127→                        <Truck className="h-4 w-4 text-muted-foreground" />
+  1128→                      </div>
+  1129→                      <div className="min-w-0">
+  1130→                        <p className="text-xs text-muted-foreground uppercase tracking-wider">
+  1131→                          {t('tracking.expedition', locale)}
+  1132→                        </p>
+  1133→                        <p className="text-sm font-medium text-foreground">
+  1134→                          {order.expedition}
+  1135→                        </p>
+  1136→                      </div>
+  1137→                    </div>
+  1138→                  )}
+  1139→                </CardContent>
+  1140→              </Card>
+  1141→            </motion.div>
+  1142→
+  1143→            {/* Payment Method */}
+  1144→            <motion.div variants={fadeInUp}>
+  1145→              <h2 className="font-heading text-lg font-semibold text-foreground mb-4">
+  1146→                {t('tracking.paymentMethod', locale)}
+  1147→              </h2>
+  1148→              <Card className="border-border/50">
+  1149→                <CardContent className="p-5">
+  1150→                  <div className="flex items-start gap-3">
+  1151→                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+  1152→                      <CreditCard className="h-5 w-5 text-[#D4AF37]" />
+  1153→                    </div>
+  1154→                    <div className="min-w-0">
+  1155→                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+  1156→                        {t('tracking.paymentMethod', locale)}
+  1157→                      </p>
+  1158→                      <p className="text-sm font-semibold text-foreground">
+  1159→                        {getPaymentLabel(order.paymentMethod, locale)}
+  1160→                      </p>
+  1161→                      <p className="text-xs text-muted-foreground mt-1">
+  1162→                        {formatDateTime(order.createdAt, locale)}
+  1163→                      </p>
+  1164→                    </div>
+  1165→                  </div>
+  1166→
+  1167→                  <Separator className="my-4" />
+  1168→
+  1169→                  {/* Mini price summary */}
+  1170→                  <div className="space-y-1.5">
+  1171→                    <div className="flex justify-between text-xs">
+  1172→                      <span className="text-muted-foreground">
+  1173→                        {t('tracking.subtotal', locale)}
+  1174→                      </span>
+  1175→                      <span className="text-foreground">
+  1176→                        {formatPrice(order.subtotal, locale)}
+  1177→                      </span>
+  1178→                    </div>
+  1179→                    <div className="flex justify-between text-xs">
+  1180→                      <span className="text-muted-foreground">
+  1181→                        {t('tracking.shipping', locale)}
+  1182→                      </span>
+  1183→                      <span className="text-foreground">
+  1184→                        {formatPrice(order.shippingCost, locale)}
+  1185→                      </span>
+  1186→                    </div>
+  1187→                    {order.discount > 0 && (
+  1188→                      <div className="flex justify-between text-xs">
+  1189→                        <span className="text-muted-foreground">
+  1190→                          {t('tracking.discount', locale)}
+  1191→                        </span>
+  1192→                        <span className="text-green-600 dark:text-green-400">
+  1193→                          -{formatPrice(order.discount, locale)}
+  1194→                        </span>
+  1195→                      </div>
+  1196→                    )}
+  1197→                    <Separator className="!my-2" />
+  1198→                    <div className="flex justify-between">
+  1199→                      <span className="text-sm font-semibold text-foreground">
+  1200→                        {t('tracking.total', locale)}
+  1201→                      </span>
+  1202→                      <span className="text-sm font-bold text-[#D4AF37]">
+  1203→                        {formatPrice(order.total, locale)}
+  1204→                      </span>
+  1205→                    </div>
+  1206→                  </div>
+  1207→                </CardContent>
+  1208→              </Card>
+  1209→            </motion.div>
+  1210→          </div>
+  1211→
+  1212→          {/* Bottom Back Button */}
+  1213→          <motion.div variants={fadeInUp} className="pb-4">
+  1214→            <Button
+  1215→              variant="outline"
+  1216→              onClick={handleBack}
+  1217→              className="w-full sm:w-auto border-border"
+  1218→            >
+  1219→              <ArrowLeft className="h-4 w-4 mr-2" />
+  1220→              {t('tracking.backToOrders', locale)}
+  1221→            </Button>
+  1222→          </motion.div>
+  1223→        </motion.div>
+  1224→      </div>
+  1225→    </div>
+  1226→  );
+  1227→}
+  1228→

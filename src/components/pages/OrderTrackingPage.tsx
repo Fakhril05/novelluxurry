@@ -302,6 +302,14 @@ function getPaymentLabel(method: string | null, locale: 'id' | 'en'): string {
   return labels[method]?.[locale] || method;
 }
 
+function getEstimatedDate(orderDate: string, daysOffset: number, locale: 'id' | 'en'): string {
+  const d = new Date(orderDate);
+  d.setDate(d.getDate() + daysOffset);
+  return d.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+  });
+}
+
 // --- Component ---
 export default function OrderTrackingPage() {
   const { pageParams, locale, setPage } = useAppStore();
@@ -943,6 +951,13 @@ export default function OrderTrackingPage() {
                               <XCircle className="h-3.5 w-3.5 text-red-500" />
                             )}
                           </div>
+
+                          {step.key === 'shipped' && (active || completed) && (
+                            <p className="text-xs font-medium text-[#D4AF37] mb-0.5">
+                              {locale === 'id' ? 'Estimasi tiba: ' : 'Est. delivery: '}
+                              {getEstimatedDate(order.createdAt, 5, locale)}
+                            </p>
+                          )}
 
                           {/* Date/time for active step */}
                           {active && (

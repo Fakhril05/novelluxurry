@@ -149,15 +149,20 @@ model Voucher {
 }
 
 model Blog {
-  id        String   @id @default(cuid())
-  title     String
-  slug      String   @unique
-  excerpt   String?
-  content   String?
-  image     String?
-  author    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  title      String
+  titleEn    String?
+  slug       String   @unique
+  excerpt    String?
+  excerptEn  String?
+  content    String?
+  contentEn  String?
+  category   String?
+  categoryEn String?
+  image      String?
+  author     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Testimonial {

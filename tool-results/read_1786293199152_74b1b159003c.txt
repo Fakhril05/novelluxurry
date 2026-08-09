@@ -1,0 +1,697 @@
+   460→                  alt={book.title}
+   461→                  className="w-full aspect-[3/4] object-cover"
+   462→                  initial={{ opacity: 0, scale: 1.02 }}
+   463→                  animate={{ opacity: 1, scale: 1 }}
+   464→                  exit={{ opacity: 0, scale: 0.98 }}
+   465→                  transition={{ duration: 0.3 }}
+   466→                />
+   467→              </AnimatePresence>
+   468→
+   469→              {/* Badges overlay */}
+   470→              <div className="absolute top-4 left-4 flex flex-col gap-2">
+   471→                {book.isBestSeller && (
+   472→                  <Badge className="bg-[#D4AF37] text-white border-0 text-xs font-bold uppercase tracking-wider px-3 py-1 shadow-lg">
+   473→                    {t('badge.bestseller', locale)}
+   474→                  </Badge>
+   475→                )}
+   476→                {book.isNewArrival && (
+   477→                  <Badge className="bg-emerald-500 text-white border-0 text-xs font-bold uppercase tracking-wider px-3 py-1 shadow-lg">
+   478→                    {t('badge.new', locale)}
+   479→                  </Badge>
+   480→                )}
+   481→                {hasDiscount && (
+   482→                  <Badge className="bg-red-500 text-white border-0 text-xs font-bold px-3 py-1 shadow-lg">
+   483→                    -{discountPercent}%
+   484→                  </Badge>
+   485→                )}
+   486→              </div>
+   487→            </div>
+   488→
+   489→            {/* Thumbnail gallery */}
+   490→            {allImages.length > 1 && (
+   491→              <div className="flex gap-3 justify-center flex-wrap">
+   492→                {allImages.map((img, idx) => (
+   493→                  <button
+   494→                    key={idx}
+   495→                    onClick={() => setSelectedImage(idx)}
+   496→                    className={`relative h-20 w-16 overflow-hidden rounded-lg border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
+   497→                      selectedImage === idx
+   498→                        ? 'border-[#D4AF37] shadow-md shadow-[#D4AF37]/20'
+   499→                        : 'border-transparent opacity-60 hover:opacity-100'
+   500→                    }`}
+   501→                    aria-label={`View image ${idx + 1}`}
+   502→                  >
+   503→                    <img
+   504→                      src={img}
+   505→                      alt={`${book.title} - ${idx + 1}`}
+   506→                      className="h-full w-full object-cover"
+   507→                    />
+   508→                  </button>
+   509→                ))}
+   510→              </div>
+   511→            )}
+   512→          </motion.div>
+   513→
+   514→          {/* ---- Right Column: Info ---- */}
+   515→          <motion.div
+   516→            initial={{ opacity: 0, x: 30 }}
+   517→            animate={{ opacity: 1, x: 0 }}
+   518→            transition={{ duration: 0.5, delay: 0.2 }}
+   519→            className="space-y-5 glass-card backdrop-blur-sm border border-[#D4AF37]/10 rounded-2xl p-6"
+   520→          >
+   521→            {/* Badges (desktop duplicates for mobile visibility) */}
+   522→            <div className="flex items-center gap-2 flex-wrap">
+   523→              {book.isBestSeller && (
+   524→                <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 text-xs font-semibold px-3 py-1">
+   525→                  {t('badge.bestseller', locale)}
+   526→                </Badge>
+   527→              )}
+   528→              {book.isNewArrival && (
+   529→                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-semibold px-3 py-1">
+   530→                  {t('badge.new', locale)}
+   531→                </Badge>
+   532→              )}
+   533→              {hasDiscount && (
+   534→                <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 text-xs font-semibold px-3 py-1">
+   535→                  -{discountPercent}% {t('badge.discount', locale)}
+   536→                </Badge>
+   537→              )}
+   538→            </div>
+   539→
+   540→            {/* Title */}
+   541→            <h1 className="font-heading text-3xl sm:text-4xl font-bold leading-tight tracking-tight text-gradient-gold">
+   542→              {book.title}
+   543→            </h1>
+   544→
+   545→            {/* Author */}
+   546→            <p className="text-lg text-muted-foreground">{book.author}</p>
+   547→
+   548→            {/* Rating */}
+   549→            <button
+   550→              onClick={handleScrollToReviews}
+   551→              className="flex items-center gap-2 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-md"
+   552→              aria-label={`Scroll to reviews, ${book.rating} out of 5`}
+   553→            >
+   554→              <div className="flex items-center dark:drop-shadow-[0_0_6px_rgba(212,175,55,0.4)]">
+   555→                {Array.from({ length: 5 }).map((_, i) => (
+   556→                  <Star
+   557→                    key={i}
+   558→                    className={`h-5 w-5 transition-colors dark:drop-shadow-[0_0_3px_rgba(212,175,55,0.3)] ${
+   559→                      i < Math.floor(book.rating)
+   560→                        ? 'fill-[#D4AF37] text-[#D4AF37]'
+   561→                        : i < book.rating
+   562→                        ? 'fill-[#D4AF37]/50 text-[#D4AF37]'
+   563→                        : 'text-muted-foreground/30 dark:text-muted-foreground/20'
+   564→                    }`}
+   565→                  />
+   566→                ))}
+   567→              </div>
+   568→              <span className="text-sm font-medium text-foreground">
+   569→                {book.rating.toFixed(1)}
+   570→              </span>
+   571→              <span className="text-sm text-muted-foreground group-hover:text-[#D4AF37] transition-colors">
+   572→                ({book.reviewCount} {locale === 'id' ? 'ulasan' : 'reviews'})
+   573→              </span>
+   574→            </button>
+   575→
+   576→            {/* Price */}
+   577→            <div className="flex items-baseline gap-3">
+   578→              <span className="text-3xl font-bold text-foreground">
+   579→                {formatPrice(effectivePrice, locale)}
+   580→              </span>
+   581→              {hasDiscount && (
+   582→                <span className="text-lg text-muted-foreground line-through">
+   583→                  {formatPrice(
+   584→                    Math.round(book.price * FORMAT_PRICE_MULTIPLIER[selectedFormat]),
+   585→                    locale
+   586→                  )}
+   587→                </span>
+   588→              )}
+   589→            </div>
+   590→
+   591→            {/* Format Selector */}
+   592→            <div className="space-y-2">
+   593→              <label className="text-sm font-medium text-muted-foreground">
+   594→                {t('book.format', locale)}
+   595→              </label>
+   596→              <div className="flex gap-2 flex-wrap">
+   597→                {FORMAT_OPTIONS.map((fmt) => {
+   598→                  const isActive = selectedFormat === fmt;
+   599→                  const fmtPrice = Math.round(
+   600→                    (book.discountPrice ?? book.price) * FORMAT_PRICE_MULTIPLIER[fmt]
+   601→                  );
+   602→                  return (
+   603→                    <button
+   604→                      key={fmt}
+   605→                      onClick={() => setSelectedFormat(fmt)}
+   606→                      className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
+   607→                        isActive
+   608→                          ? 'border-[#D4AF37]/50 bg-[#D4AF37]/10 text-[#D4AF37] shadow-md shadow-[#D4AF37]/15'
+   609→                          : 'bg-muted/50 text-muted-foreground border-border hover:border-[#D4AF37]/40 hover:text-foreground'
+   610→                      }`}
+   611→                      aria-pressed={isActive}
+   612→                    >
+   613→                      {fmt}
+   614→                      <span
+   615→                        className={`text-xs ${
+   616→                          isActive ? 'text-[#D4AF37]/70' : 'text-muted-foreground'
+   617→                        }`}
+   618→                      >
+   619→                        {formatPrice(fmtPrice, locale)}
+   620→                      </span>
+   621→                    </button>
+   622→                  );
+   623→                })}
+   624→              </div>
+   625→            </div>
+   626→
+   627→            {/* Stock Indicator */}
+   628→            <div className="flex items-center gap-2">
+   629→              <div
+   630→                className={`h-2.5 w-2.5 rounded-full ${
+   631→                  book.stock > 0
+   632→                    ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50'
+   633→                    : 'bg-red-500'
+   634→                }`}
+   635→              />
+   636→              <span
+   637→                className={`text-sm font-medium ${
+   638→                  book.stock > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
+   639→                }`}
+   640→              >
+   641→                {book.stock > 0
+   642→                  ? `${t('book.stock', locale)} (${book.stock})`
+   643→                  : locale === 'id'
+   644→                  ? 'Stok habis'
+   645→                  : 'Out of stock'}
+   646→              </span>
+   647→              {book.soldCount > 0 && (
+   648→                <span className="text-sm text-muted-foreground">
+   649→                  · {book.soldCount} {t('book.sold', locale)}
+   650→                </span>
+   651→              )}
+   652→            </div>
+   653→
+   654→            {/* Gold Gradient Divider */}
+   655→            <div
+   656→              className="h-px w-full"
+   657→              style={{
+   658→                background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+   659→              }}
+   660→            />
+   661→
+   662→            {/* Quantity Selector */}
+   663→            <div className="flex items-center gap-4">
+   664→              <label className="text-sm font-medium text-muted-foreground">
+   665→                {locale === 'id' ? 'Jumlah' : 'Quantity'}
+   666→              </label>
+   667→              <div className="flex items-center rounded-lg border border-border">
+   668→                <button
+   669→                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+   670→                  disabled={quantity <= 1}
+   671→                  className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-l-lg"
+   672→                  aria-label="Decrease quantity"
+   673→                >
+   674→                  <Minus className="h-4 w-4" />
+   675→                </button>
+   676→                <span className="flex h-10 w-12 items-center justify-center text-sm font-semibold border-x border-border">
+   677→                  {quantity}
+   678→                </span>
+   679→                <button
+   680→                  onClick={() => setQuantity((q) => Math.min(book.stock || 99, q + 1))}
+   681→                  disabled={quantity >= (book.stock || 99)}
+   682→                  className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-r-lg"
+   683→                  aria-label="Increase quantity"
+   684→                >
+   685→                  <Plus className="h-4 w-4" />
+   686→                </button>
+   687→              </div>
+   688→            </div>
+   689→
+   690→            {/* Action Buttons */}
+   691→            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+   692→              <Button
+   693→                onClick={handleAddToCart}
+   694→                disabled={book.stock <= 0}
+   695→                className="flex-1 bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold h-12 text-base rounded-xl shadow-lg shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:shadow-xl hover:shadow-[0_0_30px_rgba(212,175,55,0.4)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+   696→              >
+   697→                <ShoppingCart className="mr-2 h-5 w-5" />
+   698→                {t('book.addCart', locale)}
+   699→              </Button>
+   700→              <Button
+   701→                onClick={handleBuyNow}
+   702→                disabled={book.stock <= 0}
+   703→                variant="outline"
+   704→                className="flex-1 border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white font-semibold h-12 text-base rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+   705→              >
+   706→                {t('book.buyNow', locale)}
+   707→              </Button>
+   708→              <Button
+   709→                onClick={handleWishlist}
+   710→                variant="outline"
+   711→                size="icon"
+   712→                className={`h-12 w-12 rounded-xl border-2 transition-all duration-200 shrink-0 ${
+   713→                  isWished
+   714→                    ? 'border-red-500 bg-red-500/10 text-red-500 hover:bg-red-500/20'
+   715→                    : 'border-border text-muted-foreground hover:border-red-500/50 hover:text-red-500'
+   716→                }`}
+   717→                aria-label={t('book.wishlist', locale)}
+   718→              >
+   719→                <Heart className={`h-5 w-5 ${isWished ? 'fill-current' : ''}`} />
+   720→              </Button>
+   721→            </div>
+   722→
+   723→            {/* Gold Gradient Divider */}
+   724→            <div
+   725→              className="h-px w-full"
+   726→              style={{
+   727→                background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+   728→              }}
+   729→            />
+   730→
+   731→            {/* Book Meta Grid with gold left borders */}
+   732→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+   733→              {book.pages && (
+   734→                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   735→                  <BookOpen className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   736→                  <div>
+   737→                    <p className="text-muted-foreground text-xs">
+   738→                      {t('book.pages', locale)}
+   739→                    </p>
+   740→                    <p className="font-medium">{book.pages}</p>
+   741→                  </div>
+   742→                </div>
+   743→              )}
+   744→              {book.publisher && (
+   745→                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   746→                  <Building className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   747→                  <div>
+   748→                    <p className="text-muted-foreground text-xs">
+   749→                      {t('book.publisher', locale)}
+   750→                    </p>
+   751→                    <p className="font-medium truncate max-w-[160px]">{book.publisher}</p>
+   752→                  </div>
+   753→                </div>
+   754→              )}
+   755→              {book.publishedYear && (
+   756→                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   757→                  <Calendar className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   758→                  <div>
+   759→                    <p className="text-muted-foreground text-xs">
+   760→                      {t('book.year', locale)}
+   761→                    </p>
+   762→                    <p className="font-medium">{book.publishedYear}</p>
+   763→                  </div>
+   764→                </div>
+   765→              )}
+   766→              <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   767→                <Globe className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   768→                <div>
+   769→                  <p className="text-muted-foreground text-xs">
+   770→                    {t('book.language', locale)}
+   771→                  </p>
+   772→                  <p className="font-medium">{book.language}</p>
+   773→                </div>
+   774→              </div>
+   775→              {book.isbn && (
+   776→                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   777→                  <Hash className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   778→                  <div>
+   779→                    <p className="text-muted-foreground text-xs">ISBN</p>
+   780→                    <p className="font-medium text-xs truncate max-w-[160px]">{book.isbn}</p>
+   781→                  </div>
+   782→                </div>
+   783→              )}
+   784→            </div>
+   785→
+   786→            {/* Gold Gradient Divider */}
+   787→            <div
+   788→              className="h-px w-full"
+   789→              style={{
+   790→                background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+   791→              }}
+   792→            />
+   793→
+   794→            {/* Share Row */}
+   795→            <div className="flex items-center gap-3 pt-1">
+   796→              <span className="text-sm font-medium text-muted-foreground shrink-0">
+   797→                {t('book.share', locale)}
+   798→              </span>
+   799→              <div className="flex items-center gap-2">
+   800→                <button
+   801→                  onClick={() => handleShare('twitter')}
+   802→                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#1DA1F2] hover:border-[#1DA1F2]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   803→                  aria-label="Share on Twitter"
+   804→                >
+   805→                  <Twitter className="h-4 w-4" />
+   806→                </button>
+   807→                <button
+   808→                  onClick={() => handleShare('facebook')}
+   809→                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#1877F2] hover:border-[#1877F2]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   810→                  aria-label="Share on Facebook"
+   811→                >
+   812→                  <Facebook className="h-4 w-4" />
+   813→                </button>
+   814→                <button
+   815→                  onClick={() => handleShare('whatsapp')}
+   816→                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#25D366] hover:border-[#25D366]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   817→                  aria-label="Share on WhatsApp"
+   818→                >
+   819→                  <MessageCircle className="h-4 w-4" />
+   820→                </button>
+   821→                <button
+   822→                  onClick={() => handleShare('copy')}
+   823→                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#D4AF37] hover:border-[#D4AF37]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   824→                  aria-label="Copy link"
+   825→                >
+   826→                  <LinkIcon className="h-4 w-4" />
+   827→                </button>
+   828→              </div>
+   829→            </div>
+   830→          </motion.div>
+   831→        </div>
+   832→
+   833→        {/* ---- Tabs Section ---- */}
+   834→        <motion.div
+   835→          ref={reviewsRef}
+   836→          initial={{ opacity: 0, y: 30 }}
+   837→          animate={{ opacity: 1, y: 0 }}
+   838→          transition={{ duration: 0.5, delay: 0.3 }}
+   839→        >
+   840→          {/* Custom Tab Navigation */}
+   841→          <div className="w-full">
+   842→            <div className="w-full flex justify-start bg-muted/50 h-auto p-1 rounded-xl border border-border overflow-x-auto relative">
+   843→              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/30 to-transparent" aria-hidden="true" />
+   844→              {['synopsis', 'author', 'reviews'].map((tab) => (
+   845→                <button
+   846→                  key={tab}
+   847→                  onClick={() => setActiveTab(tab)}
+   848→                  className={`flex-1 sm:flex-none rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative ${
+   849→                    activeTab === tab
+   850→                      ? 'text-[#D4AF37] bg-transparent after:content-[\'\'] after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-3/4 after:h-0.5 after:rounded-full after:bg-[#D4AF37]'
+   851→                      : 'text-muted-foreground hover:text-foreground'
+   852→                  }`}
+   853→                >
+   854→                  {tab === 'synopsis' && t('book.synopsis', locale)}
+   855→                  {tab === 'author' && t('book.author', locale)}
+   856→                  {tab === 'reviews' && `${t('book.reviews', locale)} (${reviews.length})`}
+   857→                </button>
+   858→              ))}
+   859→            </div>
+   860→
+   861→            {/* Tab Panels */}
+   862→            <div className="mt-6">
+   863→              {activeTab === 'synopsis' && (
+   864→                <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
+   865→                  {book.synopsis ? (
+   866→                    <div className="prose prose-sm sm:prose max-w-none text-muted-foreground leading-relaxed whitespace-pre-line">
+   867→                      {book.synopsis}
+   868→                    </div>
+   869→                  ) : (
+   870→                    <p className="text-muted-foreground italic">
+   871→                      {locale === 'id'
+   872→                        ? 'Sinopsis belum tersedia untuk buku ini.'
+   873→                        : 'Synopsis is not yet available for this book.'}
+   874→                    </p>
+   875→                  )}
+   876→                </div>
+   877→              )}
+   878→
+   879→              {activeTab === 'author' && (
+   880→                <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
+   881→                  {book.authorBio ? (
+   882→                    <div className="prose prose-sm sm:prose max-w-none text-muted-foreground leading-relaxed whitespace-pre-line">
+   883→                      {book.authorBio}
+   884→                    </div>
+   885→                  ) : (
+   886→                    <p className="text-muted-foreground italic">
+   887→                      {locale === 'id'
+   888→                        ? 'Informasi penulis belum tersedia.'
+   889→                        : 'Author information is not yet available.'}
+   890→                    </p>
+   891→                  )}
+   892→                </div>
+   893→              )}
+   894→
+   895→              {activeTab === 'reviews' && (
+   896→                <div className="space-y-6">
+   897→              {/* Rating Distribution Summary */}
+   898→              <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
+   899→                <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
+   900→                  {/* Left: Overall Rating */}
+   901→                  <div className="flex flex-col items-center justify-center shrink-0">
+   902→                    <p className="text-5xl font-bold text-foreground">{book.rating.toFixed(1)}</p>
+   903→                    <div className="flex items-center mt-1.5 gap-0.5">
+   904→                      {Array.from({ length: 5 }).map((_, i) => (
+   905→                        <Star
+   906→                          key={i}
+   907→                          className={`h-4 w-4 ${
+   908→                            i < Math.floor(book.rating)
+   909→                              ? 'fill-[#D4AF37] text-[#D4AF37]'
+   910→                              : i < book.rating
+   911→                              ? 'fill-[#D4AF37]/50 text-[#D4AF37]'
+   912→                              : 'text-muted-foreground/30'
+   913→                          }`}
+   914→                        />
+   915→                      ))}
+   916→                    </div>
+   917→                    <p className="text-sm text-muted-foreground mt-1.5">
+   918→                      {reviews.length} {locale === 'id' ? 'ulasan' : 'reviews'}
+   919→                    </p>
+   920→                  </div>
+   921→                  {/* Right: Rating Bars */}
+   922→                  <div className="flex-1 space-y-2">
+   923→                    {ratingDistribution.map((count, idx) => {
+   924→                      const starVal = 5 - idx;
+   925→                      const pct = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+   926→                      return (
+   927→                        <div key={starVal} className="flex items-center gap-2.5">
+   928→                          <span className="text-sm font-medium text-muted-foreground w-8 text-right">
+   929→                            {starVal}★
+   930→                          </span>
+   931→                          <div className="flex-1 h-2.5 rounded-full bg-muted/80 overflow-hidden">
+   932→                            <div
+   933→                              className="h-full rounded-full transition-all duration-500 ease-out"
+   934→                              style={{
+   935→                                width: `${Math.min(pct, 100)}%`,
+   936→                                background: `linear-gradient(to right, #D4AF37, #B8960C)`,
+   937→                              }}
+   938→                            />
+   939→                          </div>
+   940→                          <span className="text-xs text-muted-foreground w-8 text-right">
+   941→                            {count}
+   942→                          </span>
+   943→                        </div>
+   944→                      );
+   945→                    })}
+   946→                  </div>
+   947→                </div>
+   948→              </div>
+   949→
+   950→              {/* Gold gradient divider */}
+   951→              <div
+   952→                className="h-px w-full"
+   953→                style={{
+   954→                  background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+   955→                }}
+   956→              />
+   957→
+   958→              {/* Write Review Form (authenticated users only) */}
+   959→              {isAuthenticated ? (
+   960→                <motion.div
+   961→                  initial={{ opacity: 0, y: 10 }}
+   962→                  animate={{ opacity: 1, y: 0 }}
+   963→                  className="rounded-xl border border-[#D4AF37]/20 bg-card p-6 sm:p-8 space-y-5"
+   964→                >
+   965→                  <h3 className="font-heading text-lg font-semibold text-gradient-gold">
+   966→                    {t('book.writeReview', locale)}
+   967→                  </h3>
+   968→                  {/* Star selector */}
+   969→                  <div className="space-y-2">
+   970→                    <label className="text-sm font-medium text-muted-foreground">
+   971→                      {t('book.ratingLabel', locale)}
+   972→                    </label>
+   973→                    <div className="flex items-center gap-1">
+   974→                      {Array.from({ length: 5 }).map((_, i) => (
+   975→                        <button
+   976→                          key={i}
+   977→                          onClick={() => setReviewRating(i + 1)}
+   978→                          onMouseEnter={() => {}}
+   979→                          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-sm p-0.5 transition-transform hover:scale-110"
+   980→                          aria-label={`Rate ${i + 1} star${i > 0 ? 's' : ''}`}
+   981→                        >
+   982→                          <Star
+   983→                            className={`h-7 w-7 transition-colors duration-150 ${
+   984→                              i < reviewRating
+   985→                                ? 'fill-[#D4AF37] text-[#D4AF37]'
+   986→                                : 'text-muted-foreground/30 hover:text-[#D4AF37]/50'
+   987→                            }`}
+   988→                          />
+   989→                        </button>
+   990→                      ))}
+   991→                      {reviewRating > 0 && (
+   992→                        <span className="ml-2 text-sm font-medium text-[#D4AF37]">
+   993→                          {reviewRating}/5
+   994→                        </span>
+   995→                      )}
+   996→                    </div>
+   997→                  </div>
+   998→                  {/* Comment textarea */}
+   999→                  <div className="space-y-2">
+  1000→                    <label className="text-sm font-medium text-muted-foreground">
+  1001→                      {t('book.reviewLabel', locale)}
+  1002→                    </label>
+  1003→                    <Textarea
+  1004→                      value={reviewComment}
+  1005→                      onChange={(e) => {
+  1006→                        if (e.target.value.length <= 500) {
+  1007→                          setReviewComment(e.target.value);
+  1008→                        }
+  1009→                      }}
+  1010→                      placeholder={t('book.reviewPlaceholder', locale)}
+  1011→                      rows={4}
+  1012→                      className="resize-none rounded-xl border-border focus-visible:ring-[#D4AF37]"
+  1013→                    />
+  1014→                    <div className="flex justify-end">
+  1015→                      <span className={`text-xs ${reviewComment.length >= 500 ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+  1016→                        {reviewComment.length}/500
+  1017→                      </span>
+  1018→                    </div>
+  1019→                  </div>
+  1020→                  <Button
+  1021→                    onClick={handleSubmitReview}
+  1022→                    disabled={reviewRating === 0 || submittingReview}
+  1023→                    className="bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold rounded-xl px-6 disabled:opacity-50"
+  1024→                  >
+  1025→                    {submittingReview
+  1026→                      ? t('general.loading', locale)
+  1027→                      : t('book.submitReview', locale)}
+  1028→                  </Button>
+  1029→                </motion.div>
+  1030→              ) : (
+  1031→                <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
+  1032→                  <Heart className="mx-auto h-8 w-8 text-muted-foreground/30 mb-2" />
+  1033→                  <p className="text-sm text-muted-foreground">
+  1034→                    {t('book.loginToReview', locale)}
+  1035→                  </p>
+  1036→                  <Button
+  1037→                    variant="outline"
+  1038→                    className="mt-3 border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10"
+  1039→                    onClick={() => setPage('login')}
+  1040→                  >
+  1041→                    {t('auth.login', locale)}
+  1042→                  </Button>
+  1043→                </div>
+  1044→              )}
+  1045→
+  1046→              {/* Gold gradient divider */}
+  1047→              <div
+  1048→                className="h-px w-full"
+  1049→                style={{
+  1050→                  background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+  1051→                }}
+  1052→              />
+  1053→
+  1054→              {/* Reviews List */}
+  1055→              <div className="space-y-4">
+  1056→                {reviews.length > 0 ? (
+  1057→                  reviews.map((review, idx) => (
+  1058→                    <motion.div
+  1059→                      key={review.id}
+  1060→                      initial={{ opacity: 0, y: 10 }}
+  1061→                      animate={{ opacity: 1, y: 0 }}
+  1062→                      transition={{ duration: 0.3, delay: idx * 0.05 }}
+  1063→                      className="rounded-xl border border-border bg-card p-5 sm:p-6 space-y-3"
+  1064→                    >
+  1065→                      <div className="flex items-center justify-between gap-3">
+  1066→                        <div className="flex items-center gap-3">
+  1067→                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/10 text-[#D4AF37] font-heading font-bold text-sm">
+  1068→                            {(review.user?.name || '?')[0].toUpperCase()}
+  1069→                          </div>
+  1070→                          <div>
+  1071→                            <p className="font-medium text-sm">
+  1072→                              {review.user?.name ||
+  1073→                                (locale === 'id' ? 'Anonim' : 'Anonymous')}
+  1074→                            </p>
+  1075→                            <p className="text-xs text-muted-foreground">
+  1076→                              {formatDate(review.createdAt)}
+  1077→                            </p>
+  1078→                          </div>
+  1079→                        </div>
+  1080→                        <div className="flex items-center">
+  1081→                          {Array.from({ length: 5 }).map((_, i) => (
+  1082→                            <Star
+  1083→                              key={i}
+  1084→                              className={`h-3.5 w-3.5 ${
+  1085→                                i < review.rating
+  1086→                                  ? 'fill-[#D4AF37] text-[#D4AF37]'
+  1087→                                  : 'text-muted-foreground/30'
+  1088→                              }`}
+  1089→                            />
+  1090→                          ))}
+  1091→                        </div>
+  1092→                      </div>
+  1093→                      {review.comment && (
+  1094→                        <p className="text-sm text-muted-foreground leading-relaxed">
+  1095→                          {review.comment}
+  1096→                        </p>
+  1097→                      )}
+  1098→                    </motion.div>
+  1099→                  ))
+  1100→                ) : (
+  1101→                  <div className="text-center py-12 rounded-xl border border-dashed border-border">
+  1102→                    <Star className="mx-auto h-10 w-10 text-muted-foreground/30 mb-3" />
+  1103→                    <p className="text-muted-foreground">
+  1104→                      {locale === 'id'
+  1105→                        ? 'Belum ada ulasan untuk buku ini.'
+  1106→                        : 'No reviews yet for this book.'}
+  1107→                    </p>
+  1108→                  </div>
+  1109→                )}
+  1110→              </div>
+  1111→                </div>
+  1112→              )}
+  1113→            </div>
+  1114→          </div>
+  1115→        </motion.div>
+  1116→
+  1117→        {/* ---- Recommendations Section ---- */}
+  1118→        {recommendations.length > 0 && (
+  1119→          <motion.section
+  1120→            initial={{ opacity: 0, y: 30 }}
+  1121→            animate={{ opacity: 1, y: 0 }}
+  1122→            transition={{ duration: 0.5, delay: 0.4 }}
+  1123→            className="space-y-6 pt-4"
+  1124→          >
+  1125→            <div className="flex items-center gap-4">
+  1126→              <div className="flex-1">
+  1127→                <h2 className="font-heading text-2xl font-bold tracking-tight text-gradient-gold">
+  1128→                  {t('book.recommendations', locale)}
+  1129→                </h2>
+  1130→                <p className="text-sm text-muted-foreground mt-1">
+  1131→                  {locale === 'id'
+  1132→                    ? 'Berdasarkan kategori yang sama'
+  1133→                    : 'Based on the same category'}
+  1134→                </p>
+  1135→              </div>
+  1136→              <button
+  1137→                onClick={() => setPage('catalog')}
+  1138→                className="text-sm font-medium text-[#D4AF37] hover:text-[#B8960C] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-md px-3 py-1.5 border border-[#D4AF37]/20 hover:border-[#D4AF37]/40"
+  1139→              >
+  1140→                {t('general.viewAll', locale)} →
+  1141→              </button>
+  1142→            </div>
+  1143→            {/* Gold divider */}
+  1144→            <div className="h-px w-full" style={{ background: 'linear-gradient(to right, #D4AF37, rgba(212,175,55,0.2), transparent)' }} />
+  1145→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-5">
+  1146→              {recommendations.slice(0, 4).map((recBook, idx) => (
+  1147→                <BookCard key={recBook.id} book={recBook} index={idx} />
+  1148→              ))}
+  1149→            </div>
+  1150→          </motion.section>
+  1151→        )}
+  1152→      </div>
+  1153→    </motion.div>
+  1154→  );
+  1155→}
+  1156→

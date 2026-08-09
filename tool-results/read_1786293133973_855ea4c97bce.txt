@@ -1,0 +1,678 @@
+   260→        </Button>
+   261→      </div>
+   262→    </div>
+   263→  );
+   264→}
+   265→
+   266→function BookGridSkeleton() {
+   267→  return (
+   268→    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+   269→      {Array.from({ length: 8 }).map((_, i) => (
+   270→        <div key={i} className="space-y-3">
+   271→          <Skeleton className="aspect-[2/3] w-full rounded-xl" />
+   272→          <Skeleton className="h-3 w-16" />
+   273→          <Skeleton className="h-4 w-full" />
+   274→          <Skeleton className="h-3 w-24" />
+   275→          <div className="flex items-center gap-1">
+   276→            {Array.from({ length: 5 }).map((_, j) => (
+   277→              <Skeleton key={j} className="h-3 w-3 rounded-full" />
+   278→            ))}
+   279→          </div>
+   280→          <Skeleton className="h-5 w-28" />
+   281→        </div>
+   282→      ))}
+   283→    </div>
+   284→  );
+   285→}
+   286→
+   287→function EmptyState({ locale, onReset }: { locale: 'id' | 'en'; onReset: () => void }) {
+   288→  return (
+   289→    <motion.div
+   290→      initial={{ opacity: 0, y: 20 }}
+   291→      animate={{ opacity: 1, y: 0 }}
+   292→      className="flex flex-col items-center justify-center py-20 px-4"
+   293→    >
+   294→      {/* Illustration */}
+   295→      <div className="relative mb-6">
+   296→        <div className="w-28 h-28 rounded-full bg-[#D4AF37]/5 flex items-center justify-center">
+   297→          <div className="w-20 h-20 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+   298→            <BookOpen className="w-10 h-10 text-[#D4AF37]/40" />
+   299→          </div>
+   300→        </div>
+   301→        <div className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[#D4AF37]/20 flex items-center justify-center">
+   302→          <Sparkles className="h-3 w-3 text-[#D4AF37]" />
+   303→        </div>
+   304→        <div className="absolute -bottom-1 -left-1 h-4 w-4 rounded-full bg-[#E8D48B]/30" />
+   305→      </div>
+   306→      <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
+   307→        {t('catalog.noResults', locale)}
+   308→      </h3>
+   309→      <p className="text-sm text-muted-foreground text-center max-w-sm mb-6">
+   310→        {locale === 'id'
+   311→          ? 'Coba ubah filter atau kata kunci pencarian kamu'
+   312→          : 'Try adjusting your filters or search keywords'}
+   313→      </p>
+   314→      <Button
+   315→        variant="outline"
+   316→        onClick={onReset}
+   317→        className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10"
+   318→      >
+   319→        {locale === 'id' ? 'Reset Semua Filter' : 'Reset All Filters'}
+   320→      </Button>
+   321→    </motion.div>
+   322→  );
+   323→}
+   324→
+   325→export default function CatalogPage() {
+   326→  const { locale, pageParams, setPage, filters, setFilters, resetFilters } =
+   327→    useAppStore();
+   328→
+   329→  const [books, setBooks] = useState<Book[]>([]);
+   330→  const [categories, setCategories] = useState<Category[]>([]);
+   331→  const [total, setTotal] = useState(0);
+   332→  const [currentPage, setCurrentPage] = useState(1);
+   333→  const [loading, setLoading] = useState(true);
+   334→  const [categoriesLoading, setCategoriesLoading] = useState(true);
+   335→  const [searchInput, setSearchInput] = useState('');
+   336→  const [sheetOpen, setSheetOpen] = useState(false);
+   337→
+   338→  // Sync genre from pageParams on mount
+   339→  useEffect(() => {
+   340→    if (pageParams.genre && !filters.genre) {
+   341→      setFilters({ genre: pageParams.genre });
+   342→    }
+   343→    if (pageParams.search) {
+   344→      setSearchInput(pageParams.search);
+   345→    }
+   346→  }, []);
+   347→
+   348→  // Fetch categories
+   349→  useEffect(() => {
+   350→    let cancelled = false;
+   351→    const fetchCategories = async () => {
+   352→      try {
+   353→        const res = await fetch('/api/categories');
+   354→        if (res.ok && !cancelled) {
+   355→          const data = await res.json();
+   356→          setCategories(Array.isArray(data) ? data : data.categories || []);
+   357→        }
+   358→      } catch {
+   359→        // silently fail
+   360→      } finally {
+   361→        if (!cancelled) setCategoriesLoading(false);
+   362→      }
+   363→    };
+   364→    fetchCategories();
+   365→    return () => {
+   366→      cancelled = true;
+   367→    };
+   368→  }, []);
+   369→
+   370→  // Reset to page 1 when filters change (except page itself)
+   371→  useEffect(() => {
+   372→    setCurrentPage(1);
+   373→  }, [filters.genre, filters.minPrice, filters.maxPrice, filters.minRating, filters.sort, pageParams.search]);
+   374→
+   375→  // Fetch books
+   376→  useEffect(() => {
+   377→    let cancelled = false;
+   378→    const doFetch = async () => {
+   379→      setLoading(true);
+   380→      try {
+   381→        const params = new URLSearchParams();
+   382→        params.set('limit', String(LIMIT));
+   383→        params.set('page', String(currentPage));
+   384→
+   385→        if (filters.genre) params.set('genre', filters.genre);
+   386→        if (filters.minPrice !== undefined && filters.minPrice > 0)
+   387→          params.set('minPrice', String(filters.minPrice));
+   388→        if (filters.maxPrice !== undefined && filters.maxPrice > 0)
+   389→          params.set('maxPrice', String(filters.maxPrice));
+   390→        if (filters.minRating !== undefined && filters.minRating > 0)
+   391→          params.set('minRating', String(filters.minRating));
+   392→        if (filters.sort) params.set('sort', filters.sort);
+   393→        if (pageParams.search) params.set('search', pageParams.search);
+   394→
+   395→        const res = await fetch(`/api/books?${params.toString()}`);
+   396→        if (res.ok && !cancelled) {
+   397→          const data: BooksResponse = await res.json();
+   398→          setBooks(data.books || []);
+   399→          setTotal(data.total || 0);
+   400→        }
+   401→      } catch {
+   402→        // silently fail
+   403→      } finally {
+   404→        if (!cancelled) setLoading(false);
+   405→      }
+   406→    };
+   407→    doFetch();
+   408→    return () => {
+   409→      cancelled = true;
+   410→    };
+   411→  }, [filters, currentPage, pageParams.search]);
+   412→
+   413→  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+   414→
+   415→  const handleFilterChange = useCallback(
+   416→    (newFilters: Record<string, unknown>) => {
+   417→      setFilters(newFilters as Partial<FilterState>);
+   418→    },
+   419→    [setFilters]
+   420→  );
+   421→
+   422→  const handleReset = useCallback(() => {
+   423→    resetFilters();
+   424→    setSearchInput('');
+   425→    setCurrentPage(1);
+   426→    setPage('catalog', {});
+   427→  }, [resetFilters, setPage]);
+   428→
+   429→  const handleSearch = useCallback(
+   430→    (e: React.FormEvent) => {
+   431→      e.preventDefault();
+   432→      setPage('catalog', { ...pageParams, search: searchInput.trim() });
+   433→      setCurrentPage(1);
+   434→    },
+   435→    [searchInput, pageParams, setPage]
+   436→  );
+   437→
+   438→  // Active filter badges
+   439→  const activeFilters = useMemo(() => {
+   440→    const items: { key: string; label: string; clear: () => void }[] = [];
+   441→
+   442→    if (filters.genre) {
+   443→      const slugs = filters.genre.split(',').filter(Boolean);
+   444→      slugs.forEach((slug) => {
+   445→        const cat = categories.find((c) => c.slug === slug);
+   446→        const name = cat
+   447→          ? locale === 'en' && cat.nameEn
+   448→            ? cat.nameEn
+   449→            : cat.name
+   450→          : slug;
+   451→        items.push({
+   452→          key: `genre-${slug}`,
+   453→          label: name,
+   454→          clear: () => {
+   455→            const updated = slugs.filter((s) => s !== slug);
+   456→            setFilters({ genre: updated.length > 0 ? updated.join(',') : undefined });
+   457→          },
+   458→        });
+   459→      });
+   460→    }
+   461→
+   462→    if (filters.minPrice !== undefined && filters.minPrice > 0) {
+   463→      items.push({
+   464→        key: 'minPrice',
+   465→        label: `Min ${formatPrice(filters.minPrice, locale)}`,
+   466→        clear: () => setFilters({ minPrice: undefined }),
+   467→      });
+   468→    }
+   469→
+   470→    if (filters.maxPrice !== undefined && filters.maxPrice > 0) {
+   471→      items.push({
+   472→        key: 'maxPrice',
+   473→        label: `Max ${formatPrice(filters.maxPrice, locale)}`,
+   474→        clear: () => setFilters({ maxPrice: undefined }),
+   475→      });
+   476→    }
+   477→
+   478→    if (filters.minRating !== undefined && filters.minRating > 0) {
+   479→      items.push({
+   480→        key: 'minRating',
+   481→        label: `${filters.minRating}+ \u2605`,
+   482→        clear: () => setFilters({ minRating: undefined }),
+   483→      });
+   484→    }
+   485→
+   486→    if (pageParams.search) {
+   487→      items.push({
+   488→        key: 'search',
+   489→        label: `"${pageParams.search}"`,
+   490→        clear: () => {
+   491→          setSearchInput('');
+   492→          setPage('catalog', { ...pageParams, search: '' });
+   493→        },
+   494→      });
+   495→    }
+   496→
+   497→    return items;
+   498→  }, [filters, categories, locale, pageParams, setFilters, setPage]);
+   499→
+   500→  // Breadcrumb: if single genre filtered, show the category name
+   501→  const genreCategory = useMemo(() => {
+   502→    if (!filters.genre) return null;
+   503→    const slugs = filters.genre.split(',').filter(Boolean);
+   504→    if (slugs.length === 1) {
+   505→      return categories.find((c) => c.slug === slugs[0]) || null;
+   506→    }
+   507→    return null;
+   508→  }, [filters.genre, categories]);
+   509→
+   510→  const hasActiveFilters = activeFilters.length > 0;
+   511→
+   512→  const filterSidebar = (
+   513→    <FilterSidebar
+   514→      categories={categories}
+   515→      filters={filters}
+   516→      onFilterChange={handleFilterChange}
+   517→      onReset={handleReset}
+   518→      locale={locale}
+   519→    />
+   520→  );
+   521→
+   522→  // Pagination range
+   523→  const paginationRange = useMemo(() => {
+   524→    const pages: (number | string)[] = [];
+   525→    if (totalPages <= 7) {
+   526→      for (let i = 1; i <= totalPages; i++) pages.push(i);
+   527→    } else {
+   528→      pages.push(1);
+   529→      if (currentPage > 3) pages.push('...');
+   530→      const start = Math.max(2, currentPage - 1);
+   531→      const end = Math.min(totalPages - 1, currentPage + 1);
+   532→      for (let i = start; i <= end; i++) pages.push(i);
+   533→      if (currentPage < totalPages - 2) pages.push('...');
+   534→      pages.push(totalPages);
+   535→    }
+   536→    return pages;
+   537→  }, [currentPage, totalPages]);
+   538→
+   539→  return (
+   540→    <section className="relative min-h-screen bg-background">
+   541→      {/* Subtle gold gradient overlay at top */}
+   542→      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#D4AF37]/5 to-transparent pointer-events-none" aria-hidden="true" />
+   543→      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+   544→        {/* Breadcrumb */}
+   545→        <motion.div
+   546→          initial={{ opacity: 0, y: -10 }}
+   547→          animate={{ opacity: 1, y: 0 }}
+   548→          transition={{ duration: 0.3 }}
+   549→          className="mb-6"
+   550→        >
+   551→          <Breadcrumb>
+   552→            <BreadcrumbList>
+   553→              <BreadcrumbItem>
+   554→                <BreadcrumbLink
+   555→                  href="#"
+   556→                  onClick={(e) => {
+   557→                    e.preventDefault();
+   558→                    setPage('home');
+   559→                  }}
+   560→                >
+   561→                  {t('nav.home', locale)}
+   562→                </BreadcrumbLink>
+   563→              </BreadcrumbItem>
+   564→              <BreadcrumbSeparator />
+   565→              {genreCategory ? (
+   566→                <>
+   567→                  <BreadcrumbItem>
+   568→                    <BreadcrumbLink
+   569→                      href="#"
+   570→                      onClick={(e) => {
+   571→                        e.preventDefault();
+   572→                        handleReset();
+   573→                      }}
+   574→                    >
+   575→                      {t('nav.catalog', locale)}
+   576→                    </BreadcrumbLink>
+   577→                  </BreadcrumbItem>
+   578→                  <BreadcrumbSeparator />
+   579→                  <BreadcrumbItem>
+   580→                    <BreadcrumbPage>
+   581→                      {locale === 'en' && genreCategory.nameEn
+   582→                        ? genreCategory.nameEn
+   583→                        : genreCategory.name}
+   584→                    </BreadcrumbPage>
+   585→                  </BreadcrumbItem>
+   586→                </>
+   587→              ) : (
+   588→                <BreadcrumbItem>
+   589→                  <BreadcrumbPage>
+   590→                    {t('catalog.title', locale)}
+   591→                  </BreadcrumbPage>
+   592→                </BreadcrumbItem>
+   593→              )}
+   594→            </BreadcrumbList>
+   595→          </Breadcrumb>
+   596→        </motion.div>
+   597→
+   598→        {/* Page Header */}
+   599→        <motion.div
+   600→          initial={{ opacity: 0, y: -10 }}
+   601→          animate={{ opacity: 1, y: 0 }}
+   602→          transition={{ duration: 0.3, delay: 0.05 }}
+   603→          className="mb-6 relative"
+   604→        >
+   605→          {/* Gold gradient accent behind title */}
+   606→          <div className="absolute -left-2 -top-2 -right-2 -bottom-1 bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent rounded-lg -z-10 blur-sm" aria-hidden="true" />
+   607→          <h1 className="font-heading text-2xl md:text-3xl font-bold text-gradient-gold">
+   608→            {genreCategory
+   609→              ? locale === 'en' && genreCategory.nameEn
+   610→                ? genreCategory.nameEn
+   611→                : genreCategory.name
+   612→              : t('catalog.title', locale)}
+   613→          </h1>
+   614→          <p className="text-sm text-muted-foreground mt-1">
+   615→            {!loading && (
+   616→              <>
+   617→                {total} {t('catalog.results', locale)}
+   618→              </>
+   619→            )}
+   620→          </p>
+   621→        </motion.div>
+   622→
+   623→        {/* Search & Filter Bar */}
+   624→        <motion.div
+   625→          initial={{ opacity: 0, y: -10 }}
+   626→          animate={{ opacity: 1, y: 0 }}
+   627→          transition={{ duration: 0.3, delay: 0.1 }}
+   628→          className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6"
+   629→        >
+   630→          {/* Search */}
+   631→          <form onSubmit={handleSearch} className="relative flex-1">
+   632→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   633→            <Input
+   634→              type="text"
+   635→              placeholder={t('nav.search', locale)}
+   636→              value={searchInput}
+   637→              onChange={(e) => setSearchInput(e.target.value)}
+   638→              className="pl-10 h-10 bg-background border-border"
+   639→            />
+   640→          </form>
+   641→
+   642→          {/* Sort Select (Desktop) */}
+   643→          <div className="hidden sm:flex items-center gap-2">
+   644→            <span className="text-sm text-muted-foreground whitespace-nowrap">
+   645→              {t('catalog.sort', locale)}:
+   646→            </span>
+   647→            <div className="relative">
+   648→              <select
+   649→                value={filters.sort}
+   650→                onChange={(e) => handleFilterChange({ sort: e.target.value })}
+   651→                className="appearance-none h-10 pl-3 pr-8 text-sm rounded-lg border border-[#D4AF37]/20 bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37]/50 shadow-sm shadow-[#D4AF37]/5 hover:border-[#D4AF37]/40 transition-colors"
+   652→              >
+   653→                {SORT_OPTIONS.map((opt) => (
+   654→                  <option key={opt.value} value={opt.value}>
+   655→                    {t(opt.labelKey, locale)}
+   656→                  </option>
+   657→                ))}
+   658→              </select>
+   659→              <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground rotate-90 pointer-events-none" />
+   660→            </div>
+   661→          </div>
+   662→
+   663→          {/* Mobile Filter Button */}
+   664→          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+   665→            <SheetTrigger asChild>
+   666→              <Button
+   667→                variant="outline"
+   668→                className="lg:hidden h-10 border-border gap-2"
+   669→              >
+   670→                <SlidersHorizontal className="h-4 w-4" />
+   671→                <span>{t('catalog.filter', locale)}</span>
+   672→                {hasActiveFilters && (
+   673→                  <Badge className="h-5 w-5 p-0 flex items-center justify-center bg-[#D4AF37] text-white border-0 text-[10px] rounded-full shadow-sm shadow-[#D4AF37]/30">
+   674→                    {activeFilters.length}
+   675→                  </Badge>
+   676→                )}
+   677→              </Button>
+   678→            </SheetTrigger>
+   679→            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl glass backdrop-blur-xl bg-background/80 border-t border-[#D4AF37]/20 transition-all duration-300 ease-in-out">
+   680→              <SheetHeader className="pb-2">
+   681→                <SheetTitle className="font-heading text-lg">
+   682→                  {t('catalog.filter', locale)}
+   683→                </SheetTitle>
+   684→                <SheetDescription>
+   685→                  {locale === 'id'
+   686→                    ? 'Sesuaikan pencarian kamu'
+   687→                    : 'Refine your search'}
+   688→                </SheetDescription>
+   689→              </SheetHeader>
+   690→              <ScrollArea className="flex-1 px-4 pb-4">
+   691→                {filterSidebar}
+   692→              </ScrollArea>
+   693→              <div className="p-4 border-t border-border">
+   694→                <Button
+   695→                  className="w-full bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+   696→                  onClick={() => setSheetOpen(false)}
+   697→                >
+   698→                  {locale === 'id'
+   699→                    ? 'Tampilkan Hasil'
+   700→                    : 'Show Results'}
+   701→                </Button>
+   702→              </div>
+   703→            </SheetContent>
+   704→          </Sheet>
+   705→        </motion.div>
+   706→
+   707→        {/* Animated Filter Tags (quick genre filters) */}
+   708→        <motion.div
+   709→          initial={{ opacity: 0, y: -5 }}
+   710→          animate={{ opacity: 1, y: 0 }}
+   711→          transition={{ duration: 0.3, delay: 0.15 }}
+   712→          className="mb-4 hidden md:flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1"
+   713→        >
+   714→          <span className="text-xs text-muted-foreground font-medium shrink-0">
+   715→            <TrendingUp className="h-3 w-3 inline mr-1" />
+   716→            {locale === 'id' ? 'Populer:' : 'Trending:'}
+   717→          </span>
+   718→          {categories.slice(0, 6).map((cat) => {
+   719→            const isActive = filters.genre === cat.slug;
+   720→            return (
+   721→              <motion.button
+   722→                key={cat.id}
+   723→                whileHover={{ scale: 1.05 }}
+   724→                whileTap={{ scale: 0.95 }}
+   725→                onClick={() => {
+   726→                  if (isActive) {
+   727→                    handleFilterChange({ genre: undefined });
+   728→                  } else {
+   729→                    handleFilterChange({ genre: cat.slug });
+   730→                  }
+   731→                }}
+   732→                className={`filter-tag shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 ${
+   733→                  isActive
+   734→                    ? 'bg-[#D4AF37] text-white border-[#D4AF37] shadow-sm shadow-[#D4AF37]/20'
+   735→                    : 'border-border text-muted-foreground hover:border-[#D4AF37]/40 hover:text-[#D4AF37]'
+   736→                }`}
+   737→              >
+   738→                {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
+   739→              </motion.button>
+   740→            );
+   741→          })}
+   742→        </motion.div>
+   743→
+   744→        {/* Active Filter Badges */}
+   745→        <AnimatePresence>
+   746→          {hasActiveFilters && (
+   747→            <motion.div
+   748→              initial={{ opacity: 0, height: 0 }}
+   749→              animate={{ opacity: 1, height: 'auto' }}
+   750→              exit={{ opacity: 0, height: 0 }}
+   751→              className="mb-6"
+   752→            >
+   753→              <div className="flex flex-wrap items-center gap-2">
+   754→                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+   755→                  <Filter className="h-3 w-3 inline mr-1" />
+   756→                  {locale === 'id' ? 'Filter aktif:' : 'Active filters:'}
+   757→                </span>
+   758→                {activeFilters.map((filter) => (
+   759→                  <motion.div
+   760→                    key={filter.key}
+   761→                    initial={{ scale: 0.8, opacity: 0 }}
+   762→                    animate={{ scale: 1, opacity: 1 }}
+   763→                    exit={{ scale: 0.8, opacity: 0 }}
+   764→                    transition={{ duration: 0.2 }}
+   765→                  >
+   766→                    <Badge
+   767→                      variant="secondary"
+   768→                      className="gap-1.5 pr-1 py-1 text-xs bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20 hover:bg-[#D4AF37]/20 cursor-default"
+   769→                    >
+   770→                      <span>{filter.label}</span>
+   771→                      <button
+   772→                        onClick={filter.clear}
+   773→                        className="ml-0.5 rounded-full p-0.5 hover:bg-[#D4AF37]/20 transition-colors"
+   774→                        aria-label={`Remove ${filter.label} filter`}
+   775→                      >
+   776→                        <X className="h-3 w-3" />
+   777→                      </button>
+   778→                    </Badge>
+   779→                  </motion.div>
+   780→                ))}
+   781→                <button
+   782→                  onClick={handleReset}
+   783→                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+   784→                >
+   785→                  {t('catalog.filter.reset', locale)}
+   786→                </button>
+   787→              </div>
+   788→            </motion.div>
+   789→          )}
+   790→        </AnimatePresence>
+   791→
+   792→        {/* Main Content: Sidebar + Grid */}
+   793→        <div className="flex gap-8">
+   794→          {/* Desktop Sidebar */}
+   795→          <motion.aside
+   796→            initial={{ opacity: 0, x: -20 }}
+   797→            animate={{ opacity: 1, x: 0 }}
+   798→            transition={{ duration: 0.3, delay: 0.15 }}
+   799→            className="hidden lg:block w-[240px] shrink-0 glass-card backdrop-blur-sm border border-[#D4AF37]/10"
+   800→          >
+   801→            <div className="sticky top-24">
+   802→              {categoriesLoading ? (
+   803→                <div className="space-y-6">
+   804→                  <Skeleton className="h-5 w-24" />
+   805→                  <div className="space-y-3">
+   806→                    {Array.from({ length: 5 }).map((_, i) => (
+   807→                      <Skeleton key={i} className="h-8 w-full" />
+   808→                    ))}
+   809→                  </div>
+   810→                  <Skeleton className="h-5 w-20" />
+   811→                  <div className="space-y-3">
+   812→                    {Array.from({ length: 6 }).map((_, i) => (
+   813→                      <div key={i} className="flex items-center gap-2.5">
+   814→                        <Skeleton className="h-4 w-4 rounded" />
+   815→                        <Skeleton className="h-4 flex-1" />
+   816→                      </div>
+   817→                    ))}
+   818→                  </div>
+   819→                  <Skeleton className="h-5 w-16" />
+   820→                  <div className="flex gap-2">
+   821→                    <Skeleton className="h-9 flex-1" />
+   822→                    <Skeleton className="h-9 flex-1" />
+   823→                  </div>
+   824→                  <Skeleton className="h-5 w-16" />
+   825→                  <Skeleton className="h-5 w-28" />
+   826→                </div>
+   827→              ) : (
+   828→                filterSidebar
+   829→              )}
+   830→            </div>
+   831→          </motion.aside>
+   832→
+   833→          {/* Book Grid + Pagination */}
+   834→          <div className="flex-1 min-w-0">
+   835→            {loading ? (
+   836→              <BookGridSkeleton />
+   837→            ) : books.length === 0 ? (
+   838→              <EmptyState locale={locale} onReset={handleReset} />
+   839→            ) : (
+   840→              <>
+   841→                {/* Books Grid */}
+   842→                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+   843→                  <AnimatePresence mode="popLayout">
+   844→                    {books.map((book, index) => (
+   845→                      <motion.div
+   846→                        key={book.id}
+   847→                        layout
+   848→                        initial={{ opacity: 0, scale: 0.95 }}
+   849→                        animate={{ opacity: 1, scale: 1 }}
+   850→                        exit={{ opacity: 0, scale: 0.95 }}
+   851→                        transition={{ duration: 0.3, delay: index * 0.03 }}
+   852→                        whileHover={{ y: -4 }}
+   853→                        className="rounded-xl book-card-glow transition-shadow duration-300"
+   854→                      >
+   855→                        <BookCard book={book} index={index} />
+   856→                      </motion.div>
+   857→                    ))}
+   858→                  </AnimatePresence>
+   859→                </div>
+   860→
+   861→                {/* Pagination */}
+   862→                {totalPages > 1 && (
+   863→                  <motion.nav
+   864→                    initial={{ opacity: 0, y: 10 }}
+   865→                    animate={{ opacity: 1, y: 0 }}
+   866→                    transition={{ duration: 0.3, delay: 0.2 }}
+   867→                    className="mt-10 flex items-center justify-center gap-1.5"
+   868→                    aria-label="Pagination"
+   869→                  >
+   870→                    {/* Prev */}
+   871→                    <Button
+   872→                      variant="outline"
+   873→                      size="icon"
+   874→                      className="h-9 w-9 border-border disabled:opacity-40"
+   875→                      disabled={currentPage <= 1}
+   876→                      onClick={() =>
+   877→                        setCurrentPage((p) => Math.max(1, p - 1))
+   878→                      }
+   879→                      aria-label={t('general.previous', locale)}
+   880→                    >
+   881→                      <ChevronLeft className="h-4 w-4" />
+   882→                    </Button>
+   883→
+   884→                    {/* Page Numbers */}
+   885→                    {paginationRange.map((item, idx) =>
+   886→                      item === '...' ? (
+   887→                        <span
+   888→                          key={`ellipsis-${idx}`}
+   889→                          className="flex h-9 w-9 items-center justify-center text-sm text-muted-foreground"
+   890→                        >
+   891→                          ...
+   892→                        </span>
+   893→                      ) : (
+   894→                        <Button
+   895→                          key={item}
+   896→                          variant={currentPage === item ? 'default' : 'outline'}
+   897→                          size="icon"
+   898→                          className={`h-9 w-9 transition-all duration-200 ${
+   899→                            currentPage === item
+   900→                              ? 'bg-[#D4AF37] text-white hover:bg-[#B8960C] border-[#D4AF37] shadow-md shadow-[#D4AF37]/30'
+   901→                              : 'border-border text-foreground hover:bg-muted hover:text-foreground hover:border-[#D4AF37]/30'
+   902→                          }`}
+   903→                          onClick={() => setCurrentPage(item as number)}
+   904→                          aria-label={`Page ${item}`}
+   905→                          aria-current={
+   906→                            currentPage === item ? 'page' : undefined
+   907→                          }
+   908→                        >
+   909→                          {item}
+   910→                        </Button>
+   911→                      )
+   912→                    )}
+   913→
+   914→                    {/* Next */}
+   915→                    <Button
+   916→                      variant="outline"
+   917→                      size="icon"
+   918→                      className="h-9 w-9 border-border disabled:opacity-40"
+   919→                      disabled={currentPage >= totalPages}
+   920→                      onClick={() =>
+   921→                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+   922→                      }
+   923→                      aria-label={t('general.next', locale)}
+   924→                    >
+   925→                      <ChevronRight className="h-4 w-4" />
+   926→                    </Button>
+   927→                  </motion.nav>
+   928→                )}
+   929→              </>
+   930→            )}
+   931→          </div>
+   932→        </div>
+   933→      </div>
+   934→    </section>
+   935→  );
+   936→}
+   937→

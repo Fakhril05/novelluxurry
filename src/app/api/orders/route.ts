@@ -46,7 +46,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { items, shippingName, shippingPhone, shippingAddr, shippingCity, shippingCode, expedition, paymentMethod, userId, voucherCode, voucherDisc, subtotal, shippingCost, discount, total } = body;
 
-    const orderNumber = 'NVX-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
+    const now = new Date();
+    const dateStr = now.getFullYear().toString() +
+      String(now.getMonth() + 1).padStart(2, '0') +
+      String(now.getDate()).padStart(2, '0');
+    const randomDigits = String(Math.floor(1000 + Math.random() * 9000));
+    const orderNumber = `NVL-${dateStr}-${randomDigits}`;
 
     const order = await db.order.create({
       data: {
@@ -66,7 +71,7 @@ export async function POST(request: NextRequest) {
         paymentMethod,
         voucherCode,
         voucherDisc: voucherDisc || 0,
-        pointsEarned: Math.floor(total / 10000) * 10,
+        pointsEarned: Math.floor(total / 10000),
         items: {
           create: items.map((item: any) => ({
             bookId: item.bookId,

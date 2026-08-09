@@ -1,0 +1,1135 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Star,
+     7→  Heart,
+     8→  ShoppingCart,
+     9→  Minus,
+    10→  Plus,
+    11→  ArrowLeft,
+    12→  BookOpen,
+    13→  Calendar,
+    14→  Building,
+    15→  Globe,
+    16→  Hash,
+    17→  AlertCircle,
+    18→  Twitter,
+    19→  Facebook,
+    20→  Link as LinkIcon,
+    21→  MessageCircle,
+    22→} from 'lucide-react';
+    23→import { Button } from '@/components/ui/button';
+    24→import { Badge } from '@/components/ui/badge';
+    25→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    26→import { Skeleton } from '@/components/ui/skeleton';
+    27→import { Separator } from '@/components/ui/separator';
+    28→import { Textarea } from '@/components/ui/textarea';
+    29→import {
+    30→  Breadcrumb,
+    31→  BreadcrumbList,
+    32→  BreadcrumbItem,
+    33→  BreadcrumbLink,
+    34→  BreadcrumbPage,
+    35→  BreadcrumbSeparator,
+    36→} from '@/components/ui/breadcrumb';
+    37→import { useAppStore, formatPrice } from '@/lib/store';
+    38→import { useCartStore } from '@/lib/cart-store';
+    39→import { t } from '@/lib/i18n';
+    40→import BookCard from '@/components/BookCard';
+    41→import type { Book } from '@/types';
+    42→import { toast } from 'sonner';
+    43→
+    44→interface Review {
+    45→  id: string;
+    46→  rating: number;
+    47→  comment: string | null;
+    48→  userId: string;
+    49→  user: {
+    50→    id: string;
+    51→    name: string | null;
+    52→    avatar: string | null;
+    53→  };
+    54→  createdAt: string;
+    55→}
+    56→
+    57→type FormatOption = 'Hardcover' | 'Paperback' | 'Ebook';
+    58→
+    59→const FORMAT_OPTIONS: FormatOption[] = ['Hardcover', 'Paperback', 'Ebook'];
+    60→
+    61→const FORMAT_PRICE_MULTIPLIER: Record<FormatOption, number> = {
+    62→  Hardcover: 1.2,
+    63→  Paperback: 1,
+    64→  Ebook: 0.7,
+    65→};
+    66→
+    67→/** Generate simulated rating distribution from average */
+    68→function getRatingDistribution(avgRating: number, totalReviews: number) {
+    69→  // Create a bell-curve-like distribution based on the average rating
+    70→  const base = totalReviews || 1;
+    71→  const dist: number[] = [0, 0, 0, 0, 0]; // 5★, 4★, 3★, 2★, 1★
+    72→  for (let i = 0; i < 5; i++) {
+    73→    const starVal = 5 - i;
+    74→    const diff = Math.abs(starVal - avgRating);
+    75→    dist[i] = Math.max(5, Math.round(base * Math.exp(-diff * diff * 0.5)));
+    76→  }
+    77→  // Normalize so sum matches totalReviews
+    78→  const sum = dist.reduce((a, b) => a + b, 0);
+    79→  for (let i = 0; i < 5; i++) {
+    80→    dist[i] = Math.round((dist[i] / sum) * base);
+    81→  }
+    82→  return dist;
+    83→}
+    84→
+    85→export default function BookDetailPage() {
+    86→  const {
+    87→    pageParams,
+    88→    locale,
+    89→    setPage,
+    90→    isAuthenticated,
+    91→    user,
+    92→    wishlist,
+    93→    toggleWishlist,
+    94→  } = useAppStore();
+    95→  const addItem = useCartStore((s) => s.addItem);
+    96→
+    97→  const slug = pageParams.slug;
+    98→
+    99→  const [book, setBook] = useState<Book | null>(null);
+   100→  const [reviews, setReviews] = useState<Review[]>([]);
+   101→  const [recommendations, setRecommendations] = useState<Book[]>([]);
+   102→  const [loading, setLoading] = useState(true);
+   103→  const [error, setError] = useState<string | null>(null);
+   104→  const [selectedImage, setSelectedImage] = useState(0);
+   105→  const [quantity, setQuantity] = useState(1);
+   106→  const [selectedFormat, setSelectedFormat] = useState<FormatOption>('Paperback');
+   107→  const [activeTab, setActiveTab] = useState('synopsis');
+   108→  const [reviewRating, setReviewRating] = useState(0);
+   109→  const [reviewComment, setReviewComment] = useState('');
+   110→  const [submittingReview, setSubmittingReview] = useState(false);
+   111→
+   112→  const reviewsRef = useRef<HTMLDivElement>(null);
+   113→
+   114→  // Parse gallery images from JSON string
+   115→  const galleryImages: string[] = (() => {
+   116→    if (!book?.galleryImages) return [];
+   117→    try {
+   118→      const parsed = JSON.parse(book.galleryImages);
+   119→      return Array.isArray(parsed) ? parsed : [];
+   120→    } catch {
+   121→      return [];
+   122→    }
+   123→  })();
+   124→
+   125→  // All images including cover as first
+   126→  const allImages = book ? [book.coverImage, ...galleryImages] : [];
+   127→
+   128→  // Computed price based on format
+   129→  const effectivePrice = book
+   130→    ? Math.round(
+   131→        (book.discountPrice ?? book.price) * FORMAT_PRICE_MULTIPLIER[selectedFormat]
+   132→      )
+   133→    : 0;
+   134→
+   135→  const hasDiscount = book ? !!book.discountPrice && book.discountPrice < book.price : false;
+   136→  const discountPercent = book
+   137→    ? Math.round((1 - (book.discountPrice ?? book.price) / book.price) * 100)
+   138→    : 0;
+   139→  const isWished = book ? wishlist.includes(book.id) : false;
+   140→
+   141→  // Rating distribution
+   142→  const ratingDistribution = useMemo(
+   143→    () => getRatingDistribution(book?.rating ?? 0, reviews.length),
+   144→    [book?.rating, reviews.length]
+   145→  );
+   146→
+   147→  const fetchBook = useCallback(async () => {
+   148→    if (!slug) return;
+   149→    setLoading(true);
+   150→    setError(null);
+   151→
+   152→    const controller = new AbortController();
+   153→
+   154→    try {
+   155→      const res = await fetch(`/api/books/${slug}`, {
+   156→        signal: controller.signal,
+   157→      });
+   158→      if (!res.ok) throw new Error('Failed to fetch book');
+   159→      const data = await res.json();
+   160→      setBook(data.book || data);
+   161→      setReviews(data.reviews || []);
+   162→
+   163→      // Fetch recommendations
+   164→      if (data.book?.categoryId || data?.categoryId) {
+   165→        const catId = data.book?.categoryId || data?.categoryId;
+   166→        const recRes = await fetch(`/api/books?limit=8&genre=${catId}`, {
+   167→          signal: controller.signal,
+   168→        });
+   169→        if (recRes.ok) {
+   170→          const recData = await recRes.json();
+   171→          const recBooks = (recData.books || recData || []).filter(
+   172→            (b: Book) => b.slug !== slug
+   173→          );
+   174→          setRecommendations(recBooks.slice(0, 8));
+   175→        }
+   176→      }
+   177→    } catch (err) {
+   178→      if (err instanceof DOMException && err.name === 'AbortError') return;
+   179→      setError(locale === 'id' ? 'Gagal memuat detail buku' : 'Failed to load book details');
+   180→    } finally {
+   181→      setLoading(false);
+   182→    }
+   183→
+   184→    return () => controller.abort();
+   185→  }, [slug, locale]);
+   186→
+   187→  useEffect(() => {
+   188→    fetchBook();
+   189→  }, [fetchBook]);
+   190→
+   191→  // Reset state when slug changes
+   192→  useEffect(() => {
+   193→    setSelectedImage(0);
+   194→    setQuantity(1);
+   195→    setSelectedFormat('Paperback');
+   196→    setActiveTab('synopsis');
+   197→    setReviewRating(0);
+   198→    setReviewComment('');
+   199→  }, [slug]);
+   200→
+   201→  const handleAddToCart = () => {
+   202→    if (!book) return;
+   203→    addItem(book);
+   204→    toast.success(
+   205→      locale === 'id' ? 'Ditambahkan ke keranjang' : 'Added to cart',
+   206→      {
+   207→        description: book.title,
+   208→      }
+   209→    );
+   210→  };
+   211→
+   212→  const handleBuyNow = () => {
+   213→    if (!book) return;
+   214→    addItem(book);
+   215→    setPage('checkout');
+   216→  };
+   217→
+   218→  const handleWishlist = () => {
+   219→    if (!book) return;
+   220→    toggleWishlist(book.id);
+   221→  };
+   222→
+   223→  const handleScrollToReviews = () => {
+   224→    setActiveTab('reviews');
+   225→    setTimeout(() => {
+   226→      reviewsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+   227→    }, 100);
+   228→  };
+   229→
+   230→  const handleSubmitReview = async () => {
+   231→    if (!book || reviewRating === 0) {
+   232→      toast.error(locale === 'id' ? 'Pilih rating terlebih dahulu' : 'Please select a rating first');
+   233→      return;
+   234→    }
+   235→    if (!user) return;
+   236→    setSubmittingReview(true);
+   237→    try {
+   238→      const res = await fetch('/api/reviews', {
+   239→        method: 'POST',
+   240→        headers: { 'Content-Type': 'application/json' },
+   241→        body: JSON.stringify({
+   242→          bookId: book.id,
+   243→          rating: reviewRating,
+   244→          comment: reviewComment.trim() || null,
+   245→          userId: user.id,
+   246→        }),
+   247→      });
+   248→      if (res.ok) {
+   249→        const result = await res.json();
+   250→        toast.success(t('book.reviewSuccess', locale));
+   251→
+   252→        // Append new review to the displayed list
+   253→        const newReview: Review = {
+   254→          id: result.review.id,
+   255→          rating: result.review.rating,
+   256→          comment: result.review.comment,
+   257→          userId: result.review.userId,
+   258→          user: {
+   259→            id: user.id,
+   260→            name: user.name,
+   261→            avatar: null,
+   262→          },
+   263→          createdAt: result.review.createdAt,
+   264→        };
+   265→        setReviews((prev) => [newReview, ...prev]);
+   266→
+   267→        // Update book rating display
+   268→        setBook((prev) => {
+   269→          if (!prev) return prev;
+   270→          const newReviewCount = prev.reviewCount + 1;
+   271→          const newAvgRating = Math.round(
+   272→            ((prev.rating * prev.reviewCount + reviewRating) / newReviewCount) * 10
+   273→          ) / 10;
+   274→          return { ...prev, rating: newAvgRating, reviewCount: newReviewCount };
+   275→        });
+   276→
+   277→        // Reset form
+   278→        setReviewRating(0);
+   279→        setReviewComment('');
+   280→      } else {
+   281→        toast.error(locale === 'id' ? 'Gagal mengirim ulasan' : 'Failed to submit review');
+   282→      }
+   283→    } catch {
+   284→      toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+   285→    } finally {
+   286→      setSubmittingReview(false);
+   287→    }
+   288→  };
+   289→
+   290→  const handleShare = (platform: string) => {
+   291→    const url = typeof window !== 'undefined' ? window.location.href : '';
+   292→    const text = book?.title ?? '';
+   293→    switch (platform) {
+   294→      case 'twitter':
+   295→        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+   296→        break;
+   297→      case 'facebook':
+   298→        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+   299→        break;
+   300→      case 'whatsapp':
+   301→        window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
+   302→        break;
+   303→      case 'copy':
+   304→        navigator.clipboard.writeText(url).then(() => {
+   305→          toast.success(locale === 'id' ? 'Link berhasil disalin!' : 'Link copied!');
+   306→        });
+   307→        break;
+   308→    }
+   309→  };
+   310→
+   311→  const formatDate = (dateStr: string) => {
+   312→    const date = new Date(dateStr);
+   313→    return date.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+   314→      year: 'numeric',
+   315→      month: 'long',
+   316→      day: 'numeric',
+   317→    });
+   318→  };
+   319→
+   320→  // ---- Loading Skeleton ----
+   321→  if (loading) {
+   322→    return (
+   323→      <div className="min-h-screen py-8 px-4">
+   324→        <div className="mx-auto max-w-7xl space-y-8">
+   325→          {/* Breadcrumb skeleton */}
+   326→          <div className="flex items-center gap-2">
+   327→            <Skeleton className="h-4 w-16" />
+   328→            <Skeleton className="h-4 w-4" />
+   329→            <Skeleton className="h-4 w-20" />
+   330→            <Skeleton className="h-4 w-4" />
+   331→            <Skeleton className="h-4 w-32" />
+   332→          </div>
+   333→          {/* Two column skeleton */}
+   334→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+   335→            {/* Left: cover */}
+   336→            <div className="space-y-4">
+   337→              <Skeleton className="aspect-[3/4] w-full max-w-md mx-auto rounded-xl" />
+   338→              <div className="flex gap-3 justify-center">
+   339→                <Skeleton className="h-20 w-16 rounded-lg" />
+   340→                <Skeleton className="h-20 w-16 rounded-lg" />
+   341→                <Skeleton className="h-20 w-16 rounded-lg" />
+   342→              </div>
+   343→            </div>
+   344→            {/* Right: info */}
+   345→            <div className="space-y-5">
+   346→              <Skeleton className="h-6 w-24" />
+   347→              <Skeleton className="h-10 w-3/4" />
+   348→              <Skeleton className="h-5 w-40" />
+   349→              <Skeleton className="h-5 w-32" />
+   350→              <Skeleton className="h-8 w-48" />
+   351→              <Skeleton className="h-12 w-full" />
+   352→              <Skeleton className="h-12 w-full" />
+   353→              <Skeleton className="h-10 w-full" />
+   354→            </div>
+   355→          </div>
+   356→        </div>
+   357→      </div>
+   358→    );
+   359→  }
+   360→
+   361→  // ---- Error State ----
+   362→  if (error || !book) {
+   363→    return (
+   364→      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
+   365→        <motion.div
+   366→          initial={{ opacity: 0, y: 20 }}
+   367→          animate={{ opacity: 1, y: 0 }}
+   368→          className="text-center space-y-4"
+   369→        >
+   370→          <AlertCircle className="mx-auto h-16 w-16 text-destructive" />
+   371→          <h2 className="font-heading text-2xl font-bold">
+   372→            {error || (locale === 'id' ? 'Buku tidak ditemukan' : 'Book not found')}
+   373→          </h2>
+   374→          <Button
+   375→            onClick={() => setPage('catalog')}
+   376→            className="bg-[#D4AF37] hover:bg-[#B8960C] text-white"
+   377→          >
+   378→            <ArrowLeft className="mr-2 h-4 w-4" />
+   379→            {t('general.back', locale)}
+   380→          </Button>
+   381→        </motion.div>
+   382→      </div>
+   383→    );
+   384→  }
+   385→
+   386→  // ---- Main Content ----
+   387→  return (
+   388→    <motion.div
+   389→      initial={{ opacity: 0 }}
+   390→      animate={{ opacity: 1 }}
+   391→      transition={{ duration: 0.5 }}
+   392→      className="min-h-screen py-6 px-4 sm:py-10"
+   393→    >
+   394→      <div className="mx-auto max-w-7xl space-y-10 sm:space-y-14">
+   395→        {/* Back button (mobile) */}
+   396→        <button
+   397→          onClick={() => setPage('catalog')}
+   398→          className="lg:hidden flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
+   399→        >
+   400→          <ArrowLeft className="h-4 w-4" />
+   401→          {t('general.back', locale)}
+   402→        </button>
+   403→
+   404→        {/* Breadcrumb */}
+   405→        <Breadcrumb>
+   406→          <BreadcrumbList>
+   407→            <BreadcrumbItem>
+   408→              <BreadcrumbLink
+   409→                onClick={() => setPage('home')}
+   410→                className="cursor-pointer text-muted-foreground hover:text-[#D4AF37] transition-colors"
+   411→              >
+   412→                {t('nav.home', locale)}
+   413→              </BreadcrumbLink>
+   414→            </BreadcrumbItem>
+   415→            <BreadcrumbSeparator />
+   416→            <BreadcrumbItem>
+   417→              <BreadcrumbLink
+   418→                onClick={() => setPage('catalog')}
+   419→                className="cursor-pointer text-muted-foreground hover:text-[#D4AF37] transition-colors"
+   420→              >
+   421→                {t('nav.catalog', locale)}
+   422→              </BreadcrumbLink>
+   423→            </BreadcrumbItem>
+   424→            <BreadcrumbSeparator />
+   425→            <BreadcrumbItem>
+   426→              <BreadcrumbPage className="text-foreground font-medium truncate max-w-[200px]">
+   427→                {book.title}
+   428→              </BreadcrumbPage>
+   429→            </BreadcrumbItem>
+   430→          </BreadcrumbList>
+   431→        </Breadcrumb>
+   432→
+   433→        {/* Main: Two Column Layout */}
+   434→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14">
+   435→          {/* ---- Left Column: Cover Gallery ---- */}
+   436→          <motion.div
+   437→            initial={{ opacity: 0, x: -30 }}
+   438→            animate={{ opacity: 1, x: 0 }}
+   439→            transition={{ duration: 0.5, delay: 0.1 }}
+   440→            className="space-y-4"
+   441→          >
+   442→            {/* Main cover image */}
+   443→            <div className="relative overflow-hidden rounded-xl shadow-2xl shadow-[0_0_40px_rgba(212,175,55,0.3)] bg-secondary">
+   444→              <AnimatePresence mode="wait">
+   445→                <motion.img
+   446→                  key={selectedImage}
+   447→                  src={allImages[selectedImage] || book.coverImage}
+   448→                  alt={book.title}
+   449→                  className="w-full aspect-[3/4] object-cover"
+   450→                  initial={{ opacity: 0, scale: 1.02 }}
+   451→                  animate={{ opacity: 1, scale: 1 }}
+   452→                  exit={{ opacity: 0, scale: 0.98 }}
+   453→                  transition={{ duration: 0.3 }}
+   454→                />
+   455→              </AnimatePresence>
+   456→
+   457→              {/* Badges overlay */}
+   458→              <div className="absolute top-4 left-4 flex flex-col gap-2">
+   459→                {book.isBestSeller && (
+   460→                  <Badge className="bg-[#D4AF37] text-white border-0 text-xs font-bold uppercase tracking-wider px-3 py-1 shadow-lg">
+   461→                    {t('badge.bestseller', locale)}
+   462→                  </Badge>
+   463→                )}
+   464→                {book.isNewArrival && (
+   465→                  <Badge className="bg-emerald-500 text-white border-0 text-xs font-bold uppercase tracking-wider px-3 py-1 shadow-lg">
+   466→                    {t('badge.new', locale)}
+   467→                  </Badge>
+   468→                )}
+   469→                {hasDiscount && (
+   470→                  <Badge className="bg-red-500 text-white border-0 text-xs font-bold px-3 py-1 shadow-lg">
+   471→                    -{discountPercent}%
+   472→                  </Badge>
+   473→                )}
+   474→              </div>
+   475→            </div>
+   476→
+   477→            {/* Thumbnail gallery */}
+   478→            {allImages.length > 1 && (
+   479→              <div className="flex gap-3 justify-center flex-wrap">
+   480→                {allImages.map((img, idx) => (
+   481→                  <button
+   482→                    key={idx}
+   483→                    onClick={() => setSelectedImage(idx)}
+   484→                    className={`relative h-20 w-16 overflow-hidden rounded-lg border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
+   485→                      selectedImage === idx
+   486→                        ? 'border-[#D4AF37] shadow-md shadow-[#D4AF37]/20'
+   487→                        : 'border-transparent opacity-60 hover:opacity-100'
+   488→                    }`}
+   489→                    aria-label={`View image ${idx + 1}`}
+   490→                  >
+   491→                    <img
+   492→                      src={img}
+   493→                      alt={`${book.title} - ${idx + 1}`}
+   494→                      className="h-full w-full object-cover"
+   495→                    />
+   496→                  </button>
+   497→                ))}
+   498→              </div>
+   499→            )}
+   500→          </motion.div>
+   501→
+   502→          {/* ---- Right Column: Info ---- */}
+   503→          <motion.div
+   504→            initial={{ opacity: 0, x: 30 }}
+   505→            animate={{ opacity: 1, x: 0 }}
+   506→            transition={{ duration: 0.5, delay: 0.2 }}
+   507→            className="space-y-5 glass-card backdrop-blur-sm border border-[#D4AF37]/10 rounded-2xl p-6"
+   508→          >
+   509→            {/* Badges (desktop duplicates for mobile visibility) */}
+   510→            <div className="flex items-center gap-2 flex-wrap">
+   511→              {book.isBestSeller && (
+   512→                <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 text-xs font-semibold px-3 py-1">
+   513→                  {t('badge.bestseller', locale)}
+   514→                </Badge>
+   515→              )}
+   516→              {book.isNewArrival && (
+   517→                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-semibold px-3 py-1">
+   518→                  {t('badge.new', locale)}
+   519→                </Badge>
+   520→              )}
+   521→              {hasDiscount && (
+   522→                <Badge className="bg-red-500/10 text-red-500 border border-red-500/30 text-xs font-semibold px-3 py-1">
+   523→                  -{discountPercent}% {t('badge.discount', locale)}
+   524→                </Badge>
+   525→              )}
+   526→            </div>
+   527→
+   528→            {/* Title */}
+   529→            <h1 className="font-heading text-3xl sm:text-4xl font-bold leading-tight tracking-tight text-gradient-gold">
+   530→              {book.title}
+   531→            </h1>
+   532→
+   533→            {/* Author */}
+   534→            <p className="text-lg text-muted-foreground">{book.author}</p>
+   535→
+   536→            {/* Rating */}
+   537→            <button
+   538→              onClick={handleScrollToReviews}
+   539→              className="flex items-center gap-2 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-md"
+   540→              aria-label={`Scroll to reviews, ${book.rating} out of 5`}
+   541→            >
+   542→              <div className="flex items-center dark:drop-shadow-[0_0_6px_rgba(212,175,55,0.4)]">
+   543→                {Array.from({ length: 5 }).map((_, i) => (
+   544→                  <Star
+   545→                    key={i}
+   546→                    className={`h-5 w-5 transition-colors dark:drop-shadow-[0_0_3px_rgba(212,175,55,0.3)] ${
+   547→                      i < Math.floor(book.rating)
+   548→                        ? 'fill-[#D4AF37] text-[#D4AF37]'
+   549→                        : i < book.rating
+   550→                        ? 'fill-[#D4AF37]/50 text-[#D4AF37]'
+   551→                        : 'text-muted-foreground/30 dark:text-muted-foreground/20'
+   552→                    }`}
+   553→                  />
+   554→                ))}
+   555→              </div>
+   556→              <span className="text-sm font-medium text-foreground">
+   557→                {book.rating.toFixed(1)}
+   558→              </span>
+   559→              <span className="text-sm text-muted-foreground group-hover:text-[#D4AF37] transition-colors">
+   560→                ({book.reviewCount} {locale === 'id' ? 'ulasan' : 'reviews'})
+   561→              </span>
+   562→            </button>
+   563→
+   564→            {/* Price */}
+   565→            <div className="flex items-baseline gap-3">
+   566→              <span className="text-3xl font-bold text-foreground">
+   567→                {formatPrice(effectivePrice, locale)}
+   568→              </span>
+   569→              {hasDiscount && (
+   570→                <span className="text-lg text-muted-foreground line-through">
+   571→                  {formatPrice(
+   572→                    Math.round(book.price * FORMAT_PRICE_MULTIPLIER[selectedFormat]),
+   573→                    locale
+   574→                  )}
+   575→                </span>
+   576→              )}
+   577→            </div>
+   578→
+   579→            {/* Format Selector */}
+   580→            <div className="space-y-2">
+   581→              <label className="text-sm font-medium text-muted-foreground">
+   582→                {t('book.format', locale)}
+   583→              </label>
+   584→              <div className="flex gap-2 flex-wrap">
+   585→                {FORMAT_OPTIONS.map((fmt) => {
+   586→                  const isActive = selectedFormat === fmt;
+   587→                  const fmtPrice = Math.round(
+   588→                    (book.discountPrice ?? book.price) * FORMAT_PRICE_MULTIPLIER[fmt]
+   589→                  );
+   590→                  return (
+   591→                    <button
+   592→                      key={fmt}
+   593→                      onClick={() => setSelectedFormat(fmt)}
+   594→                      className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
+   595→                        isActive
+   596→                          ? 'border-[#D4AF37]/50 bg-[#D4AF37]/10 text-[#D4AF37] shadow-md shadow-[#D4AF37]/15'
+   597→                          : 'bg-muted/50 text-muted-foreground border-border hover:border-[#D4AF37]/40 hover:text-foreground'
+   598→                      }`}
+   599→                      aria-pressed={isActive}
+   600→                    >
+   601→                      {fmt}
+   602→                      <span
+   603→                        className={`text-xs ${
+   604→                          isActive ? 'text-[#D4AF37]/70' : 'text-muted-foreground'
+   605→                        }`}
+   606→                      >
+   607→                        {formatPrice(fmtPrice, locale)}
+   608→                      </span>
+   609→                    </button>
+   610→                  );
+   611→                })}
+   612→              </div>
+   613→            </div>
+   614→
+   615→            {/* Stock Indicator */}
+   616→            <div className="flex items-center gap-2">
+   617→              <div
+   618→                className={`h-2.5 w-2.5 rounded-full ${
+   619→                  book.stock > 0
+   620→                    ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50'
+   621→                    : 'bg-red-500'
+   622→                }`}
+   623→              />
+   624→              <span
+   625→                className={`text-sm font-medium ${
+   626→                  book.stock > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
+   627→                }`}
+   628→              >
+   629→                {book.stock > 0
+   630→                  ? `${t('book.stock', locale)} (${book.stock})`
+   631→                  : locale === 'id'
+   632→                  ? 'Stok habis'
+   633→                  : 'Out of stock'}
+   634→              </span>
+   635→              {book.soldCount > 0 && (
+   636→                <span className="text-sm text-muted-foreground">
+   637→                  · {book.soldCount} {t('book.sold', locale)}
+   638→                </span>
+   639→              )}
+   640→            </div>
+   641→
+   642→            {/* Gold Gradient Divider */}
+   643→            <div
+   644→              className="h-px w-full"
+   645→              style={{
+   646→                background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+   647→              }}
+   648→            />
+   649→
+   650→            {/* Quantity Selector */}
+   651→            <div className="flex items-center gap-4">
+   652→              <label className="text-sm font-medium text-muted-foreground">
+   653→                {locale === 'id' ? 'Jumlah' : 'Quantity'}
+   654→              </label>
+   655→              <div className="flex items-center rounded-lg border border-border">
+   656→                <button
+   657→                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+   658→                  disabled={quantity <= 1}
+   659→                  className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-l-lg"
+   660→                  aria-label="Decrease quantity"
+   661→                >
+   662→                  <Minus className="h-4 w-4" />
+   663→                </button>
+   664→                <span className="flex h-10 w-12 items-center justify-center text-sm font-semibold border-x border-border">
+   665→                  {quantity}
+   666→                </span>
+   667→                <button
+   668→                  onClick={() => setQuantity((q) => Math.min(book.stock || 99, q + 1))}
+   669→                  disabled={quantity >= (book.stock || 99)}
+   670→                  className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-r-lg"
+   671→                  aria-label="Increase quantity"
+   672→                >
+   673→                  <Plus className="h-4 w-4" />
+   674→                </button>
+   675→              </div>
+   676→            </div>
+   677→
+   678→            {/* Action Buttons */}
+   679→            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+   680→              <Button
+   681→                onClick={handleAddToCart}
+   682→                disabled={book.stock <= 0}
+   683→                className="flex-1 bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold h-12 text-base rounded-xl shadow-lg shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:shadow-xl hover:shadow-[0_0_30px_rgba(212,175,55,0.4)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+   684→              >
+   685→                <ShoppingCart className="mr-2 h-5 w-5" />
+   686→                {t('book.addCart', locale)}
+   687→              </Button>
+   688→              <Button
+   689→                onClick={handleBuyNow}
+   690→                disabled={book.stock <= 0}
+   691→                variant="outline"
+   692→                className="flex-1 border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white font-semibold h-12 text-base rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+   693→              >
+   694→                {t('book.buyNow', locale)}
+   695→              </Button>
+   696→              <Button
+   697→                onClick={handleWishlist}
+   698→                variant="outline"
+   699→                size="icon"
+   700→                className={`h-12 w-12 rounded-xl border-2 transition-all duration-200 shrink-0 ${
+   701→                  isWished
+   702→                    ? 'border-red-500 bg-red-500/10 text-red-500 hover:bg-red-500/20'
+   703→                    : 'border-border text-muted-foreground hover:border-red-500/50 hover:text-red-500'
+   704→                }`}
+   705→                aria-label={t('book.wishlist', locale)}
+   706→              >
+   707→                <Heart className={`h-5 w-5 ${isWished ? 'fill-current' : ''}`} />
+   708→              </Button>
+   709→            </div>
+   710→
+   711→            {/* Gold Gradient Divider */}
+   712→            <div
+   713→              className="h-px w-full"
+   714→              style={{
+   715→                background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+   716→              }}
+   717→            />
+   718→
+   719→            {/* Book Meta Grid with gold left borders */}
+   720→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+   721→              {book.pages && (
+   722→                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   723→                  <BookOpen className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   724→                  <div>
+   725→                    <p className="text-muted-foreground text-xs">
+   726→                      {t('book.pages', locale)}
+   727→                    </p>
+   728→                    <p className="font-medium">{book.pages}</p>
+   729→                  </div>
+   730→                </div>
+   731→              )}
+   732→              {book.publisher && (
+   733→                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   734→                  <Building className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   735→                  <div>
+   736→                    <p className="text-muted-foreground text-xs">
+   737→                      {t('book.publisher', locale)}
+   738→                    </p>
+   739→                    <p className="font-medium truncate max-w-[160px]">{book.publisher}</p>
+   740→                  </div>
+   741→                </div>
+   742→              )}
+   743→              {book.publishedYear && (
+   744→                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   745→                  <Calendar className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   746→                  <div>
+   747→                    <p className="text-muted-foreground text-xs">
+   748→                      {t('book.year', locale)}
+   749→                    </p>
+   750→                    <p className="font-medium">{book.publishedYear}</p>
+   751→                  </div>
+   752→                </div>
+   753→              )}
+   754→              <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   755→                <Globe className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   756→                <div>
+   757→                  <p className="text-muted-foreground text-xs">
+   758→                    {t('book.language', locale)}
+   759→                  </p>
+   760→                  <p className="font-medium">{book.language}</p>
+   761→                </div>
+   762→              </div>
+   763→              {book.isbn && (
+   764→                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+   765→                  <Hash className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+   766→                  <div>
+   767→                    <p className="text-muted-foreground text-xs">ISBN</p>
+   768→                    <p className="font-medium text-xs truncate max-w-[160px]">{book.isbn}</p>
+   769→                  </div>
+   770→                </div>
+   771→              )}
+   772→            </div>
+   773→
+   774→            {/* Gold Gradient Divider */}
+   775→            <div
+   776→              className="h-px w-full"
+   777→              style={{
+   778→                background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+   779→              }}
+   780→            />
+   781→
+   782→            {/* Share Row */}
+   783→            <div className="flex items-center gap-3 pt-1">
+   784→              <span className="text-sm font-medium text-muted-foreground shrink-0">
+   785→                {t('book.share', locale)}
+   786→              </span>
+   787→              <div className="flex items-center gap-2">
+   788→                <button
+   789→                  onClick={() => handleShare('twitter')}
+   790→                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#1DA1F2] hover:border-[#1DA1F2]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   791→                  aria-label="Share on Twitter"
+   792→                >
+   793→                  <Twitter className="h-4 w-4" />
+   794→                </button>
+   795→                <button
+   796→                  onClick={() => handleShare('facebook')}
+   797→                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#1877F2] hover:border-[#1877F2]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   798→                  aria-label="Share on Facebook"
+   799→                >
+   800→                  <Facebook className="h-4 w-4" />
+   801→                </button>
+   802→                <button
+   803→                  onClick={() => handleShare('whatsapp')}
+   804→                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#25D366] hover:border-[#25D366]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   805→                  aria-label="Share on WhatsApp"
+   806→                >
+   807→                  <MessageCircle className="h-4 w-4" />
+   808→                </button>
+   809→                <button
+   810→                  onClick={() => handleShare('copy')}
+   811→                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#D4AF37] hover:border-[#D4AF37]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   812→                  aria-label="Copy link"
+   813→                >
+   814→                  <LinkIcon className="h-4 w-4" />
+   815→                </button>
+   816→              </div>
+   817→            </div>
+   818→          </motion.div>
+   819→        </div>
+   820→
+   821→        {/* ---- Tabs Section ---- */}
+   822→        <motion.div
+   823→          ref={reviewsRef}
+   824→          initial={{ opacity: 0, y: 30 }}
+   825→          animate={{ opacity: 1, y: 0 }}
+   826→          transition={{ duration: 0.5, delay: 0.3 }}
+   827→        >
+   828→          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+   829→            <TabsList className="w-full justify-start bg-muted/50 h-auto p-1 rounded-xl border border-border overflow-x-auto relative">
+   830→              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/30 to-transparent" aria-hidden="true" />
+   831→              <TabsTrigger
+   832→                value="synopsis"
+   833→                className="flex-1 sm:flex-none data-[state=active]:text-[#D4AF37] data-[state=active]:bg-transparent rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:w-3/4 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-[#D4AF37]"
+   834→              >
+   835→                {t('book.synopsis', locale)}
+   836→              </TabsTrigger>
+   837→              <TabsTrigger
+   838→                value="author"
+   839→                className="flex-1 sm:flex-none data-[state=active]:text-[#D4AF37] data-[state=active]:bg-transparent rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:w-3/4 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-[#D4AF37]"
+   840→              >
+   841→                {t('book.author', locale)}
+   842→              </TabsTrigger>
+   843→              <TabsTrigger
+   844→                value="reviews"
+   845→                className="flex-1 sm:flex-none data-[state=active]:text-[#D4AF37] data-[state=active]:bg-transparent rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:w-3/4 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-[#D4AF37]"
+   846→              >
+   847→                {t('book.reviews', locale)} ({reviews.length})
+   848→              </TabsTrigger>
+   849→            </TabsList>
+   850→
+   851→            {/* Synopsis Tab */}
+   852→            <TabsContent value="synopsis" className="mt-6">
+   853→              <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
+   854→                {book.synopsis ? (
+   855→                  <div className="prose prose-sm sm:prose max-w-none text-muted-foreground leading-relaxed whitespace-pre-line">
+   856→                    {book.synopsis}
+   857→                  </div>
+   858→                ) : (
+   859→                  <p className="text-muted-foreground italic">
+   860→                    {locale === 'id'
+   861→                      ? 'Sinopsis belum tersedia untuk buku ini.'
+   862→                      : 'Synopsis is not yet available for this book.'}
+   863→                  </p>
+   864→                )}
+   865→              </div>
+   866→            </TabsContent>
+   867→
+   868→            {/* Author Tab */}
+   869→            <TabsContent value="author" className="mt-6">
+   870→              <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
+   871→                {book.authorBio ? (
+   872→                  <div className="prose prose-sm sm:prose max-w-none text-muted-foreground leading-relaxed whitespace-pre-line">
+   873→                    {book.authorBio}
+   874→                  </div>
+   875→                ) : (
+   876→                  <p className="text-muted-foreground italic">
+   877→                    {locale === 'id'
+   878→                      ? 'Informasi penulis belum tersedia.'
+   879→                      : 'Author information is not yet available.'}
+   880→                  </p>
+   881→                )}
+   882→              </div>
+   883→            </TabsContent>
+   884→
+   885→            {/* Reviews Tab */}
+   886→            <TabsContent value="reviews" className="mt-6 space-y-6">
+   887→              {/* Rating Distribution Summary */}
+   888→              <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
+   889→                <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
+   890→                  {/* Left: Overall Rating */}
+   891→                  <div className="flex flex-col items-center justify-center shrink-0">
+   892→                    <p className="text-5xl font-bold text-foreground">{book.rating.toFixed(1)}</p>
+   893→                    <div className="flex items-center mt-1.5 gap-0.5">
+   894→                      {Array.from({ length: 5 }).map((_, i) => (
+   895→                        <Star
+   896→                          key={i}
+   897→                          className={`h-4 w-4 ${
+   898→                            i < Math.floor(book.rating)
+   899→                              ? 'fill-[#D4AF37] text-[#D4AF37]'
+   900→                              : i < book.rating
+   901→                              ? 'fill-[#D4AF37]/50 text-[#D4AF37]'
+   902→                              : 'text-muted-foreground/30'
+   903→                          }`}
+   904→                        />
+   905→                      ))}
+   906→                    </div>
+   907→                    <p className="text-sm text-muted-foreground mt-1.5">
+   908→                      {reviews.length} {locale === 'id' ? 'ulasan' : 'reviews'}
+   909→                    </p>
+   910→                  </div>
+   911→                  {/* Right: Rating Bars */}
+   912→                  <div className="flex-1 space-y-2">
+   913→                    {ratingDistribution.map((count, idx) => {
+   914→                      const starVal = 5 - idx;
+   915→                      const pct = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+   916→                      return (
+   917→                        <div key={starVal} className="flex items-center gap-2.5">
+   918→                          <span className="text-sm font-medium text-muted-foreground w-8 text-right">
+   919→                            {starVal}★
+   920→                          </span>
+   921→                          <div className="flex-1 h-2.5 rounded-full bg-muted/80 overflow-hidden">
+   922→                            <div
+   923→                              className="h-full rounded-full transition-all duration-500 ease-out"
+   924→                              style={{
+   925→                                width: `${Math.min(pct, 100)}%`,
+   926→                                background: `linear-gradient(to right, #D4AF37, #B8960C)`,
+   927→                              }}
+   928→                            />
+   929→                          </div>
+   930→                          <span className="text-xs text-muted-foreground w-8 text-right">
+   931→                            {count}
+   932→                          </span>
+   933→                        </div>
+   934→                      );
+   935→                    })}
+   936→                  </div>
+   937→                </div>
+   938→              </div>
+   939→
+   940→              {/* Gold gradient divider */}
+   941→              <div
+   942→                className="h-px w-full"
+   943→                style={{
+   944→                  background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+   945→                }}
+   946→              />
+   947→
+   948→              {/* Write Review Form (authenticated users only) */}
+   949→              {isAuthenticated ? (
+   950→                <motion.div
+   951→                  initial={{ opacity: 0, y: 10 }}
+   952→                  animate={{ opacity: 1, y: 0 }}
+   953→                  className="rounded-xl border border-[#D4AF37]/20 bg-card p-6 sm:p-8 space-y-5"
+   954→                >
+   955→                  <h3 className="font-heading text-lg font-semibold text-gradient-gold">
+   956→                    {t('book.writeReview', locale)}
+   957→                  </h3>
+   958→                  {/* Star selector */}
+   959→                  <div className="space-y-2">
+   960→                    <label className="text-sm font-medium text-muted-foreground">
+   961→                      {t('book.ratingLabel', locale)}
+   962→                    </label>
+   963→                    <div className="flex items-center gap-1">
+   964→                      {Array.from({ length: 5 }).map((_, i) => (
+   965→                        <button
+   966→                          key={i}
+   967→                          onClick={() => setReviewRating(i + 1)}
+   968→                          onMouseEnter={() => {}}
+   969→                          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-sm p-0.5 transition-transform hover:scale-110"
+   970→                          aria-label={`Rate ${i + 1} star${i > 0 ? 's' : ''}`}
+   971→                        >
+   972→                          <Star
+   973→                            className={`h-7 w-7 transition-colors duration-150 ${
+   974→                              i < reviewRating
+   975→                                ? 'fill-[#D4AF37] text-[#D4AF37]'
+   976→                                : 'text-muted-foreground/30 hover:text-[#D4AF37]/50'
+   977→                            }`}
+   978→                          />
+   979→                        </button>
+   980→                      ))}
+   981→                      {reviewRating > 0 && (
+   982→                        <span className="ml-2 text-sm font-medium text-[#D4AF37]">
+   983→                          {reviewRating}/5
+   984→                        </span>
+   985→                      )}
+   986→                    </div>
+   987→                  </div>
+   988→                  {/* Comment textarea */}
+   989→                  <div className="space-y-2">
+   990→                    <label className="text-sm font-medium text-muted-foreground">
+   991→                      {t('book.reviewLabel', locale)}
+   992→                    </label>
+   993→                    <Textarea
+   994→                      value={reviewComment}
+   995→                      onChange={(e) => {
+   996→                        if (e.target.value.length <= 500) {
+   997→                          setReviewComment(e.target.value);
+   998→                        }
+   999→                      }}
+  1000→                      placeholder={t('book.reviewPlaceholder', locale)}
+  1001→                      rows={4}
+  1002→                      className="resize-none rounded-xl border-border focus-visible:ring-[#D4AF37]"
+  1003→                    />
+  1004→                    <div className="flex justify-end">
+  1005→                      <span className={`text-xs ${reviewComment.length >= 500 ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+  1006→                        {reviewComment.length}/500
+  1007→                      </span>
+  1008→                    </div>
+  1009→                  </div>
+  1010→                  <Button
+  1011→                    onClick={handleSubmitReview}
+  1012→                    disabled={reviewRating === 0 || submittingReview}
+  1013→                    className="bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold rounded-xl px-6 disabled:opacity-50"
+  1014→                  >
+  1015→                    {submittingReview
+  1016→                      ? t('general.loading', locale)
+  1017→                      : t('book.submitReview', locale)}
+  1018→                  </Button>
+  1019→                </motion.div>
+  1020→              ) : (
+  1021→                <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
+  1022→                  <Heart className="mx-auto h-8 w-8 text-muted-foreground/30 mb-2" />
+  1023→                  <p className="text-sm text-muted-foreground">
+  1024→                    {t('book.loginToReview', locale)}
+  1025→                  </p>
+  1026→                  <Button
+  1027→                    variant="outline"
+  1028→                    className="mt-3 border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10"
+  1029→                    onClick={() => setPage('login')}
+  1030→                  >
+  1031→                    {t('auth.login', locale)}
+  1032→                  </Button>
+  1033→                </div>
+  1034→              )}
+  1035→
+  1036→              {/* Gold gradient divider */}
+  1037→              <div
+  1038→                className="h-px w-full"
+  1039→                style={{
+  1040→                  background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+  1041→                }}
+  1042→              />
+  1043→
+  1044→              {/* Reviews List */}
+  1045→              <div className="space-y-4">
+  1046→                {reviews.length > 0 ? (
+  1047→                  reviews.map((review, idx) => (
+  1048→                    <motion.div
+  1049→                      key={review.id}
+  1050→                      initial={{ opacity: 0, y: 10 }}
+  1051→                      animate={{ opacity: 1, y: 0 }}
+  1052→                      transition={{ duration: 0.3, delay: idx * 0.05 }}
+  1053→                      className="rounded-xl border border-border bg-card p-5 sm:p-6 space-y-3"
+  1054→                    >
+  1055→                      <div className="flex items-center justify-between gap-3">
+  1056→                        <div className="flex items-center gap-3">
+  1057→                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/10 text-[#D4AF37] font-heading font-bold text-sm">
+  1058→                            {(review.user?.name || '?')[0].toUpperCase()}
+  1059→                          </div>
+  1060→                          <div>
+  1061→                            <p className="font-medium text-sm">
+  1062→                              {review.user?.name ||
+  1063→                                (locale === 'id' ? 'Anonim' : 'Anonymous')}
+  1064→                            </p>
+  1065→                            <p className="text-xs text-muted-foreground">
+  1066→                              {formatDate(review.createdAt)}
+  1067→                            </p>
+  1068→                          </div>
+  1069→                        </div>
+  1070→                        <div className="flex items-center">
+  1071→                          {Array.from({ length: 5 }).map((_, i) => (
+  1072→                            <Star
+  1073→                              key={i}
+  1074→                              className={`h-3.5 w-3.5 ${
+  1075→                                i < review.rating
+  1076→                                  ? 'fill-[#D4AF37] text-[#D4AF37]'
+  1077→                                  : 'text-muted-foreground/30'
+  1078→                              }`}
+  1079→                            />
+  1080→                          ))}
+  1081→                        </div>
+  1082→                      </div>
+  1083→                      {review.comment && (
+  1084→                        <p className="text-sm text-muted-foreground leading-relaxed">
+  1085→                          {review.comment}
+  1086→                        </p>
+  1087→                      )}
+  1088→                    </motion.div>
+  1089→                  ))
+  1090→                ) : (
+  1091→                  <div className="text-center py-12 rounded-xl border border-dashed border-border">
+  1092→                    <Star className="mx-auto h-10 w-10 text-muted-foreground/30 mb-3" />
+  1093→                    <p className="text-muted-foreground">
+  1094→                      {locale === 'id'
+  1095→                        ? 'Belum ada ulasan untuk buku ini.'
+  1096→                        : 'No reviews yet for this book.'}
+  1097→                    </p>
+  1098→                  </div>
+  1099→                )}
+  1100→              </div>
+  1101→            </TabsContent>
+  1102→          </Tabs>
+  1103→        </motion.div>
+  1104→
+  1105→        {/* ---- Recommendations Section ---- */}
+  1106→        {recommendations.length > 0 && (
+  1107→          <motion.section
+  1108→            initial={{ opacity: 0, y: 30 }}
+  1109→            animate={{ opacity: 1, y: 0 }}
+  1110→            transition={{ duration: 0.5, delay: 0.4 }}
+  1111→            className="space-y-6 pt-4"
+  1112→          >
+  1113→            <div className="flex items-center justify-between">
+  1114→              <h2 className="font-heading text-2xl font-bold tracking-tight">
+  1115→                {t('book.recommendations', locale)}
+  1116→              </h2>
+  1117→              <button
+  1118→                onClick={() => setPage('catalog')}
+  1119→                className="text-sm font-medium text-[#D4AF37] hover:text-[#B8960C] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-md"
+  1120→              >
+  1121→                {t('general.viewAll', locale)} →
+  1122→              </button>
+  1123→            </div>
+  1124→            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+  1125→              {recommendations.map((recBook, idx) => (
+  1126→                <BookCard key={recBook.id} book={recBook} index={idx} />
+  1127→              ))}
+  1128→            </div>
+  1129→          </motion.section>
+  1130→        )}
+  1131→      </div>
+  1132→    </motion.div>
+  1133→  );
+  1134→}
+  1135→

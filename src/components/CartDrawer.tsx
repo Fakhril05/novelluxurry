@@ -11,6 +11,8 @@ import {
   BookOpen,
   ShoppingBag,
   Tag,
+  Truck,
+  CalendarClock,
 } from 'lucide-react';
 import {
   Sheet,
@@ -95,6 +97,29 @@ export default function CartDrawer() {
     closeCart();
   };
 
+  // Estimated delivery date (3-7 business days from now)
+  const [estimatedDelivery] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 3 + Math.floor(Math.random() * 5));
+    return d.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+  });
+
+  // Estimated delivery range for display
+  const [deliveryRange] = useState(() => {
+    const min = new Date();
+    min.setDate(min.getDate() + 3);
+    const max = new Date();
+    max.setDate(max.getDate() + 7);
+    const fmt = (d: Date) => d.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+      month: 'short', day: 'numeric',
+    });
+    return `${fmt(min)} - ${fmt(max)}`;
+  });
+
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) closeCart(); }}>
       <SheetContent
@@ -125,15 +150,22 @@ export default function CartDrawer() {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.4 }}
-              className="flex h-24 w-24 items-center justify-center rounded-full bg-muted"
+              className="relative"
             >
-              <BookOpen className="h-12 w-12 text-muted-foreground/50" />
+              <div className="w-28 h-28 rounded-full bg-[#D4AF37]/5 flex items-center justify-center">
+                <div className="w-20 h-20 rounded-full bg-[#D4AF37]/10 flex items-center justify-center">
+                  <BookOpen className="h-10 w-10 text-[#D4AF37]/40" />
+                </div>
+              </div>
+              <div className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-[#D4AF37]/20">
+                <ShoppingBag className="h-3 w-3 text-[#D4AF37] m-auto mt-1.5" />
+              </div>
             </motion.div>
             <div className="text-center">
-              <p className="text-muted-foreground font-medium">
+              <p className="font-heading text-lg font-semibold text-foreground">
                 {t('cart.empty', lang)}
               </p>
-              <p className="mt-1 text-sm text-muted-foreground/70">
+              <p className="mt-1 text-sm text-muted-foreground max-w-[250px]">
                 {lang === 'id'
                   ? 'Jelajahi koleksi novel kami dan temukan buku favoritmu'
                   : 'Explore our novel collection and find your favorites'}
@@ -141,8 +173,9 @@ export default function CartDrawer() {
             </div>
             <Button
               onClick={handleContinueShopping}
-              className="mt-2 bg-[#D4AF37] text-black hover:bg-[#C4A030] font-medium"
+              className="mt-2 bg-[#D4AF37] text-black hover:bg-[#C4A030] font-medium shadow-lg shadow-[#D4AF37]/20"
             >
+              <BookOpen className="h-4 w-4 mr-2" />
               {t('cart.continue', lang)}
             </Button>
           </div>
@@ -204,20 +237,20 @@ export default function CartDrawer() {
                             </div>
                             <div className="flex items-center gap-1.5">
                               {/* Quantity Controls */}
-                              <div className="flex items-center gap-0 rounded-md border">
+                              <div className="flex items-center gap-0 rounded-md border border-[#D4AF37]/20">
                                 <button
                                   onClick={() => updateQuantity(item.book.id, item.quantity - 1)}
-                                  className="flex h-7 w-7 items-center justify-center rounded-l-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                  className="flex h-7 w-7 items-center justify-center rounded-l-md text-muted-foreground transition-colors hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]"
                                   aria-label="Decrease quantity"
                                 >
                                   <Minus className="h-3 w-3" />
                                 </button>
-                                <span className="flex h-7 w-8 items-center justify-center border-x text-xs font-medium">
+                                <span className="flex h-7 w-8 items-center justify-center border-x border-[#D4AF37]/20 text-xs font-semibold">
                                   {item.quantity}
                                 </span>
                                 <button
                                   onClick={() => updateQuantity(item.book.id, item.quantity + 1)}
-                                  className="flex h-7 w-7 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                  className="flex h-7 w-7 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]"
                                   aria-label="Increase quantity"
                                 >
                                   <Plus className="h-3 w-3" />
@@ -291,6 +324,7 @@ export default function CartDrawer() {
                   </motion.p>
                 )}
 
+
                 <Separator />
 
                 {/* Price Summary */}
@@ -315,6 +349,22 @@ export default function CartDrawer() {
                     </span>
                   </div>
                 </div>
+
+                {/* Estimated Delivery */ }
+                <div className="flex items-center gap-2 rounded-lg bg-[#D4AF37]/5 border border-[#D4AF37]/10 px-3 py-2.5">
+                  <CalendarClock className="h-4 w-4 text-[#D4AF37] shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-muted-foreground leading-tight">
+                      {lang === 'id' ? 'Estimasi tiba' : 'Est. delivery'}
+                    </p>
+                    <p className="text-xs font-semibold text-[#D4AF37] truncate">
+                      {deliveryRange}
+                    </p>
+                  </div>
+                  <Truck className="h-4 w-4 text-[#D4AF37]/50 ml-auto shrink-0" />
+                </div>
+
+                <Separator />
 
                 {/* Checkout Button */}
                 <Button

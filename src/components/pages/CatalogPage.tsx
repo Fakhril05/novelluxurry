@@ -10,7 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Star,
-  BookOpen,
+  Sparkles,
+  TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -282,24 +283,65 @@ function BookGridSkeleton() {
   );
 }
 
-function EmptyState({ locale }: { locale: 'id' | 'en' }) {
+function EmptyState({ locale, onReset }: { locale: 'id' | 'en'; onReset: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center justify-center py-20 px-4"
     >
-      <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-5">
-        <BookOpen className="w-10 h-10 text-muted-foreground" />
-      </div>
+      {/* SVG Illustration */}
+      <motion.div
+        initial={{ scale: 0.9 }}
+        animate={{ scale: 1 }}
+        transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+        className="relative mb-8"
+      >
+        <svg width="180" height="140" viewBox="0 0 180 140" fill="none" className="drop-shadow-sm">
+          {/* Book stack */}
+          <rect x="50" y="50" width="80" height="90" rx="4" fill="rgba(212,175,55,0.1)" stroke="rgba(212,175,55,0.25)" strokeWidth="1.5" />
+          <rect x="58" y="42" width="80" height="90" rx="4" fill="rgba(212,175,55,0.15)" stroke="rgba(212,175,55,0.3)" strokeWidth="1.5" />
+          <rect x="66" y="34" width="80" height="90" rx="4" fill="rgba(212,175,55,0.2)" stroke="rgba(212,175,55,0.4)" strokeWidth="1.5" />
+          {/* Open book */}
+          <path d="M72 38 Q106 28 140 38 L140 100 Q106 90 72 100 Z" fill="rgba(212,175,55,0.08)" stroke="#D4AF37" strokeWidth="1.5" strokeLinejoin="round" />
+          <path d="M72 38 Q106 48 140 38" fill="none" stroke="#D4AF37" strokeWidth="1" />
+          {/* Lines on page */}
+          <line x1="82" y1="50" x2="128" y2="50" stroke="rgba(212,175,55,0.25)" strokeWidth="1" />
+          <line x1="82" y1="58" x2="120" y2="58" stroke="rgba(212,175,55,0.2)" strokeWidth="1" />
+          <line x1="82" y1="66" x2="124" y2="66" stroke="rgba(212,175,55,0.15)" strokeWidth="1" />
+          <line x1="82" y1="74" x2="116" y2="74" stroke="rgba(212,175,55,0.12)" strokeWidth="1" />
+          {/* Magnifying glass */}
+          <circle cx="134" cy="28" r="14" fill="rgba(212,175,55,0.06)" stroke="#D4AF37" strokeWidth="1.5" />
+          <line x1="144" y1="38" x2="152" y2="46" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round" />
+          {/* Sparkle dots */}
+          <circle cx="42" cy="36" r="2" fill="#D4AF37" opacity="0.5" />
+          <circle cx="36" cy="68" r="1.5" fill="#E8D48B" opacity="0.6" />
+          <circle cx="152" cy="60" r="2" fill="#D4AF37" opacity="0.4" />
+          <circle cx="48" cy="110" r="1.5" fill="#E8D48B" opacity="0.5" />
+        </svg>
+        <motion.div
+          animate={{ y: [0, -4, 0] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -top-3 -right-3 h-7 w-7 rounded-full bg-[#D4AF37]/15 flex items-center justify-center"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-[#D4AF37]" />
+        </motion.div>
+      </motion.div>
       <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
         {t('catalog.noResults', locale)}
       </h3>
-      <p className="text-sm text-muted-foreground text-center max-w-sm">
+      <p className="text-sm text-muted-foreground text-center max-w-sm mb-6">
         {locale === 'id'
           ? 'Coba ubah filter atau kata kunci pencarian kamu'
           : 'Try adjusting your filters or search keywords'}
       </p>
+      <Button
+        variant="outline"
+        onClick={onReset}
+        className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10"
+      >
+        {locale === 'id' ? 'Reset Semua Filter' : 'Reset All Filters'}
+      </Button>
     </motion.div>
   );
 }
@@ -686,6 +728,43 @@ export default function CatalogPage() {
           </Sheet>
         </motion.div>
 
+        {/* Animated Filter Tags (quick genre filters) */}
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.15 }}
+          className="mb-4 hidden md:flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1"
+        >
+          <span className="text-xs text-muted-foreground font-medium shrink-0">
+            <TrendingUp className="h-3 w-3 inline mr-1" />
+            {locale === 'id' ? 'Populer:' : 'Trending:'}
+          </span>
+          {categories.slice(0, 6).map((cat) => {
+            const isActive = filters.genre === cat.slug;
+            return (
+              <motion.button
+                key={cat.id}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  if (isActive) {
+                    handleFilterChange({ genre: undefined });
+                  } else {
+                    handleFilterChange({ genre: cat.slug });
+                  }
+                }}
+                className={`filter-tag shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 ${
+                  isActive
+                    ? 'bg-[#D4AF37] text-white border-[#D4AF37] shadow-sm shadow-[#D4AF37]/20'
+                    : 'border-border text-muted-foreground hover:border-[#D4AF37]/40 hover:text-[#D4AF37]'
+                }`}
+              >
+                {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
+              </motion.button>
+            );
+          })}
+        </motion.div>
+
         {/* Active Filter Badges */}
         <AnimatePresence>
           {hasActiveFilters && (
@@ -701,20 +780,27 @@ export default function CatalogPage() {
                   {locale === 'id' ? 'Filter aktif:' : 'Active filters:'}
                 </span>
                 {activeFilters.map((filter) => (
-                  <Badge
+                  <motion.div
                     key={filter.key}
-                    variant="secondary"
-                    className="gap-1.5 pr-1 py-1 text-xs bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20 hover:bg-[#D4AF37]/20 cursor-default"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    <span>{filter.label}</span>
-                    <button
-                      onClick={filter.clear}
-                      className="ml-0.5 rounded-full p-0.5 hover:bg-[#D4AF37]/20 transition-colors"
-                      aria-label={`Remove ${filter.label} filter`}
+                    <Badge
+                      variant="secondary"
+                      className="gap-1.5 pr-1 py-1 text-xs bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20 hover:bg-[#D4AF37]/20 cursor-default"
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
+                      <span>{filter.label}</span>
+                      <button
+                        onClick={filter.clear}
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-[#D4AF37]/20 transition-colors"
+                        aria-label={`Remove ${filter.label} filter`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  </motion.div>
                 ))}
                 <button
                   onClick={handleReset}
@@ -773,7 +859,7 @@ export default function CatalogPage() {
             {loading ? (
               <BookGridSkeleton />
             ) : books.length === 0 ? (
-              <EmptyState locale={locale} />
+              <EmptyState locale={locale} onReset={handleReset} />
             ) : (
               <>
                 {/* Books Grid */}
@@ -788,7 +874,7 @@ export default function CatalogPage() {
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ duration: 0.3, delay: index * 0.03 }}
                         whileHover={{ y: -4 }}
-                        className="rounded-xl hover:card-glow transition-shadow duration-300"
+                        className="rounded-xl book-card-glow transition-shadow duration-300"
                       >
                         <BookCard book={book} index={index} />
                       </motion.div>

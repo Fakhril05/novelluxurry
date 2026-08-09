@@ -1,19 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
   Truck,
   CreditCard,
-  QrCode,
-  Wallet,
-  Building,
   Check,
   MapPin,
   Tag,
   Package,
+  ShoppingCart,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,31 +27,42 @@ import { useAppStore, formatPrice } from '@/lib/store';
 import { t } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 
+const GOLD = '#D4AF37';
+const GOLD_DARK = '#B8960C';
+
 const EXPEDITIONS = [
-  { id: 'jne-regular', name: 'JNE Regular', price: 15000, icon: Truck, eta: '3-5 hari' },
-  { id: 'jne-express', name: 'JNE Express', price: 25000, icon: Truck, eta: '1-2 hari' },
-  { id: 'jne-sameday', name: 'JNE Same Day', price: 50000, icon: Truck, eta: 'Hari ini' },
+  { id: 'jne-regular', name: 'JNE Regular', price: 15000, icon: Truck, eta: '3-5 hari', etaEn: '3-5 days' },
+  { id: 'jne-express', name: 'JNE Express', price: 25000, icon: Truck, eta: '1-2 hari', etaEn: '1-2 days' },
+  { id: 'jne-sameday', name: 'JNE Same Day', price: 50000, icon: Truck, eta: 'Hari ini', etaEn: 'Today' },
 ];
 
 const PAYMENT_METHODS = [
-  { id: 'bank-transfer', name: 'Transfer Bank', icon: Building, desc: 'BCA, BNI, Mandiri, BRI' },
-  { id: 'qris', name: 'QRIS', icon: QrCode, desc: 'Scan QR untuk bayar' },
-  { id: 'ewallet', name: 'E-Wallet', icon: Wallet, desc: 'GoPay, OVO, DANA, ShopeePay' },
-  { id: 'virtual-account', name: 'Virtual Account', icon: CreditCard, desc: 'Bayar via VA' },
-  { id: 'cod', name: 'COD (Bayar di Tempat)', icon: Package, desc: 'Bayar saat barang diterima' },
+  { id: 'bank-transfer', name: 'Transfer Bank', nameEn: 'Bank Transfer', icon: Building, desc: 'BCA, BNI, Mandiri, BRI' },
+  { id: 'qris', name: 'QRIS', nameEn: 'QRIS', icon: QrCode, desc: 'Scan QR untuk bayar', descEn: 'Scan QR to pay' },
+  { id: 'ewallet', name: 'E-Wallet', nameEn: 'E-Wallet', icon: Wallet, desc: 'GoPay, OVO, DANA, ShopeePay' },
+  { id: 'virtual-account', name: 'Virtual Account', nameEn: 'Virtual Account', icon: CreditCard, desc: 'Bayar via VA', descEn: 'Pay via VA' },
+  { id: 'cod', name: 'COD (Bayar di Tempat)', nameEn: 'COD (Cash on Delivery)', icon: Package, desc: 'Bayar saat barang diterima', descEn: 'Pay when item arrives' },
 ];
 
+import {
+  Building,
+  QrCode,
+  Wallet,
+} from 'lucide-react';
+
 const STEPS = [
-  { key: 'address', labelId: 'checkout.address', icon: MapPin },
-  { key: 'expedition', labelId: 'checkout.expedition', icon: Truck },
-  { key: 'payment', labelId: 'checkout.payment', icon: CreditCard },
-  { key: 'confirm', labelId: 'checkout.placeOrder', icon: Check },
+  { key: 'address', labelId: 'checkout.stepAddress', icon: MapPin },
+  { key: 'shipping', labelId: 'checkout.stepShipping', icon: Truck },
+  { key: 'confirm', labelId: 'checkout.stepConfirm', icon: Check },
 ];
 
 export default function CheckoutPage() {
   const { items, getTotalPrice, getDiscountSavings, clearCart } = useCartStore();
   const { locale, setPage, user, isAuthenticated } = useAppStore();
   const lang = (locale ?? 'id') as Locale;
+
+  // Step state
+  const [currentStep, setCurrentStep] = useState(0);
 
   // Form state
   const [form, setForm] = useState({
@@ -71,6 +81,10 @@ export default function CheckoutPage() {
   const [voucherError, setVoucherError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const addressRef = useRef<HTMLDivElement>(null);
+  const shippingRef = useRef<HTMLDivElement>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
 
   const subtotal = getTotalPrice();
   const savings = getDiscountSavings();
@@ -132,6 +146,20 @@ export default function CheckoutPage() {
     if (!form.postalCode.trim()) errors.postalCode = lang === 'id' ? 'Kode pos wajib diisi' : 'Postal code is required';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const goToStep = (step: number) => {
+    if (step === 1 && currentStep === 0) {
+      if (!validateForm()) {
+        toast.error(lang === 'id' ? 'Lengkapi data pengiriman' : 'Please complete shipping information');
+        return;
+      }
+    }
+    setCurrentStep(step);
+    const refs = [addressRef, shippingRef, confirmRef];
+    setTimeout(() => {
+      refs[step]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const handleSubmit = async () => {
@@ -228,10 +256,11 @@ export default function CheckoutPage() {
     }
   };
 
+  const selectedExpedition = EXPEDITIONS.find((e) => e.id === expedition);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      {/* Back Button + Title */
-      }
+      {/* Back Button + Title */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -247,258 +276,565 @@ export default function CheckoutPage() {
         <h1 className="font-heading text-2xl font-bold sm:text-3xl">{t('checkout.title', lang)}</h1>
       </motion.div>
 
-      {/* Step Indicator */
-      }
+      {/* ─── Progress Stepper ─── */}
       <motion.div
         initial={{ opacity: 0, y: -5 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
-        className="mb-8"
+        className="mb-10"
       >
-        <div className="flex items-center justify-center gap-0 sm:gap-2">
-          {STEPS.map((step, idx) => {
-            const Icon = step.icon;
-            const isActive = idx === 0;
-            return (
-              <div key={step.key} className="flex items-center">
-                <div className="flex flex-col items-center gap-1">
+        <div className="relative mx-auto max-w-2xl">
+          {/* Progress bar background */}
+          <div className="absolute top-5 left-0 right-0 h-0.5 bg-border" />
+          {/* Progress bar fill */}
+          <div
+            className="absolute top-5 left-0 h-0.5 transition-all duration-500 ease-out"
+            style={{
+              width: `calc(${(currentStep / (STEPS.length - 1)) * 100}% - ${(currentStep / (STEPS.length - 1)) * 40}px)`,
+              backgroundColor: GOLD,
+            }}
+          />
+
+          <div className="relative flex items-center justify-between">
+            {STEPS.map((step, idx) => {
+              const Icon = step.icon;
+              const isCompleted = idx < currentStep;
+              const isActive = idx === currentStep;
+              return (
+                <button
+                  key={step.key}
+                  onClick={() => {
+                    if (idx <= currentStep) goToStep(idx);
+                  }}
+                  className="group flex flex-col items-center gap-2"
+                  type="button"
+                >
                   <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors sm:h-9 sm:w-9 ${
-                      isActive
-                        ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-[#D4AF37]'
-                        : 'border-muted-foreground/30 text-muted-foreground/50'
+                    className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300 sm:h-11 sm:w-11 ${
+                      isCompleted
+                        ? `border-[${GOLD}] bg-[${GOLD}] text-white shadow-lg shadow-[${GOLD}]/20`
+                        : isActive
+                          ? `border-[${GOLD}] bg-[${GOLD}]/10 text-[${GOLD}] ring-4 ring-[${GOLD}]/10`
+                          : 'border-muted-foreground/25 bg-background text-muted-foreground/50'
                     }`}
+                    style={
+                      isCompleted
+                        ? { borderColor: GOLD, backgroundColor: GOLD, color: '#fff' }
+                        : isActive
+                          ? { borderColor: GOLD, color: GOLD }
+                          : undefined
+                    }
                   >
-                    <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    {isCompleted ? (
+                      <Check className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={3} />
+                    ) : (
+                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    )}
                   </div>
                   <span
-                    className={`hidden text-[10px] sm:block sm:text-xs ${
-                      isActive ? 'font-medium text-[#D4AF37]' : 'text-muted-foreground/50'
+                    className={`text-xs font-medium transition-colors sm:text-sm ${
+                      isCompleted || isActive
+                        ? 'text-foreground'
+                        : 'text-muted-foreground/50'
                     }`}
                   >
                     {t(step.labelId, lang)}
                   </span>
-                </div>
-                {idx < STEPS.length - 1 && (
-                  <div className="mx-2 h-px w-8 bg-muted-foreground/20 sm:mx-4 sm:w-12 lg:w-16" />
-                )}
-              </div>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </motion.div>
 
-      {/* Two-Column Layout */
-      }
+      {/* ─── Two-Column Layout ─── */}
       <div className="grid gap-8 lg:grid-cols-3">
-        {/* Left Column - Forms */
-        }
+        {/* Left Column - Forms */}
         <div className="flex flex-col gap-6 lg:col-span-2">
-          {/* Shipping Address */
-          }
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Card className="overflow-hidden">
-              <CardContent className="p-5 sm:p-6">
-                <div className="mb-5 flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#D4AF37]/10">
-                    <MapPin className="h-4 w-4 text-[#D4AF37]" />
-                  </div>
-                  <h2 className="font-heading text-lg font-semibold">{t('checkout.address', lang)}</h2>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="name" className="text-sm font-medium">
-                      {t('checkout.name', lang)} <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="name"
-                      value={form.name}
-                      onChange={(e) => updateField('name', e.target.value)}
-                      placeholder={lang === 'id' ? 'Masukkan nama lengkap' : 'Enter full name'}
-                      className={`h-10 ${formErrors.name ? 'border-red-500' : ''}`}
-                    />
-                    {formErrors.name && (
-                      <p className="text-xs text-red-500">{formErrors.name}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="phone" className="text-sm font-medium">
-                      {t('checkout.phone', lang)} <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="phone"
-                      value={form.phone}
-                      onChange={(e) => updateField('phone', e.target.value)}
-                      placeholder={lang === 'id' ? '08xxxxxxxxxx' : '08xxxxxxxxxx'}
-                      className={`h-10 ${formErrors.phone ? 'border-red-500' : ''}`}
-                    />
-                    {formErrors.phone && (
-                      <p className="text-xs text-red-500">{formErrors.phone}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="address" className="text-sm font-medium">
-                      {t('checkout.addressField', lang)} <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="address"
-                      value={form.address}
-                      onChange={(e) => updateField('address', e.target.value)}
-                      placeholder={lang === 'id' ? 'Jl. Contoh No. 123, RT/RW, Kelurahan, Kecamatan' : 'Street, Ward, District'}
-                      className={`h-10 ${formErrors.address ? 'border-red-500' : ''}`}
-                    />
-                    {formErrors.address && (
-                      <p className="text-xs text-red-500">{formErrors.address}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="city" className="text-sm font-medium">
-                      {t('checkout.city', lang)} <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="city"
-                      value={form.city}
-                      onChange={(e) => updateField('city', e.target.value)}
-                      placeholder={lang === 'id' ? 'Jakarta Selatan' : 'South Jakarta'}
-                      className={`h-10 ${formErrors.city ? 'border-red-500' : ''}`}
-                    />
-                    {formErrors.city && (
-                      <p className="text-xs text-red-500">{formErrors.city}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="postal" className="text-sm font-medium">
-                      {t('checkout.postal', lang)} <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="postal"
-                      value={form.postalCode}
-                      onChange={(e) => updateField('postalCode', e.target.value)}
-                      placeholder="12345"
-                      className={`h-10 ${formErrors.postalCode ? 'border-red-500' : ''}`}
-                    />
-                    {formErrors.postalCode && (
-                      <p className="text-xs text-red-500">{formErrors.postalCode}</p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Expedition */
-          }
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card className="overflow-hidden">
-              <CardContent className="p-5 sm:p-6">
-                <div className="mb-5 flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#D4AF37]/10">
-                    <Truck className="h-4 w-4 text-[#D4AF37]" />
-                  </div>
-                  <h2 className="font-heading text-lg font-semibold">{t('checkout.expedition', lang)}</h2>
-                </div>
-                <RadioGroup value={expedition} onValueChange={setExpedition} className="grid gap-3">
-                  {EXPEDITIONS.map((exp) => {
-                    const isSelected = expedition === exp.id;
-                    return (
-                      <Label
-                        key={exp.id}
-                        htmlFor={exp.id}
-                        className={`flex cursor-pointer items-center gap-4 rounded-lg border p-4 transition-all ${
-                          isSelected
-                            ? 'border-[#D4AF37] bg-[#D4AF37]/5 shadow-sm'
-                            : 'border-border hover:border-[#D4AF37]/40'
-                        }`}
+          {/* Step 0: Shipping Address */}
+          <AnimatePresence mode="wait">
+            {currentStep === 0 && (
+              <motion.div
+                key="step-address"
+                ref={addressRef}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="overflow-hidden">
+                  <CardContent className="p-5 sm:p-6">
+                    <div className="mb-5 flex items-center gap-2.5">
+                      <div
+                        className="flex h-8 w-8 items-center justify-center rounded-full"
+                        style={{ backgroundColor: `${GOLD}15` }}
                       >
-                        <RadioGroupItem value={exp.id} id={exp.id} />
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                          <Truck className={`h-5 w-5 ${isSelected ? 'text-[#D4AF37]' : 'text-muted-foreground'}`} />
-                        </div>
-                        <div className="flex-1">
-                          <p className={`text-sm font-semibold ${isSelected ? 'text-[#D4AF37]' : ''}`}>
-                            {exp.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{exp.eta}</p>
-                        </div>
-                        <p className={`text-sm font-bold ${isSelected ? 'text-[#D4AF37]' : ''}`}>
-                          {formatPrice(exp.price, lang)}
-                        </p>
-                      </Label>
-                    );
-                  })}
-                </RadioGroup>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Payment Method */
-          }
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card className="overflow-hidden">
-              <CardContent className="p-5 sm:p-6">
-                <div className="mb-5 flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#D4AF37]/10">
-                    <CreditCard className="h-4 w-4 text-[#D4AF37]" />
-                  </div>
-                  <h2 className="font-heading text-lg font-semibold">{t('checkout.payment', lang)}</h2>
-                </div>
-                <RadioGroup value={payment} onValueChange={setPayment} className="grid gap-3 sm:grid-cols-2">
-                  {PAYMENT_METHODS.map((method) => {
-                    const Icon = method.icon;
-                    const isSelected = payment === method.id;
-                    return (
-                      <Label
-                        key={method.id}
-                        htmlFor={method.id}
-                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all ${
-                          isSelected
-                            ? 'border-[#D4AF37] bg-[#D4AF37]/5 shadow-sm'
-                            : 'border-border hover:border-[#D4AF37]/40'
-                        }`}
+                        <MapPin className="h-4 w-4" style={{ color: GOLD }} />
+                      </div>
+                      <h2 className="font-heading text-lg font-semibold">{t('checkout.address', lang)}</h2>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="name" className="text-sm font-medium">
+                          {t('checkout.name', lang)} <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="name"
+                          value={form.name}
+                          onChange={(e) => updateField('name', e.target.value)}
+                          placeholder={lang === 'id' ? 'Masukkan nama lengkap' : 'Enter full name'}
+                          className={`h-10 ${formErrors.name ? 'border-red-500' : ''}`}
+                        />
+                        {formErrors.name && (
+                          <p className="text-xs text-red-500">{formErrors.name}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="phone" className="text-sm font-medium">
+                          {t('checkout.phone', lang)} <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="phone"
+                          value={form.phone}
+                          onChange={(e) => updateField('phone', e.target.value)}
+                          placeholder="08xxxxxxxxxx"
+                          className={`h-10 ${formErrors.phone ? 'border-red-500' : ''}`}
+                        />
+                        {formErrors.phone && (
+                          <p className="text-xs text-red-500">{formErrors.phone}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="address" className="text-sm font-medium">
+                          {t('checkout.addressField', lang)} <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="address"
+                          value={form.address}
+                          onChange={(e) => updateField('address', e.target.value)}
+                          placeholder={lang === 'id' ? 'Jl. Contoh No. 123, RT/RW, Kelurahan, Kecamatan' : 'Street, Ward, District'}
+                          className={`h-10 ${formErrors.address ? 'border-red-500' : ''}`}
+                        />
+                        {formErrors.address && (
+                          <p className="text-xs text-red-500">{formErrors.address}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="city" className="text-sm font-medium">
+                          {t('checkout.city', lang)} <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="city"
+                          value={form.city}
+                          onChange={(e) => updateField('city', e.target.value)}
+                          placeholder={lang === 'id' ? 'Jakarta Selatan' : 'South Jakarta'}
+                          className={`h-10 ${formErrors.city ? 'border-red-500' : ''}`}
+                        />
+                        {formErrors.city && (
+                          <p className="text-xs text-red-500">{formErrors.city}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="postal" className="text-sm font-medium">
+                          {t('checkout.postal', lang)} <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="postal"
+                          value={form.postalCode}
+                          onChange={(e) => updateField('postalCode', e.target.value)}
+                          placeholder="12345"
+                          className={`h-10 ${formErrors.postalCode ? 'border-red-500' : ''}`}
+                        />
+                        {formErrors.postalCode && (
+                          <p className="text-xs text-red-500">{formErrors.postalCode}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                      <Button
+                        onClick={() => goToStep(1)}
+                        className="bg-[#D4AF37] font-semibold text-white hover:bg-[#B8960C]"
                       >
-                        <RadioGroupItem value={method.id} id={method.id} />
-                        <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                            isSelected ? 'bg-[#D4AF37]/10' : 'bg-muted'
-                          }`}
-                        >
-                          <Icon
-                            className={`h-5 w-5 ${
-                              isSelected ? 'text-[#D4AF37]' : 'text-muted-foreground'
+                        {t('general.next', lang)}
+                        <ChevronRight className="ml-1 h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Step 1: Expedition & Payment */}
+          <AnimatePresence mode="wait">
+            {currentStep === 1 && (
+              <motion.div
+                key="step-shipping"
+                ref={shippingRef}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                {/* Back button */}
+                <button
+                  onClick={() => goToStep(0)}
+                  className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  type="button"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  {t('general.back', lang)}
+                </button>
+
+                {/* Expedition */}
+                <Card className="overflow-hidden">
+                  <CardContent className="p-5 sm:p-6">
+                    <div className="mb-5 flex items-center gap-2.5">
+                      <div
+                        className="flex h-8 w-8 items-center justify-center rounded-full"
+                        style={{ backgroundColor: `${GOLD}15` }}
+                      >
+                        <Truck className="h-4 w-4" style={{ color: GOLD }} />
+                      </div>
+                      <h2 className="font-heading text-lg font-semibold">{t('checkout.expedition', lang)}</h2>
+                    </div>
+                    <RadioGroup value={expedition} onValueChange={setExpedition} className="grid gap-3">
+                      {EXPEDITIONS.map((exp) => {
+                        const isSelected = expedition === exp.id;
+                        return (
+                          <Label
+                            key={exp.id}
+                            htmlFor={exp.id}
+                            className={`flex cursor-pointer items-center gap-4 rounded-lg border p-4 transition-all ${
+                              isSelected
+                                ? 'shadow-sm'
+                                : 'border-border hover:border-[#D4AF37]/40'
                             }`}
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <p
-                            className={`text-sm font-semibold ${isSelected ? 'text-[#D4AF37]' : ''}`}
+                            style={
+                              isSelected
+                                ? { borderColor: GOLD, backgroundColor: `${GOLD}08` }
+                                : undefined
+                            }
                           >
-                            {method.name}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">{method.desc}</p>
+                            <RadioGroupItem value={exp.id} id={exp.id} />
+                            <div
+                              className="flex h-10 w-10 items-center justify-center rounded-full"
+                              style={{ backgroundColor: isSelected ? `${GOLD}15` : undefined }}
+                            >
+                              <Truck
+                                className="h-5 w-5"
+                                style={{ color: isSelected ? GOLD : undefined }}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <p
+                                className="text-sm font-semibold"
+                                style={isSelected ? { color: GOLD } : undefined}
+                              >
+                                {exp.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {lang === 'en' ? exp.etaEn : exp.eta}
+                              </p>
+                            </div>
+                            <p
+                              className="text-sm font-bold"
+                              style={isSelected ? { color: GOLD } : undefined}
+                            >
+                              {formatPrice(exp.price, lang)}
+                            </p>
+                          </Label>
+                        );
+                      })}
+                    </RadioGroup>
+
+                    <div className="mt-6 flex justify-between">
+                      <Button
+                        variant="outline"
+                        onClick={() => goToStep(0)}
+                        className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10"
+                      >
+                        <ArrowLeft className="mr-1 h-4 w-4" />
+                        {t('general.back', lang)}
+                      </Button>
+                      <Button
+                        onClick={() => goToStep(2)}
+                        className="bg-[#D4AF37] font-semibold text-white hover:bg-[#B8960C]"
+                      >
+                        {t('general.next', lang)}
+                        <ChevronRight className="ml-1 h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Payment Method */}
+                <Card className="overflow-hidden">
+                  <CardContent className="p-5 sm:p-6">
+                    <div className="mb-5 flex items-center gap-2.5">
+                      <div
+                        className="flex h-8 w-8 items-center justify-center rounded-full"
+                        style={{ backgroundColor: `${GOLD}15` }}
+                      >
+                        <CreditCard className="h-4 w-4" style={{ color: GOLD }} />
+                      </div>
+                      <h2 className="font-heading text-lg font-semibold">{t('checkout.payment', lang)}</h2>
+                    </div>
+                    <RadioGroup value={payment} onValueChange={setPayment} className="grid gap-3 sm:grid-cols-2">
+                      {PAYMENT_METHODS.map((method) => {
+                        const Icon = method.icon;
+                        const isSelected = payment === method.id;
+                        return (
+                          <Label
+                            key={method.id}
+                            htmlFor={method.id}
+                            className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all ${
+                              isSelected
+                                ? 'shadow-sm'
+                                : 'border-border hover:border-[#D4AF37]/40'
+                            }`}
+                            style={
+                              isSelected
+                                ? { borderColor: GOLD, backgroundColor: `${GOLD}08` }
+                                : undefined
+                            }
+                          >
+                            <RadioGroupItem value={method.id} id={method.id} />
+                            <div
+                              className="flex h-10 w-10 items-center justify-center rounded-full"
+                              style={{ backgroundColor: isSelected ? `${GOLD}15` : undefined }}
+                            >
+                              <Icon
+                                className="h-5 w-5"
+                                style={{ color: isSelected ? GOLD : undefined }}
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <p
+                                className="text-sm font-semibold"
+                                style={isSelected ? { color: GOLD } : undefined}
+                              >
+                                {lang === 'en' && method.nameEn ? method.nameEn : method.name}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {lang === 'en' && method.descEn ? method.descEn : method.desc}
+                              </p>
+                            </div>
+                          </Label>
+                        );
+                      })}
+                    </RadioGroup>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Step 2: Order Confirmation */}
+          <AnimatePresence mode="wait">
+            {currentStep === 2 && (
+              <motion.div
+                key="step-confirm"
+                ref={confirmRef}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                <button
+                  onClick={() => goToStep(1)}
+                  className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  type="button"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  {t('general.back', lang)}
+                </button>
+
+                {/* Address Summary */}
+                <Card className="overflow-hidden">
+                  <CardContent className="p-5 sm:p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="flex h-8 w-8 items-center justify-center rounded-full"
+                          style={{ backgroundColor: `${GOLD}15` }}
+                        >
+                          <MapPin className="h-4 w-4" style={{ color: GOLD }} />
                         </div>
-                      </Label>
-                    );
-                  })}
-                </RadioGroup>
-              </CardContent>
-            </Card>
-          </motion.div>
+                        <h2 className="font-heading text-lg font-semibold">{t('checkout.address', lang)}</h2>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => goToStep(0)}
+                        className="text-xs text-[#D4AF37] hover:text-[#D4AF37] hover:bg-[#D4AF37]/10"
+                      >
+                        {lang === 'id' ? 'Ubah' : 'Change'}
+                      </Button>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-4">
+                      <p className="font-semibold">{form.name}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{form.phone}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{form.address}</p>
+                      <p className="text-sm text-muted-foreground">{form.city}, {form.postalCode}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Shipping Summary */}
+                <Card className="overflow-hidden">
+                  <CardContent className="p-5 sm:p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="flex h-8 w-8 items-center justify-center rounded-full"
+                          style={{ backgroundColor: `${GOLD}15` }}
+                        >
+                          <Truck className="h-4 w-4" style={{ color: GOLD }} />
+                        </div>
+                        <h2 className="font-heading text-lg font-semibold">{t('checkout.expedition', lang)}</h2>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => goToStep(1)}
+                        className="text-xs text-[#D4AF37] hover:text-[#D4AF37] hover:bg-[#D4AF37]/10"
+                      >
+                        {lang === 'id' ? 'Ubah' : 'Change'}
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg bg-muted/50 p-4">
+                      <div>
+                        <p className="font-semibold">{selectedExpedition?.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedExpedition ? (lang === 'en' ? selectedExpedition.etaEn : selectedExpedition.eta) : ''}
+                        </p>
+                      </div>
+                      <p className="font-bold" style={{ color: GOLD }}>
+                        {formatPrice(shippingCost, lang)}
+                      </p>
+                    </div>
+
+                    <Separator className="my-4" />
+
+                    {/* Payment Summary */}
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="flex h-8 w-8 items-center justify-center rounded-full"
+                        style={{ backgroundColor: `${GOLD}15` }}
+                      >
+                        <CreditCard className="h-4 w-4" style={{ color: GOLD }} />
+                      </div>
+                      <div>
+                        <h3 className="font-heading text-sm font-semibold">{t('checkout.payment', lang)}</h3>
+                        <p className="text-xs text-muted-foreground">
+                          {PAYMENT_METHODS.find((m) => m.id === payment)?.name}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Itemized Order Summary */}
+                <Card className="overflow-hidden">
+                  <CardContent className="p-5 sm:p-6">
+                    <div className="mb-4 flex items-center gap-2.5">
+                      <div
+                        className="flex h-8 w-8 items-center justify-center rounded-full"
+                        style={{ backgroundColor: `${GOLD}15` }}
+                      >
+                        <ShoppingCart className="h-4 w-4" style={{ color: GOLD }} />
+                      </div>
+                      <h2 className="font-heading text-lg font-semibold">{t('checkout.items', lang)}</h2>
+                      <Badge
+                        variant="secondary"
+                        className="ml-auto text-xs"
+                        style={{ backgroundColor: `${GOLD}15`, color: GOLD }}
+                      >
+                        {items.reduce((sum, i) => sum + i.quantity, 0)} {t('checkout.qty', lang)}
+                      </Badge>
+                    </div>
+                    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                      {items.map((item) => {
+                        const price = item.book.discountPrice ?? item.book.price;
+                        const lineTotal = price * item.quantity;
+                        return (
+                          <div
+                            key={item.book.id}
+                            className="flex items-center gap-3 rounded-lg border border-border/50 p-3"
+                          >
+                            <div className="relative h-16 w-12 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+                              <img
+                                src={item.book.coverImage}
+                                alt={item.book.title}
+                                className="h-full w-full object-cover"
+                              />
+                              {item.quantity > 1 && (
+                                <div
+                                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                                  style={{ backgroundColor: GOLD }}
+                                >
+                                  {item.quantity}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="line-clamp-1 text-sm font-medium leading-tight">
+                                {item.book.title}
+                              </p>
+                              <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>{item.book.format}</span>
+                                <span>×</span>
+                                <span>{item.quantity}</span>
+                                <span>×</span>
+                                <span>{formatPrice(price, lang)}</span>
+                              </div>
+                            </div>
+                            <p
+                              className="flex-shrink-0 text-sm font-bold"
+                              style={{ color: GOLD }}
+                            >
+                              {formatPrice(lineTotal, lang)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Place Order Button */}
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="h-14 w-full text-base font-bold text-black transition-all hover:shadow-lg hover:shadow-[#D4AF37]/20"
+                  style={{ backgroundColor: GOLD }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = GOLD_DARK)}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = GOLD)}
+                >
+                  {submitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+                      {t('general.loading', lang)}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Check className="h-5 w-5" />
+                      {t('checkout.placeOrder', lang)}
+                      <span className="ml-1 text-sm font-normal opacity-80">
+                        — {formatPrice(total, lang)}
+                      </span>
+                    </span>
+                  )}
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Right Column - Order Summary (Sticky) */
-        }
+        {/* Right Column - Order Summary (Sticky) */}
         <div className="lg:col-span-1">
           <motion.div
             initial={{ opacity: 0, x: 20 }}
@@ -512,9 +848,8 @@ export default function CheckoutPage() {
                   {t('checkout.orderSummary', lang)}
                 </h2>
 
-                {/* Compact Item List */
-                }
-                <div className="mb-4 flex max-h-60 flex-col gap-3 overflow-y-auto pr-1">
+                {/* Compact Item List */}
+                <div className="mb-4 max-h-60 space-y-3 overflow-y-auto pr-1">
                   {items.map((item) => {
                     const price = item.book.discountPrice ?? item.book.price;
                     return (
@@ -525,13 +860,20 @@ export default function CheckoutPage() {
                             alt={item.book.title}
                             className="h-full w-full object-cover"
                           />
+                          {item.quantity > 1 && (
+                            <div
+                              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#D4AF37] text-[9px] font-bold text-white"
+                            >
+                              {item.quantity}
+                            </div>
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="line-clamp-1 text-xs font-medium">{item.book.title}</p>
                           <p className="text-[10px] text-muted-foreground">
                             {item.book.format} × {item.quantity}
                           </p>
-                          <p className="text-xs font-semibold text-[#D4AF37]">
+                          <p className="text-xs font-semibold" style={{ color: GOLD }}>
                             {formatPrice(price * item.quantity, lang)}
                           </p>
                         </div>
@@ -542,8 +884,7 @@ export default function CheckoutPage() {
 
                 <Separator className="my-4" />
 
-                {/* Voucher */
-                }
+                {/* Voucher */}
                 <div className="mb-4">
                   <div className="flex gap-2">
                     <div className="relative flex-1">
@@ -569,7 +910,8 @@ export default function CheckoutPage() {
                       size="sm"
                       onClick={handleApplyVoucher}
                       disabled={voucherLoading || voucherApplied || !voucherCode.trim()}
-                      className="h-9 border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10 shrink-0 px-3"
+                      className="h-9 shrink-0 px-3"
+                      style={{ borderColor: GOLD, color: GOLD }}
                     >
                       {voucherLoading
                         ? t('general.loading', lang)
@@ -594,8 +936,7 @@ export default function CheckoutPage() {
 
                 <Separator className="my-4" />
 
-                {/* Price Breakdown */
-                }
+                {/* Price Breakdown */}
                 <div className="flex flex-col gap-2.5">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{t('cart.subtotal', lang)}</span>
@@ -604,7 +945,7 @@ export default function CheckoutPage() {
                   {savings > 0 && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-green-600 dark:text-green-400">{t('cart.discount', lang)}</span>
-                      <span className="text-green-600 dark:text-green-400 font-medium">
+                      <span className="font-medium text-green-600 dark:text-green-400">
                         -{formatPrice(savings, lang)}
                       </span>
                     </div>
@@ -612,7 +953,7 @@ export default function CheckoutPage() {
                   {voucherApplied && voucherDiscount > 0 && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-green-600 dark:text-green-400">Voucher</span>
-                      <span className="text-green-600 dark:text-green-400 font-medium">
+                      <span className="font-medium text-green-600 dark:text-green-400">
                         -{formatPrice(voucherDiscount, lang)}
                       </span>
                     </div>
@@ -626,26 +967,11 @@ export default function CheckoutPage() {
 
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">{t('cart.total', lang)}</span>
-                    <span className="text-xl font-bold text-[#D4AF37]">{formatPrice(total, lang)}</span>
+                    <span className="text-xl font-bold" style={{ color: GOLD }}>
+                      {formatPrice(total, lang)}
+                    </span>
                   </div>
                 </div>
-
-                {/* Place Order Button */
-                }
-                <Button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="mt-5 h-12 w-full bg-[#D4AF37] text-black font-semibold text-sm hover:bg-[#C4A030] disabled:opacity-60"
-                >
-                  {submitting ? (
-                    <span className="flex items-center gap-2">
-                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black" />
-                      {t('general.loading', lang)}
-                    </span>
-                  ) : (
-                    t('checkout.placeOrder', lang)
-                  )}
-                </Button>
               </CardContent>
             </Card>
           </motion.div>

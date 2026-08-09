@@ -1,0 +1,1001 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useRef, useCallback } from 'react';
+     4→import { motion, useInView } from 'framer-motion';
+     5→import {
+     6→  ArrowRight,
+     7→  Star,
+     8→  Sparkles,
+     9→  BookOpen,
+    10→  ChevronLeft,
+    11→  ChevronRight,
+    12→  Users,
+    13→  TrendingUp,
+    14→  Award,
+    15→  Tag,
+    16→  Gift,
+    17→  Quote,
+    18→  Clock,
+    19→  Eye,
+    20→} from 'lucide-react';
+    21→import { Button } from '@/components/ui/button';
+    22→import { Badge } from '@/components/ui/badge';
+    23→import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+    24→import { Input } from '@/components/ui/input';
+    25→import {
+    26→  Carousel,
+    27→  CarouselContent,
+    28→  CarouselItem,
+    29→  CarouselPrevious,
+    30→  CarouselNext,
+    31→} from '@/components/ui/carousel';
+    32→import { useAppStore, formatPrice } from '@/lib/store';
+    33→import { t } from '@/lib/i18n';
+    34→import BookCard from '@/components/BookCard';
+    35→import QuickViewModal from '@/components/QuickViewModal';
+    36→import type { Book, Category, Testimonial } from '@/types';
+    37→import { toast } from 'sonner';
+    38→
+    39→/* ─── Animated Counter Hook ─── */
+    40→function useAnimatedCounter(target: number, duration = 2000, startCounting = false) {
+    41→  const [count, setCount] = useState(0);
+    42→  const countRef = useRef<HTMLElement>(null);
+    43→  const hasAnimated = useRef(false);
+    44→
+    45→  useEffect(() => {
+    46→    if (!startCounting || hasAnimated.current) return;
+    47→    hasAnimated.current = true;
+    48→    const startTime = performance.now();
+    49→    const animate = (currentTime: number) => {
+    50→      const elapsed = currentTime - startTime;
+    51→      const progress = Math.min(elapsed / duration, 1);
+    52→      const eased = 1 - Math.pow(1 - progress, 3);
+    53→      setCount(Math.floor(eased * target));
+    54→      if (progress < 1) requestAnimationFrame(animate);
+    55→      else setCount(target);
+    56→    };
+    57→    requestAnimationFrame(animate);
+    58→  }, [startCounting, target, duration]);
+    59→
+    60→  return { count, ref: countRef };
+    61→}
+    62→
+    63→/* ─── Recently Viewed Helper ─── */
+    64→function getRecentlyViewed(): string[] {
+    65→  if (typeof window === 'undefined') return [];
+    66→  try {
+    67→    const data = localStorage.getItem('noveluxe-recently-viewed');
+    68→    return data ? JSON.parse(data) : [];
+    69→  } catch { return []; }
+    70→}
+    71→
+    72→function addRecentlyViewed(bookId: string) {
+    73→  if (typeof window === 'undefined') return;
+    74→  try {
+    75→    let ids = getRecentlyViewed();
+    76→    ids = ids.filter((id) => id !== bookId);
+    77→    ids.unshift(bookId);
+    78→    ids = ids.slice(0, 8);
+    79→    localStorage.setItem('noveluxe-recently-viewed', JSON.stringify(ids));
+    80→  } catch { /* ignore */ }
+    81→}
+    82→
+    83→/* ─── Animation helpers ─── */
+    84→const fadeUp = {
+    85→  hidden: { opacity: 0, y: 30 },
+    86→  visible: (i: number) => ({
+    87→    opacity: 1,
+    88→    y: 0,
+    89→    transition: { duration: 0.55, delay: i * 0.08, ease: [0.25, 0.46, 0.45, 0.94] },
+    90→  }),
+    91→};
+    92→
+    93→const fadeIn = {
+    94→  hidden: { opacity: 0 },
+    95→  visible: (i: number) => ({
+    96→    opacity: 1,
+    97→    transition: { duration: 0.6, delay: i * 0.1 },
+    98→  }),
+    99→};
+   100→
+   101→function SectionHeader({
+   102→  title,
+   103→  subtitle,
+   104→  action,
+   105→}: {
+   106→  title: string;
+   107→  subtitle: string;
+   108→  action?: { label: string; onClick: () => void };
+   109→}) {
+   110→  return (
+   111→    <motion.div
+   112→      initial="hidden"
+   113→      whileInView="visible"
+   114→      viewport={{ once: true, margin: '-80px' }}
+   115→      variants={fadeUp}
+   116→      custom={0}
+   117→      className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8"
+   118→    >
+   119→      <div>
+   120→        <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">{title}</h2>
+   121→        <p className="mt-2 text-muted-foreground text-sm sm:text-base">{subtitle}</p>
+   122→      </div>
+   123→      {action && (
+   124→        <Button
+   125→          variant="outline"
+   126→          onClick={action.onClick}
+   127→          className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-all shrink-0 h-10 px-5"
+   128→        >
+   129→          {action.label}
+   130→          <ArrowRight className="ml-2 h-4 w-4" />
+   131→        </Button>
+   132→      )}
+   133→    </motion.div>
+   134→  );
+   135→}
+   136→
+   137→/* ═══════════════════════════════════════════════════════════
+   138→   HORIZONTAL SCROLL ROW  (Bestsellers / New Arrivals)
+   139→   ═══════════════════════════════════════════════════════════ */
+   140→function HorizontalBookRow({
+   141→  books,
+   142→  title,
+   143→  subtitle,
+   144→  viewAllLabel,
+   145→  onViewAll,
+   146→}: {
+   147→  books: Book[];
+   148→  title: string;
+   149→  subtitle: string;
+   150→  viewAllLabel: string;
+   151→  onViewAll: () => void;
+   152→}) {
+   153→  const scrollRef = useRef<HTMLDivElement>(null);
+   154→
+   155→  const scroll = (dir: 'left' | 'right') => {
+   156→    if (!scrollRef.current) return;
+   157→    const amount = 340;
+   158→    scrollRef.current.scrollBy({
+   159→      left: dir === 'left' ? -amount : amount,
+   160→      behavior: 'smooth',
+   161→    });
+   162→  };
+   163→
+   164→  if (books.length === 0) return null;
+   165→
+   166→  return (
+   167→    <section className="py-16 sm:py-20">
+   168→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   169→        <SectionHeader
+   170→          title={title}
+   171→          subtitle={subtitle}
+   172→          action={{ label: viewAllLabel, onClick: onViewAll }}
+   173→        />
+   174→      </div>
+   175→
+   176→      <div className="relative group/row">
+   177→        <button
+   178→          onClick={() => scroll('left')}
+   179→          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-background/90 border border-border shadow-lg opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37] hidden sm:flex"
+   180→          aria-label="Scroll left"
+   181→        >
+   182→          <ChevronLeft className="h-5 w-5" />
+   183→        </button>
+   184→        <button
+   185→          onClick={() => scroll('right')}
+   186→          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-background/90 border border-border shadow-lg opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37] hidden sm:flex"
+   187→          aria-label="Scroll right"
+   188→        >
+   189→          <ChevronRight className="h-5 w-5" />
+   190→        </button>
+   191→
+   192→        <div
+   193→          ref={scrollRef}
+   194→          className="flex gap-5 overflow-x-auto scrollbar-hide px-4 sm:px-6 lg:px-8 pb-4 snap-x snap-mandatory"
+   195→        >
+   196→          {books.map((book, i) => (
+   197→            <div key={book.id} className="w-[180px] sm:w-[200px] shrink-0 snap-start">
+   198→              <BookCard book={book} index={i} />
+   199→            </div>
+   200→          ))}
+   201→        </div>
+   202→      </div>
+   203→    </section>
+   204→  );
+   205→}
+   206→
+   207→/* ═══════════════════════════════════════════════════════════
+   208→   ANIMATED STAT COUNTER
+   209→   ═══════════════════════════════════════════════════════════ */
+   210→function AnimatedStat({
+   211→  icon: Icon,
+   212→  value,
+   213→  suffix,
+   214→  label,
+   215→  inView,
+   216→}: {
+   217→  icon: React.ElementType;
+   218→  value: number;
+   219→  suffix: string;
+   220→  label: string;
+   221→  inView: boolean;
+   222→}) {
+   223→  const { count } = useAnimatedCounter(value, 2200, inView);
+   224→
+   225→  return (
+   226→    <div className="flex items-center gap-3">
+   227→      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
+   228→        <Icon className="h-5 w-5 text-[#D4AF37]" />
+   229→      </div>
+   230→      <div>
+   231→        <p className="text-xl font-bold text-white">
+   232→          {count.toLocaleString()}{suffix}
+   233→        </p>
+   234→        <p className="text-xs text-white/50">{label}</p>
+   235→      </div>
+   236→    </div>
+   237→  );
+   238→}
+   239→
+   240→/* ═══════════════════════════════════════════════════════════
+   241→   MAIN HOMEPAGE COMPONENT
+   242→   ═══════════════════════════════════════════════════════════ */
+   243→export default function HomePage() {
+   244→  const { locale, setPage } = useAppStore();
+   245→
+   246→  // ── Data state ──
+   247→  const [books, setBooks] = useState<Book[]>([]);
+   248→  const [categories, setCategories] = useState<Category[]>([]);
+   249→  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+   250→  const [loading, setLoading] = useState(true);
+   251→  const [activeIdx, setActiveIdx] = useState(0);
+   252→  const [email, setEmail] = useState('');
+   253→  const [recentlyViewedBooks, setRecentlyViewedBooks] = useState<Book[]>([]);
+   254→  const [quickViewBook, setQuickViewBook] = useState<Book | null>(null);
+   255→  const [quickViewOpen, setQuickViewOpen] = useState(false);
+   256→
+   257→  // Stats counter visibility
+   258→  const statsRef = useRef<HTMLDivElement>(null);
+   259→  const statsInView = useInView(statsRef, { once: true, margin: '-50px' });
+   260→
+   261→  // Recently viewed section visibility
+   262→  const rvRef = useRef<HTMLDivElement>(null);
+   263→  const rvInView = useInView(rvRef, { once: true, margin: '-80px' });
+   264→
+   265→  // ── Fetch data ──
+   266→  useEffect(() => {
+   267→    async function fetchData() {
+   268→      try {
+   269→        const [booksRes, catsRes, testRes] = await Promise.all([
+   270→          fetch('/api/books?limit=16'),
+   271→          fetch('/api/categories'),
+   272→          fetch('/api/testimonials'),
+   273→        ]);
+   274→        if (!booksRes.ok || !catsRes.ok || !testRes.ok) throw new Error('Fetch failed');
+   275→        const [booksData, catsData, testData] = await Promise.all([
+   276→          booksRes.json(),
+   277→          catsRes.json(),
+   278→          testRes.json(),
+   279→        ]);
+   280→        setBooks(booksData.books || []);
+   281→        setCategories(catsData);
+   282→        setTestimonials(testData);
+   283→      } catch (err) {
+   284→        console.error('Error loading homepage data:', err);
+   285→      } finally {
+   286→        setLoading(false);
+   287→      }
+   288→    }
+   289→    fetchData();
+   290→  }, []);
+   291→
+   292→  // ── Load recently viewed books ──
+   293→  useEffect(() => {
+   294→    const ids = getRecentlyViewed();
+   295→    if (ids.length === 0) return;
+   296→    Promise.all(
+   297→      ids.map((id) => fetch(`/api/books/${id}`).then((r) => (r.ok ? r.json() : null)).catch(() => null))
+   298→    ).then((results) => {
+   299→      const validBooks = results
+   300→        .filter((r) => r && (r.book || r.id))
+   301→        .map((r) => r.book || r)
+   302→        .filter(Boolean) as Book[];
+   303→      setRecentlyViewedBooks(validBooks);
+   304→    });
+   305→  }, []);
+   306→
+   307→  // ── Auto-play testimonial carousel ──
+   308→  useEffect(() => {
+   309→    if (testimonials.length <= 1) return;
+   310→    const interval = setInterval(() => {
+   311→      setActiveIdx((prev) => (prev + 1) % testimonials.length);
+   312→    }, 5000);
+   313→    return () => clearInterval(interval);
+   314→  }, [testimonials.length]);
+   315→
+   316→  // ── Derived data ──
+   317→  const bestsellers = books.filter((b) => b.isBestSeller);
+   318→  const newArrivals = books.filter((b) => b.isNewArrival);
+   319→
+   320→  // ── Loading skeleton ──
+   321→  if (loading) {
+   322→    return (
+   323→      <div className="min-h-screen flex items-center justify-center">
+   324→        <div className="flex flex-col items-center gap-4">
+   325→          <div className="h-12 w-12 rounded-full border-4 border-[#D4AF37]/20 border-t-[#D4AF37] animate-spin" />
+   326→          <p className="text-muted-foreground text-sm">{t('general.loading', locale)}</p>
+   327→        </div>
+   328→      </div>
+   329→    );
+   330→  }
+   331→
+   332→  return (
+   333→    <main>
+   334→      {/* ────────────────────────────────────────────────────
+   335→          1. HERO SECTION (with animated gradient)
+   336→          ──────────────────────────────────────────────────── */}
+   337→      <section className="relative min-h-screen flex items-center overflow-hidden">
+   338→        {/* Background */}
+   339→        <div className="absolute inset-0 z-0">
+   340→          <img
+   341→            src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1920&h=1080&fit=crop"
+   342→            alt="Luxury library"
+   343→            className="h-full w-full object-cover"
+   344→          />
+   345→          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/30" />
+   346→          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+   347→          {/* Animated gold gradient overlay */
+   348→          <div className="hero-animated-gradient absolute inset-0 mix-blend-soft-light" />
+   349→        </div>
+   350→
+   351→        {/* Radial gradient glow behind text */}
+   352→        <div
+   353→          className="absolute inset-0 z-[1] pointer-events-none"
+   354→          style={{
+   355→            background:
+   356→              'radial-gradient(ellipse at 35% 40%, rgba(212,175,55,0.15) 0%, transparent 70%)',
+   357→          }}
+   358→        />
+   359→
+   360→        {/* Floating gold particles */}
+   361→        <div className="absolute top-[15%] left-[10%] z-[2] h-2 w-2 rounded-full bg-[#D4AF37]/40 animate-float-subtle" />
+   362→        <div className="absolute top-[25%] right-[20%] z-[2] h-1.5 w-1.5 rounded-full bg-[#D4AF37]/30 animate-float-subtle [animation-delay:0.5s]" />
+   363→        <div className="absolute top-[60%] left-[8%] z-[2] h-1 w-1 rounded-full bg-[#E8D48B]/50 animate-float-subtle [animation-delay:1s]" />
+   364→        <div className="absolute top-[70%] right-[15%] z-[2] h-2.5 w-2.5 rounded-full bg-[#D4AF37]/25 animate-float-subtle [animation-delay:1.5s]" />
+   365→        <div className="absolute top-[40%] right-[35%] z-[2] h-1.5 w-1.5 rounded-full bg-[#D4AF37]/35 animate-float-subtle [animation-delay:2s]" />
+   366→        <div className="absolute top-[80%] left-[25%] z-[2] h-1 w-1 rounded-full bg-[#E8D48B]/40 animate-float-subtle [animation-delay:0.8s]" />
+   367→
+   368→        {/* Content */}
+   369→        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pt-24 pb-16">
+   370→          <motion.div
+   371→            initial={{ opacity: 0, y: 30 }}
+   372→            animate={{ opacity: 1, y: 0 }}
+   373→            transition={{ duration: 0.7, delay: 0.2 }}
+   374→          >
+   375→            <div className="max-w-2xl rounded-2xl border border-[#D4AF37]/15 p-6 sm:p-8 bg-black/10 backdrop-blur-[2px]">
+   376→              <motion.div
+   377→                initial={{ opacity: 0, y: 20 }}
+   378→                animate={{ opacity: 1, y: 0 }}
+   379→                transition={{ duration: 0.5 }}
+   380→              >
+   381→                <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5 text-sm text-[#E8D48B]">
+   382→                  <Sparkles className="h-3.5 w-3.5" />
+   383→                  Noveluxe
+   384→                </div>
+   385→              </motion.div>
+   386→
+   387→              <motion.h1
+   388→                initial={{ opacity: 0, y: 30 }}
+   389→                animate={{ opacity: 1, y: 0 }}
+   390→                transition={{ duration: 0.6, delay: 0.15 }}
+   391→                className="mt-6 font-heading text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl leading-[1.1]"
+   392→              >
+   393→                {t('hero.title', locale)}
+   394→              </motion.h1>
+   395→
+   396→              <div className="mt-5 w-16 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/60 to-transparent" />
+   397→
+   398→              <motion.p
+   399→                initial={{ opacity: 0, y: 30 }}
+   400→                animate={{ opacity: 1, y: 0 }}
+   401→                transition={{ duration: 0.6, delay: 0.3 }}
+   402→                className="mt-4 max-w-xl text-lg text-white/70 leading-relaxed"
+   403→              >
+   404→                {t('hero.subtitle', locale)}
+   405→              </motion.p>
+   406→
+   407→              <motion.div
+   408→                initial={{ opacity: 0, y: 30 }}
+   409→                animate={{ opacity: 1, y: 0 }}
+   410→                transition={{ duration: 0.6, delay: 0.45 }}
+   411→                className="mt-8 flex flex-col sm:flex-row gap-4"
+   412→              >
+   413→                <Button
+   414→                  size="lg"
+   415→                  onClick={() => setPage('catalog')}
+   416→                  className="bg-[#D4AF37] hover:bg-[#B8960C] text-white h-12 px-8 text-base font-semibold shadow-[0_0_30px_rgba(212,175,55,0.4)] hover:shadow-[0_0_40px_rgba(212,175,55,0.55)] transition-all"
+   417→                >
+   418→                  {t('hero.cta1', locale)}
+   419→                  <ArrowRight className="ml-2 h-4 w-4" />
+   420→                </Button>
+   421→                <Button
+   422→                  variant="outline"
+   423→                  size="lg"
+   424→                  onClick={() => setPage('catalog')}
+   425→                  className="border-[#D4AF37]/50 text-[#E8D48B] hover:bg-[#D4AF37]/15 hover:border-[#D4AF37] hover:shadow-[0_0_20px_rgba(212,175,55,0.25)] h-12 px-8 text-base transition-all"
+   426→                >
+   427→                  {t('hero.cta2', locale)}
+   428→                </Button>
+   429→              </motion.div>
+   430→
+   431→              {/* Stat badges */}
+   432→              <motion.div
+   433→                initial={{ opacity: 0, y: 20 }}
+   434→                animate={{ opacity: 1, y: 0 }}
+   435→                transition={{ duration: 0.6, delay: 0.55 }}
+   436→                className="mt-6 flex items-center gap-3"
+   437→              >
+   438→                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-xs font-medium text-[#E8D48B]">
+   439→                  <BookOpen className="h-3 w-3" />
+   440→                  18+ {locale === 'id' ? 'Judul' : 'Titles'}
+   441→                </span>
+   442→                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-xs font-medium text-[#E8D48B]">
+   443→                  <Users className="h-3 w-3" />
+   444→                  5000+ {locale === 'id' ? 'Pembeli' : 'Buyers'}
+   445→                </span>
+   446→              </motion.div>
+   447→            </div>
+   448→
+   449→            {/* Animated Stats */}
+   450→            <motion.div
+   451→              ref={statsRef}
+   452→              initial={{ opacity: 0, y: 30 }}
+   453→              animate={{ opacity: 1, y: 0 }}
+   454→              transition={{ duration: 0.6, delay: 0.6 }}
+   455→              className="mt-10 flex items-center gap-8 sm:gap-10 flex-wrap px-2"
+   456→            >
+   457→              <AnimatedStat
+   458→                icon={Users}
+   459→                value={10000}
+   460→                suffix="+"
+   461→                label={locale === 'id' ? 'Pembaca' : 'Readers'}
+   462→                inView={statsInView}
+   463→              />
+   464→              <div className="h-10 w-px bg-white/15" />
+   465→              <AnimatedStat
+   466→                icon={BookOpen}
+   467→                value={500}
+   468→                suffix="+"
+   469→                label={locale === 'id' ? 'Judul' : 'Titles'}
+   470→                inView={statsInView}
+   471→              />
+   472→              <div className="h-10 w-px bg-white/15" />
+   473→              <AnimatedStat
+   474→                icon={Star}
+   475→                value={49}
+   476→                suffix=""
+   477→                label={locale === 'id' ? 'Rating' : 'Rating'}
+   478→                inView={statsInView}
+   479→              />
+   480→            </motion.div>
+   481→          </motion.div>
+   482→        </div>
+   483→      </section>
+   484→
+   485→      {/* ────────────────────────────────────────────────────
+   486→          2. CATEGORIES SECTION
+   487→          ──────────────────────────────────────────────────── */}
+   488→      <CategoriesSection categories={categories} locale={locale} />
+   489→
+   490→      {/* ────────────────────────────────────────────────────
+   491→          3. BESTSELLERS SECTION
+   492→          ──────────────────────────────────────────────────── */}
+   493→      <HorizontalBookRow
+   494→        books={bestsellers}
+   495→        title={t('bestseller.title', locale)}
+   496→        subtitle={t('bestseller.subtitle', locale)}
+   497→        viewAllLabel={t('bestseller.viewAll', locale)}
+   498→        onViewAll={() => setPage('catalog', { sort: 'bestseller' })}
+   499→      />
+   500→
+   501→      {/* ────────────────────────────────────────────────────
+   502→          4. NEW ARRIVALS SECTION
+   503→          ──────────────────────────────────────────────────── */}
+   504→      <HorizontalBookRow
+   505→        books={newArrivals}
+   506→        title={t('newArrival.title', locale)}
+   507→        subtitle={t('newArrival.subtitle', locale)}
+   508→        viewAllLabel={t('general.viewAll', locale)}
+   509→        onViewAll={() => setPage('catalog', { sort: 'newest' })}
+   510→      />
+   511→
+   512→      {/* ────────────────────────────────────────────────────
+   513→          5. PROMO BANNER (with countdown)
+   514→          ──────────────────────────────────────────────────── */}
+   515→      <PromoBanner locale={locale} />
+   516→
+   517→      {/* ────────────────────────────────────────────────────
+   518→          6. RECENTLY VIEWED SECTION
+   519→          ──────────────────────────────────────────────────── */}
+   520→      {recentlyViewedBooks.length > 0 && (
+   521→        <RecentlyViewedSection
+   522→          books={recentlyViewedBooks}
+   523→          locale={locale}
+   524→          inView={rvInView}
+   525→          ref={rvRef}
+   526→          onQuickView={(book) => { setQuickViewBook(book); setQuickViewOpen(true); }}
+   527→        />
+   528→      )}
+   529→
+   530→      {/* ────────────────────────────────────────────────────
+   531→          7. TESTIMONIALS SECTION
+   532→          ──────────────────────────────────────────────────── */}
+   533→      <TestimonialsSection
+   534→        testimonials={testimonials}
+   535→        activeIdx={activeIdx}
+   536→        setActiveIdx={setActiveIdx}
+   537→        locale={locale}
+   538→      />
+   539→
+   540→      {/* Quick View Modal */}
+   541→      {quickViewBook && (
+   542→        <QuickViewModal
+   543→          book={quickViewBook}
+   544→          open={quickViewOpen}
+   545→          onClose={() => { setQuickViewOpen(false); setQuickViewBook(null); }}
+   546→        />
+   547→      )}
+   548→    </main>
+   549→  );
+   550→}
+   551→
+   552→/* ═══════════════════════════════════════════════════════════
+   553→   RECENTLY VIEWED SECTION
+   554→   ═══════════════════════════════════════════════════════════ */
+   555→const RecentlyViewedSection = ({
+   556→  books,
+   557→  locale,
+   558→  inView,
+   559→  ref,
+   560→  onQuickView,
+   561→}: {
+   562→  books: Book[];
+   563→  locale: 'id' | 'en';
+   564→  inView: boolean;
+   565→  ref: React.RefObject<HTMLDivElement | null>;
+   566→  onQuickView: (book: Book) => void;
+   567→}) => {
+   568→  const { setPage } = useAppStore();
+   569→  return (
+   570→    <section ref={ref} className="py-16 sm:py-20 bg-secondary/30">
+   571→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   572→        <motion.div
+   573→          initial="hidden"
+   574→          whileInView="visible"
+   575→          viewport={{ once: true, margin: '-80px' }}
+   576→          variants={fadeUp}
+   577→          custom={0}
+   578→          className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8"
+   579→        >
+   580→          <div>
+   581→            <div className="flex items-center gap-2 mb-2">
+   582→              <Eye className="h-5 w-5 text-[#D4AF37]" />
+   583→              <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
+   584→                {locale === 'id' ? 'Baru Dilihat' : 'Recently Viewed'}
+   585→              </h2>
+   586→            </div>
+   587→            <p className="text-muted-foreground text-sm sm:text-base">
+   588→              {locale === 'id'
+   589→                ? 'Lanjutkan membaca buku yang telah kamu lihat'
+   590→                : 'Continue exploring books you\'ve viewed'}
+   591→            </p>
+   592→          </div>
+   593→          <Button
+   594→            variant="ghost"
+   595→            onClick={() => {
+   596→              if (typeof window !== 'undefined') localStorage.removeItem('noveluxe-recently-viewed');
+   597→            }}
+   598→            className="text-muted-foreground hover:text-foreground text-sm shrink-0 h-10 px-5"
+   599→          >
+   600→            {locale === 'id' ? 'Hapus Riwayat' : 'Clear History'}
+   601→          </Button>
+   602→        </motion.div>
+   603→
+   604→        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-5">
+   605→          {books.map((book, i) => (
+   606→            <motion.div
+   607→              key={book.id}
+   608→              initial="hidden"
+   609→              animate={inView ? 'visible' : 'hidden'}
+   610→              variants={fadeUp}
+   611→              custom={i}
+   612→              whileHover={{ y: -4 }}
+   613→              className="cursor-pointer"
+   614→              onClick={() => {
+   615→                addRecentlyViewed(book.id);
+   616→                setPage('book-detail', { slug: book.slug });
+   617→              }}
+   618→            >
+   619→              <div className="group relative overflow-hidden rounded-2xl border border-border bg-card transition-all duration-500 hover:border-[#D4AF37]/40 hover:shadow-xl hover:shadow-[#D4AF37]/10 book-card-glow">
+   620→                <div className="relative aspect-[2/3] overflow-hidden bg-secondary">
+   621→                  <img
+   622→                    src={book.coverImage}
+   623→                    alt={book.title}
+   624→                    loading="lazy"
+   625→                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+   626→                  />
+   627→                </div>
+   628→                <div className="p-3">
+   629→                  <h3 className="font-heading text-sm font-bold leading-snug line-clamp-1 group-hover:text-[#D4AF37] transition-colors">
+   630→                    {book.title}
+   631→                  </h3>
+   632→                  <p className="text-xs text-muted-foreground mt-0.5">{book.author}</p>
+   633→                </div>
+   634→              </div>
+   635→            </motion.div>
+   636→          ))}
+   637→        </div>
+   638→      </div>
+   639→    </section>
+   640→  );
+   641→};
+   642→
+   643→/* ═══════════════════════════════════════════════════════════
+   644→   CATEGORIES SECTION COMPONENT
+   645→   ═══════════════════════════════════════════════════════════ */
+   646→function CategoriesSection({
+   647→  categories,
+   648→  locale,
+   649→}: {
+   650→  categories: Category[];
+   651→  locale: 'id' | 'en';
+   652→}) {
+   653→  const { setPage } = useAppStore();
+   654→  const ref = useRef<HTMLDivElement>(null);
+   655→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   656→
+   657→  if (categories.length === 0) return null;
+   658→
+   659→  return (
+   660→    <section ref={ref} className="py-16 sm:py-20 bg-secondary/40 parallax-gold section-divider-gold">
+   661→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   662→        <SectionHeader
+   663→          title={t('categories.title', locale)}
+   664→          subtitle={t('categories.subtitle', locale)}
+   665→        />
+   666→
+   667→        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
+   668→          {categories.map((cat, i) => (
+   669→            <motion.button
+   670→              key={cat.id}
+   671→              initial="hidden"
+   672→              animate={inView ? 'visible' : 'hidden'}
+   673→              variants={fadeUp}
+   674→              custom={i}
+   675→              onClick={() => setPage('catalog', { genre: cat.slug })}
+   676→              className="group relative overflow-hidden rounded-2xl border border-border bg-card text-left transition-all duration-300 hover:border-[#D4AF37]/40 hover:shadow-xl hover:shadow-[#D4AF37]/10 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   677→              aria-label={`Browse ${cat.name}`}
+   678→            >
+   679→              <div className="relative aspect-[4/3] overflow-hidden">
+   680→                <img
+   681→                  src={cat.image || '/images/category-placeholder.jpg'}
+   682→                  alt={cat.name}
+   683→                  loading="lazy"
+   684→                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+   685→                />
+   686→                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+   687→                <div className="absolute inset-0 bg-[#D4AF37]/0 group-hover:bg-[#D4AF37]/10 transition-colors duration-300" />
+   688→              </div>
+   689→              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
+   690→                <h3 className="font-heading text-sm sm:text-base font-bold text-white leading-tight">
+   691→                  {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
+   692→                </h3>
+   693→                <p className="mt-1 text-xs text-white/70">
+   694→                  {cat._count?.books || 0} {locale === 'id' ? 'buku' : 'books'}
+   695→                </p>
+   696→              </div>
+   697→              <div className="absolute top-0 left-0 w-full h-0.5 bg-[#D4AF37] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
+   698→            </motion.button>
+   699→          ))}
+   700→        </div>
+   701→      </div>
+   702→    </section>
+   703→  );
+   704→}
+   705→
+   706→/* ═══════════════════════════════════════════════════════════
+   707→   PROMO BANNER COMPONENT (with countdown timer)
+   708→   ═══════════════════════════════════════════════════════════ */
+   709→function PromoBanner({ locale }: { locale: 'id' | 'en' }) {
+   710→  const { setPage } = useAppStore();
+   711→  const ref = useRef<HTMLDivElement>(null);
+   712→  const inView = useInView(ref, { once: true, margin: '-80px' });
+   713→
+   714→  // Countdown: 7 days from now (persisted in session)
+   715→  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, mins: 0, secs: 0 });
+   716→
+   717→  useEffect(() => {
+   718→    let targetKey = 'noveluxe-promo-end';
+   719→    let target = parseInt(sessionStorage.getItem(targetKey) || '0', 10);
+   720→    if (!target || target < Date.now()) {
+   721→      target = Date.now() + 7 * 24 * 60 * 60 * 1000;
+   722→      sessionStorage.setItem(targetKey, String(target));
+   723→    }
+   724→    const tick = () => {
+   725→      const diff = Math.max(0, target - Date.now());
+   726→      setTimeLeft({
+   727→        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+   728→        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+   729→        mins: Math.floor((diff / (1000 * 60)) % 60),
+   730→        secs: Math.floor((diff / 1000) % 60),
+   731→      });
+   732→    };
+   733→    tick();
+   734→    const interval = setInterval(tick, 1000);
+   735→    return () => clearInterval(interval);
+   736→  }, []);
+   737→
+   738→  const handleCopyCode = () => {
+   739→    navigator.clipboard.writeText('WELCOME10');
+   740→    toast.success(locale === 'id' ? 'Kode berhasil disalin!' : 'Code copied!');
+   741→  };
+   742→
+   743→  const pad = (n: number) => String(n).padStart(2, '0');
+   744→
+   745→  return (
+   746→    <section ref={ref} className="py-16 sm:py-20">
+   747→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   748→        <div className="relative rounded-[1.6rem] p-[2px] bg-gradient-to-br from-[#D4AF37] via-[#E8D48B] to-[#B8960C] shadow-[0_0_50px_rgba(212,175,55,0.3)]">
+   749→          <div className="absolute -inset-4 rounded-[2.2rem] bg-gradient-to-br from-[#D4AF37]/10 via-transparent to-[#D4AF37]/5 blur-xl pointer-events-none" />
+   750→        <motion.div
+   751→          initial="hidden"
+   752→          animate={inView ? 'visible' : 'hidden'}
+   753→          variants={fadeIn}
+   754→          custom={0}
+   755→          className="relative overflow-hidden rounded-[calc(1.6rem-2px)] shine-sweep"
+   756→        >
+   757→          <div className="absolute inset-0 bg-gradient-to-br from-[#D4AF37] via-[#E8D48B] to-[#B8960C]" />
+   758→          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-60" />
+   759→
+   760→          <div className="relative z-10 px-6 py-12 sm:px-12 sm:py-16 md:px-16 md:py-20 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+   761→            <div className="flex-1 text-center md:text-left">
+   762→              <div className="inline-flex items-center gap-2 rounded-full bg-black/15 px-3 py-1 mb-4">
+   763→                <Gift className="h-4 w-4 text-white" />
+   764→                <span className="text-xs font-semibold text-white uppercase tracking-wider">
+   765→                  {t('promo.title', locale)}
+   766→                </span>
+   767→              </div>
+   768→              <h2 className="font-heading text-3xl sm:text-4xl font-bold text-white leading-tight">
+   769→                {t('promo.subtitle', locale)}
+   770→              </h2>
+   771→              <p className="mt-3 text-white/80 text-sm sm:text-base max-w-md mx-auto md:mx-0">
+   772→                {t('promo.desc', locale)}
+   773→              </p>
+   774→
+   775→              {/* Countdown Timer */}
+   776→              <div className="mt-6 flex items-center justify-center md:justify-start gap-2">
+   777→                <span className="text-xs text-white/60 uppercase tracking-wider mr-1">
+   778→                  <Clock className="h-3.5 w-3.5 inline mr-1" />
+   779→                  {locale === 'id' ? 'Berakhir dalam' : 'Ends in'}:
+   780→                </span>
+   781→                {[
+   782→                  { val: timeLeft.days, label: locale === 'id' ? 'Hr' : 'D' },
+   783→                  { val: timeLeft.hours, label: locale === 'id' ? 'Jm' : 'H' },
+   784→                  { val: timeLeft.mins, label: locale === 'id' ? 'Mn' : 'M' },
+   785→                  { val: timeLeft.secs, label: 'S' },
+   786→                ].map((unit, idx) => (
+   787→                  <div key={idx} className="flex items-center gap-2">
+   788→                    <div className="flex flex-col items-center bg-black/20 rounded-lg px-2.5 py-1.5 min-w-[44px]">
+   789→                      <span className="text-lg font-bold text-white font-mono leading-none">
+   790→                        {pad(unit.val)}
+   791→                      </span>
+   792→                      <span className="text-[9px] text-white/50 uppercase">{unit.label}</span>
+   793→                    </div>
+   794→                    {idx < 3 && <span className="text-white/40 font-bold">:</span>}
+   795→                  </div>
+   796→                ))}
+   797→              </div>
+   798→
+   799→              <div className="mt-6 flex flex-col sm:flex-row items-center gap-4 justify-center md:justify-start">
+   800→                <Button
+   801→                  size="lg"
+   802→                  onClick={() => setPage('catalog')}
+   803→                  className="bg-black text-white hover:bg-black/80 h-12 px-8 text-base font-semibold transition-all"
+   804→                >
+   805→                  {t('hero.cta1', locale)}
+   806→                  <ArrowRight className="ml-2 h-4 w-4" />
+   807→                </Button>
+   808→                <button
+   809→                  onClick={handleCopyCode}
+   810→                  className="flex items-center gap-2 rounded-xl border-2 border-dashed border-white/50 bg-black/10 px-5 py-3 transition-all hover:border-white/80 hover:bg-black/20 group cursor-pointer"
+   811→                >
+   812→                  <Tag className="h-4 w-4 text-white/80" />
+   813→                  <span className="text-base sm:text-lg font-mono font-bold text-white tracking-wider">
+   814→                    WELCOME10
+   815→                  </span>
+   816→                  <span className="text-[10px] text-white/60 uppercase tracking-wider group-hover:text-white/80 transition-colors">
+   817→                    {locale === 'id' ? 'Salin' : 'Copy'}
+   818→                  </span>
+   819→                </button>
+   820→              </div>
+   821→            </div>
+   822→
+   823→            <div className="hidden md:flex items-center justify-center shrink-0">
+   824→              <div className="relative">
+   825→                <div className="w-40 h-40 rounded-full bg-white/10 flex items-center justify-center animate-pulse-gold">
+   826→                  <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center">
+   827→                    <div className="text-center">
+   828→                      <p className="text-5xl font-bold text-white">10%</p>
+   829→                      <p className="text-xs text-white/80 font-semibold uppercase tracking-wider mt-1">
+   830→                        {t('promo.code', locale)}
+   831→                      </p>
+   832→                    </div>
+   833→                  </div>
+   834→                </div>
+   835→                <div className="absolute -top-4 -right-4 h-8 w-8 rounded-full bg-white/10" />
+   836→                <div className="absolute -bottom-2 -left-2 h-6 w-6 rounded-full bg-white/10" />
+   837→                <div className="absolute top-1/2 -right-8 h-4 w-4 rounded-full bg-white/10" />
+   838→              </div>
+   839→            </div>
+   840→          </div>
+   841→        </motion.div>
+   842→        </div>
+   843→      </div>
+   844→    </section>
+   845→  );
+   846→}
+   847→
+   848→/* ═══════════════════════════════════════════════════════════
+   849→   TESTIMONIALS SECTION COMPONENT
+   850→   ═══════════════════════════════════════════════════════════ */
+   851→function TestimonialsSection({
+   852→  testimonials,
+   853→  activeIdx,
+   854→  setActiveIdx,
+   855→  locale,
+   856→}: {
+   857→  testimonials: Testimonial[];
+   858→  activeIdx: number;
+   859→  setActiveIdx: (idx: number) => void;
+   860→  locale: 'id' | 'en';
+   861→}) {
+   862→  const ref = useRef<HTMLDivElement>(null);
+   863→  const inView = useInView(ref, { once: true, margin: '-80px' });
+   864→
+   865→  if (testimonials.length === 0) return null;
+   866→
+   867→  return (
+   868→    <section ref={ref} className="py-16 sm:py-20 bg-secondary/40 parallax-gold section-divider-gold">
+   869→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   870→        <motion.div
+   871→          initial="hidden"
+   872→          animate={inView ? 'visible' : 'hidden'}
+   873→          variants={fadeUp}
+   874→          custom={0}
+   875→          className="text-center mb-12"
+   876→        >
+   877→          <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
+   878→            {t('testimonial.title', locale)}
+   879→          </h2>
+   880→          <p className="mt-2 text-muted-foreground text-sm sm:text-base">
+   881→            {t('testimonial.subtitle', locale)}
+   882→          </p>
+   883→        </motion.div>
+   884→
+   885→        <div className="hidden md:block">
+   886→          <motion.div
+   887→            initial="hidden"
+   888→            animate={inView ? 'visible' : 'hidden'}
+   889→            variants={fadeIn}
+   890→            custom={1}
+   891→            className="relative"
+   892→          >
+   893→            <Carousel
+   894→              opts={{ align: 'start', loop: true }}
+   895→              className="w-full"
+   896→            >
+   897→              <CarouselContent className="-ml-4">
+   898→                {testimonials.map((test) => (
+   899→                  <CarouselItem key={test.id} className="pl-4 md:basis-1/2 lg:basis-1/3">
+   900→                    <TestimonialCard testimonial={test} locale={locale} />
+   901→                  </CarouselItem>
+   902→                ))}
+   903→              </CarouselContent>
+   904→              <CarouselPrevious className="-left-14 bg-background border-border hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37]" />
+   905→              <CarouselNext className="-right-14 bg-background border-border hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37]" />
+   906→            </Carousel>
+   907→          </motion.div>
+   908→        </div>
+   909→
+   910→        <div className="md:hidden">
+   911→          <motion.div
+   912→            initial="hidden"
+   913→            animate={inView ? 'visible' : 'hidden'}
+   914→            variants={fadeIn}
+   915→            custom={1}
+   916→          >
+   917→            <div className="relative overflow-hidden">
+   918→              <div
+   919→                className="flex transition-transform duration-500 ease-in-out"
+   920→                style={{ transform: `translateX(-${activeIdx * 100}%)` }}
+   921→              >
+   922→                {testimonials.map((test) => (
+   923→                  <div key={test.id} className="w-full shrink-0 px-1">
+   924→                    <TestimonialCard testimonial={test} locale={locale} />
+   925→                  </div>
+   926→                ))}
+   927→              </div>
+   928→            </div>
+   929→
+   930→            <div className="flex items-center justify-center gap-2 mt-6">
+   931→              {testimonials.map((_, i) => (
+   932→                <button
+   933→                  key={i}
+   934→                  onClick={() => setActiveIdx(i)}
+   935→                  className={`h-2.5 rounded-full transition-all duration-300 ${
+   936→                    i === activeIdx
+   937→                      ? 'w-8 bg-[#D4AF37]'
+   938→                      : 'w-2.5 bg-[#D4AF37]/30 hover:bg-[#D4AF37]/50'
+   939→                  }`}
+   940→                  aria-label={`Go to testimonial ${i + 1}`}
+   941→                />
+   942→              ))}
+   943→            </div>
+   944→          </motion.div>
+   945→        </div>
+   946→      </div>
+   947→    </section>
+   948→  );
+   949→}
+   950→
+   951→/* ═══════════════════════════════════════════════════════════
+   952→   SINGLE TESTIMONIAL CARD
+   953→   ═══════════════════════════════════════════════════════════ */
+   954→function TestimonialCard({
+   955→  testimonial,
+   956→  locale,
+   957→}: {
+   958→  testimonial: Testimonial;
+   959→  locale: 'id' | 'en';
+   960→}) {
+   961→  return (
+   962→    <div className="h-full rounded-2xl border border-border bg-card p-6 sm:p-8 transition-all duration-300 hover:border-[#D4AF37]/30 hover:shadow-lg hover:shadow-[#D4AF37]/5">
+   963→      <Quote className="h-8 w-8 text-[#D4AF37]/20 mb-4" />
+   964→      <div className="flex items-center gap-0.5 mb-4">
+   965→        {Array.from({ length: 5 }).map((_, i) => (
+   966→          <Star
+   967→            key={i}
+   968→            className={`h-4 w-4 ${
+   969→              i < testimonial.rating
+   970→                ? 'fill-[#D4AF37] text-[#D4AF37]'
+   971→                : 'text-muted-foreground/25'
+   972→            }`}
+   973→          />
+   974→        ))}
+   975→      </div>
+   976→      <p className="text-sm sm:text-base text-foreground/80 leading-relaxed line-clamp-4 mb-6">
+   977→        &ldquo;{testimonial.comment}&rdquo;
+   978→      </p>
+   979→      <div className="flex items-center gap-3">
+   980→        <Avatar className="h-10 w-10 border-2 border-[#D4AF37]/20">
+   981→          <AvatarImage src={testimonial.avatar || undefined} alt={testimonial.name} />
+   982→          <AvatarFallback className="bg-[#D4AF37]/10 text-[#D4AF37] text-sm font-bold">
+   983→            {testimonial.name
+   984→              .split(' ')
+   985→              .map((n) => n[0])
+   986→              .join('')
+   987→              .slice(0, 2)
+   988→              .toUpperCase()}
+   989→          </AvatarFallback>
+   990→        </Avatar>
+   991→        <div>
+   992→          <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
+   993→          <p className="text-xs text-muted-foreground">
+   994→            {locale === 'id' ? 'Pembaca Noveluxe' : 'Noveluxe Reader'}
+   995→          </p>
+   996→        </div>
+   997→      </div>
+   998→    </div>
+   999→  );
+  1000→}
+  1001→

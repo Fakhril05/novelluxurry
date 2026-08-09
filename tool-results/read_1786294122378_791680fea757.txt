@@ -1,0 +1,688 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useRef } from 'react';
+     4→import { motion } from 'framer-motion';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  ArrowLeft,
+     8→  Truck,
+     9→  CreditCard,
+    10→  QrCode,
+    11→  Wallet,
+    12→  Building,
+    13→  Check,
+    14→  MapPin,
+    15→  Tag,
+    16→  Package,
+    17→} from 'lucide-react';
+    18→import { Button } from '@/components/ui/button';
+    19→import { Input } from '@/components/ui/input';
+    20→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    21→import { Label } from '@/components/ui/label';
+    22→import { Separator } from '@/components/ui/separator';
+    23→import { Card, CardContent } from '@/components/ui/card';
+    24→import { Badge } from '@/components/ui/badge';
+    25→import { ScrollArea } from '@/components/ui/scroll-area';
+    26→import { useCartStore } from '@/lib/cart-store';
+    27→import { useAppStore, formatPrice } from '@/lib/store';
+    28→import { t } from '@/lib/i18n';
+    29→import type { Locale } from '@/lib/i18n';
+    30→
+    31→const EXPEDITIONS = [
+    32→  { id: 'jne-reguler', name: 'JNE Reguler', price: 15000, eta: '5-7 hari', etaEn: '5-7 days' },
+    33→  { id: 'jne-yes', name: 'JNE YES', price: 25000, eta: '2-3 hari', etaEn: '2-3 days' },
+    34→  { id: 'sicepat-reg', name: 'SiCepat REG', price: 12000, eta: '4-6 hari', etaEn: '4-6 days' },
+    35→  { id: 'sicepat-best', name: 'SiCepat BEST', price: 20000, eta: '1-2 hari', etaEn: '1-2 days' },
+    36→  { id: 'anteraja', name: 'Anteraja', price: 18000, eta: '3-5 hari', etaEn: '3-5 days' },
+    37→];
+    38→
+    39→const PAYMENT_METHODS = [
+    40→  { id: 'bank-transfer', name: 'Transfer Bank', icon: Building, desc: 'BCA, BNI, Mandiri, BRI' },
+    41→  { id: 'qris', name: 'QRIS', icon: QrCode, desc: 'Scan QR untuk bayar' },
+    42→  { id: 'ewallet', name: 'E-Wallet', icon: Wallet, desc: 'GoPay, OVO, DANA, ShopeePay' },
+    43→  { id: 'virtual-account', name: 'Virtual Account', icon: CreditCard, desc: 'Bayar via VA' },
+    44→  { id: 'cod', name: 'COD (Bayar di Tempat)', icon: Package, desc: 'Bayar saat barang diterima' },
+    45→];
+    46→
+    47→const STEPS = [
+    48→  { key: 'address', labelId: 'checkout.address', icon: MapPin },
+    49→  { key: 'expedition', labelId: 'checkout.expedition', icon: Truck },
+    50→  { key: 'payment', labelId: 'checkout.payment', icon: CreditCard },
+    51→  { key: 'confirm', labelId: 'checkout.placeOrder', icon: Check },
+    52→];
+    53→
+    54→export default function CheckoutPage() {
+    55→  const { items, getTotalPrice, getDiscountSavings, clearCart } = useCartStore();
+    56→  const { locale, setPage, user, isAuthenticated } = useAppStore();
+    57→  const lang = (locale ?? 'id') as Locale;
+    58→
+    59→  // Form state
+    60→  const [form, setForm] = useState({
+    61→    name: '',
+    62→    phone: '',
+    63→    address: '',
+    64→    city: '',
+    65→    postalCode: '',
+    66→  });
+    67→  const [expedition, setExpedition] = useState('jne-reguler');
+    68→  const [payment, setPayment] = useState('bank-transfer');
+    69→  const [voucherCode, setVoucherCode] = useState('');
+    70→  const [voucherLoading, setVoucherLoading] = useState(false);
+    71→  const [voucherDiscount, setVoucherDiscount] = useState(0);
+    72→  const [voucherApplied, setVoucherApplied] = useState(false);
+    73→  const [voucherError, setVoucherError] = useState('');
+    74→  const [submitting, setSubmitting] = useState(false);
+    75→  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+    76→
+    77→  // Refs for interactive stepper scroll-to-section
+    78→  const addressRef = useRef<HTMLDivElement>(null);
+    79→  const expeditionRef = useRef<HTMLDivElement>(null);
+    80→  const paymentRef = useRef<HTMLDivElement>(null);
+    81→  const confirmRef = useRef<HTMLDivElement>(null);
+    82→
+    83→  const sectionRefs = [addressRef, expeditionRef, paymentRef, confirmRef];
+    84→
+    85→  const scrollToSection = (idx: number) => {
+    86→    const ref = sectionRefs[idx];
+    87→    if (ref?.current) {
+    88→      ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    89→    }
+    90→  };
+    91→
+    92→  const subtotal = getTotalPrice();
+    93→  const savings = getDiscountSavings();
+    94→  const shippingCost = EXPEDITIONS.find((e) => e.id === expedition)?.price ?? 0;
+    95→  const total = Math.max(0, subtotal - voucherDiscount + shippingCost);
+    96→
+    97→  // Pre-fill from user data
+    98→  useEffect(() => {
+    99→    if (isAuthenticated && user) {
+   100→      setForm((prev) => ({
+   101→        ...prev,
+   102→        name: user.name || '',
+   103→        phone: user.phone || '',
+   104→        address: user.address || '',
+   105→        city: user.city || '',
+   106→        postalCode: user.postalCode || '',
+   107→      }));
+   108→    }
+   109→  }, [isAuthenticated, user]);
+   110→
+   111→  const handleApplyVoucher = async () => {
+   112→    if (!voucherCode.trim()) return;
+   113→    setVoucherLoading(true);
+   114→    setVoucherError('');
+   115→    try {
+   116→      const res = await fetch('/api/vouchers/validate', {
+   117→        method: 'POST',
+   118→        headers: { 'Content-Type': 'application/json' },
+   119→        body: JSON.stringify({ code: voucherCode.trim().toUpperCase(), total: subtotal }),
+   120→      });
+   121→      const data = await res.json();
+   122→      if (data.success && data.discount > 0) {
+   123→        setVoucherDiscount(data.discount);
+   124→        setVoucherApplied(true);
+   125→        setVoucherError('');
+   126→        toast.success(
+   127→          lang === 'id'
+   128→            ? `Voucher berhasil! Hemat ${formatPrice(data.discount, lang)}`
+   129→            : `Voucher applied! Save ${formatPrice(data.discount, lang)}`
+   130→        );
+   131→      } else {
+   132→        setVoucherDiscount(0);
+   133→        setVoucherApplied(false);
+   134→        setVoucherError(data.message || (lang === 'id' ? 'Voucher tidak valid' : 'Invalid voucher'));
+   135→      }
+   136→    } catch {
+   137→      setVoucherError(lang === 'id' ? 'Gagal menerapkan voucher' : 'Failed to apply voucher');
+   138→    } finally {
+   139→      setVoucherLoading(false);
+   140→    }
+   141→  };
+   142→
+   143→  const validateForm = (): boolean => {
+   144→    const errors: Record<string, string> = {};
+   145→    if (!form.name.trim()) errors.name = lang === 'id' ? 'Nama wajib diisi' : 'Name is required';
+   146→    if (!form.phone.trim()) errors.phone = lang === 'id' ? 'Nomor telepon wajib diisi' : 'Phone is required';
+   147→    if (!form.address.trim()) errors.address = lang === 'id' ? 'Alamat wajib diisi' : 'Address is required';
+   148→    if (!form.city.trim()) errors.city = lang === 'id' ? 'Kota wajib diisi' : 'City is required';
+   149→    if (!form.postalCode.trim()) errors.postalCode = lang === 'id' ? 'Kode pos wajib diisi' : 'Postal code is required';
+   150→    setFormErrors(errors);
+   151→    return Object.keys(errors).length === 0;
+   152→  };
+   153→
+   154→  const handleSubmit = async () => {
+   155→    if (items.length === 0) {
+   156→      toast.error(lang === 'id' ? 'Keranjang kosong' : 'Cart is empty');
+   157→      return;
+   158→    }
+   159→    if (!validateForm()) {
+   160→      toast.error(lang === 'id' ? 'Lengkapi data pengiriman' : 'Please complete shipping information');
+   161→      return;
+   162→    }
+   163→
+   164→    setSubmitting(true);
+   165→    try {
+   166→      const orderData = {
+   167→        items: items.map((item) => ({
+   168→          bookId: item.book.id,
+   169→          title: item.book.title,
+   170→          quantity: item.quantity,
+   171→          price: item.book.discountPrice ?? item.book.price,
+   172→          format: item.book.format,
+   173→        })),
+   174→        shippingName: form.name,
+   175→        shippingPhone: form.phone,
+   176→        shippingAddr: form.address,
+   177→        shippingCity: form.city,
+   178→        shippingCode: form.postalCode,
+   179→        expedition,
+   180→        shippingCost,
+   181→        paymentMethod: payment,
+   182→        userId: user?.id || null,
+   183→        voucherCode: voucherApplied ? voucherCode.toUpperCase() : null,
+   184→        voucherDisc: voucherDiscount,
+   185→        subtotal,
+   186→        discount: savings + voucherDiscount,
+   187→        total,
+   188→      };
+   189→
+   190→      const res = await fetch('/api/orders', {
+   191→        method: 'POST',
+   192→        headers: { 'Content-Type': 'application/json' },
+   193→        body: JSON.stringify(orderData),
+   194→      });
+   195→
+   196→      const data = await res.json();
+   197→
+   198→      if (data.success) {
+   199→        const pointsEarned = Math.floor(total / 10000);
+   200→        toast.success(t('checkout.success', lang), {
+   201→          description: `${t('checkout.orderNumber', lang)}: ${data.orderNumber}${pointsEarned > 0 ? ` | ${t('checkout.pointsEarned', lang)}: ${pointsEarned}` : ''}`,
+   202→          duration: 5000,
+   203→        });
+   204→        clearCart();
+   205→        setPage('dashboard', { tab: 'orders' });
+   206→      } else {
+   207→        toast.error(data.message || (lang === 'id' ? 'Gagal membuat pesanan' : 'Failed to place order'));
+   208→      }
+   209→    } catch {
+   210→      toast.error(lang === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+   211→    } finally {
+   212→      setSubmitting(false);
+   213→    }
+   214→  };
+   215→
+   216→  if (items.length === 0) {
+   217→    return (
+   218→      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4">
+   219→        <motion.div
+   220→          initial={{ scale: 0.8, opacity: 0 }}
+   221→          animate={{ scale: 1, opacity: 1 }}
+   222→          className="flex h-24 w-24 items-center justify-center rounded-full bg-muted"
+   223→        >
+   224→          <Package className="h-12 w-12 text-muted-foreground/50" />
+   225→        </motion.div>
+   226→        <p className="text-muted-foreground font-medium">{t('cart.empty', lang)}</p>
+   227→        <Button
+   228→          variant="outline"
+   229→          onClick={() => setPage('catalog')}
+   230→          className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"
+   231→        >
+   232→          {t('cart.continue', lang)}
+   233→        </Button>
+   234→      </div>
+   235→    );
+   236→  }
+   237→
+   238→  const updateField = (field: string, value: string) => {
+   239→    setForm((prev) => ({ ...prev, [field]: value }));
+   240→    if (formErrors[field]) {
+   241→      setFormErrors((prev) => {
+   242→        const next = { ...prev };
+   243→        delete next[field];
+   244→        return next;
+   245→      });
+   246→    }
+   247→  };
+   248→
+   249→  return (
+   250→    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+   251→      {/* Back Button + Title */
+   252→      }
+   253→      <motion.div
+   254→        initial={{ opacity: 0, y: -10 }}
+   255→        animate={{ opacity: 1, y: 0 }}
+   256→        className="mb-6"
+   257→      >
+   258→        <button
+   259→          onClick={() => setPage('catalog')}
+   260→          className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+   261→        >
+   262→          <ArrowLeft className="h-4 w-4" />
+   263→          {t('general.back', lang)}
+   264→        </button>
+   265→        <h1 className="font-heading text-2xl font-bold sm:text-3xl">{t('checkout.title', lang)}</h1>
+   266→      </motion.div>
+   267→
+   268→      {/* Step Indicator - Interactive Stepper */
+   269→      <motion.div
+   270→        initial={{ opacity: 0, y: -5 }}
+   271→        animate={{ opacity: 1, y: 0 }}
+   272→        transition={{ delay: 0.05 }}
+   273→        className="mb-8"
+   274→      >
+   275→        <div className="flex items-center justify-center gap-0 sm:gap-0">
+   276→          {STEPS.map((step, idx) => {
+   277→            const Icon = step.icon;
+   278→            return (
+   279→              <div key={step.key} className="flex items-center">
+   280→                <button
+   281→                  type="button"
+   282→                  onClick={() => scrollToSection(idx)}
+   283→                  className="flex flex-col items-center gap-1.5 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-lg p-1"
+   284→                  aria-label={t(step.labelId, lang)}
+   285→                >
+   286→                  <motion.div
+   287→                    whileHover={{ scale: 1.08 }}
+   288→                    whileTap={{ scale: 0.95 }}
+   289→                    className="flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all duration-300 sm:h-10 sm:w-10 border-[#D4AF37] bg-[#D4AF37]/10 text-[#D4AF37] shadow-sm shadow-[#D4AF37]/20 group-hover:bg-[#D4AF37] group-hover:text-white"
+   290→                  >
+   291→                    <Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+   292→                  </motion.div>
+   293→                  <span className="text-[10px] sm:text-xs font-medium text-[#D4AF37] transition-colors group-hover:text-[#B8960C]">
+   294→                    {t(step.labelId, lang)}
+   295→                  </span>
+   296→                </button>
+   297→                {idx < STEPS.length - 1 && (
+   298→                  <div className="mx-2 sm:mx-4 h-px w-6 sm:w-12 lg:w-16 bg-[#D4AF37]/40 transition-colors duration-300" />
+   299→                )}
+   300→              </div>
+   301→            );
+   302→          })}
+   303→        </div>
+   304→      </motion.div>
+   305→
+   306→      {/* Two-Column Layout */
+   307→      <div className="grid gap-8 lg:grid-cols-3">
+   308→        {/* Left Column - Forms */
+   309→        <div className="flex flex-col gap-6 lg:col-span-2">
+   310→          {/* Shipping Address */}
+   311→          <motion.div
+   312→            ref={addressRef}
+   313→            initial={{ opacity: 0, y: 15 }}
+   314→            animate={{ opacity: 1, y: 0 }}
+   315→            transition={{ delay: 0.1 }}
+   316→          >
+   317→            <Card className="overflow-hidden">
+   318→              <CardContent className="p-5 sm:p-6">
+   319→                <div className="mb-5 flex items-center gap-2.5">
+   320→                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#D4AF37]/10">
+   321→                    <MapPin className="h-4 w-4 text-[#D4AF37]" />
+   322→                  </div>
+   323→                  <h2 className="font-heading text-lg font-semibold">{t('checkout.address', lang)}</h2>
+   324→                </div>
+   325→                <div className="grid gap-4 sm:grid-cols-2">
+   326→                  <div className="space-y-1.5">
+   327→                    <Label htmlFor="name" className="text-sm font-medium">
+   328→                      {t('checkout.name', lang)} <span className="text-red-500">*</span>
+   329→                    </Label>
+   330→                    <Input
+   331→                      id="name"
+   332→                      value={form.name}
+   333→                      onChange={(e) => updateField('name', e.target.value)}
+   334→                      placeholder={lang === 'id' ? 'Masukkan nama lengkap' : 'Enter full name'}
+   335→                      className={`h-10 ${formErrors.name ? 'border-red-500' : ''}`}
+   336→                    />
+   337→                    {formErrors.name && (
+   338→                      <p className="text-xs text-red-500">{formErrors.name}</p>
+   339→                    )}
+   340→                  </div>
+   341→                  <div className="space-y-1.5">
+   342→                    <Label htmlFor="phone" className="text-sm font-medium">
+   343→                      {t('checkout.phone', lang)} <span className="text-red-500">*</span>
+   344→                    </Label>
+   345→                    <Input
+   346→                      id="phone"
+   347→                      value={form.phone}
+   348→                      onChange={(e) => updateField('phone', e.target.value)}
+   349→                      placeholder={lang === 'id' ? '08xxxxxxxxxx' : '08xxxxxxxxxx'}
+   350→                      className={`h-10 ${formErrors.phone ? 'border-red-500' : ''}`}
+   351→                    />
+   352→                    {formErrors.phone && (
+   353→                      <p className="text-xs text-red-500">{formErrors.phone}</p>
+   354→                    )}
+   355→                  </div>
+   356→                  <div className="space-y-1.5 sm:col-span-2">
+   357→                    <Label htmlFor="address" className="text-sm font-medium">
+   358→                      {t('checkout.addressField', lang)} <span className="text-red-500">*</span>
+   359→                    </Label>
+   360→                    <Input
+   361→                      id="address"
+   362→                      value={form.address}
+   363→                      onChange={(e) => updateField('address', e.target.value)}
+   364→                      placeholder={lang === 'id' ? 'Jl. Contoh No. 123, RT/RW, Kelurahan, Kecamatan' : 'Street, Ward, District'}
+   365→                      className={`h-10 ${formErrors.address ? 'border-red-500' : ''}`}
+   366→                    />
+   367→                    {formErrors.address && (
+   368→                      <p className="text-xs text-red-500">{formErrors.address}</p>
+   369→                    )}
+   370→                  </div>
+   371→                  <div className="space-y-1.5">
+   372→                    <Label htmlFor="city" className="text-sm font-medium">
+   373→                      {t('checkout.city', lang)} <span className="text-red-500">*</span>
+   374→                    </Label>
+   375→                    <Input
+   376→                      id="city"
+   377→                      value={form.city}
+   378→                      onChange={(e) => updateField('city', e.target.value)}
+   379→                      placeholder={lang === 'id' ? 'Jakarta Selatan' : 'South Jakarta'}
+   380→                      className={`h-10 ${formErrors.city ? 'border-red-500' : ''}`}
+   381→                    />
+   382→                    {formErrors.city && (
+   383→                      <p className="text-xs text-red-500">{formErrors.city}</p>
+   384→                    )}
+   385→                  </div>
+   386→                  <div className="space-y-1.5">
+   387→                    <Label htmlFor="postal" className="text-sm font-medium">
+   388→                      {t('checkout.postal', lang)} <span className="text-red-500">*</span>
+   389→                    </Label>
+   390→                    <Input
+   391→                      id="postal"
+   392→                      value={form.postalCode}
+   393→                      onChange={(e) => updateField('postalCode', e.target.value)}
+   394→                      placeholder="12345"
+   395→                      className={`h-10 ${formErrors.postalCode ? 'border-red-500' : ''}`}
+   396→                    />
+   397→                    {formErrors.postalCode && (
+   398→                      <p className="text-xs text-red-500">{formErrors.postalCode}</p>
+   399→                    )}
+   400→                  </div>
+   401→                </div>
+   402→              </CardContent>
+   403→            </Card>
+   404→          </motion.div>
+   405→
+   406→          {/* Expedition */}
+   407→          <motion.div
+   408→            ref={expeditionRef}
+   409→            initial={{ opacity: 0, y: 15 }}
+   410→            animate={{ opacity: 1, y: 0 }}
+   411→            transition={{ delay: 0.2 }}
+   412→          >
+   413→            <Card className="overflow-hidden">
+   414→              <CardContent className="p-5 sm:p-6">
+   415→                <div className="mb-5 flex items-center gap-2.5">
+   416→                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#D4AF37]/10">
+   417→                    <Truck className="h-4 w-4 text-[#D4AF37]" />
+   418→                  </div>
+   419→                  <h2 className="font-heading text-lg font-semibold">{t('checkout.expedition', lang)}</h2>
+   420→                </div>
+   421→                <RadioGroup value={expedition} onValueChange={setExpedition} className="grid gap-3">
+   422→                  {EXPEDITIONS.map((exp) => {
+   423→                    const isSelected = expedition === exp.id;
+   424→                    return (
+   425→                      <Label
+   426→                        key={exp.id}
+   427→                        htmlFor={exp.id}
+   428→                        className={`flex cursor-pointer items-center gap-4 rounded-lg border p-4 transition-all ${
+   429→                          isSelected
+   430→                            ? 'border-[#D4AF37] bg-[#D4AF37]/5 shadow-sm'
+   431→                            : 'border-border hover:border-[#D4AF37]/40'
+   432→                        }`}
+   433→                      >
+   434→                        <RadioGroupItem value={exp.id} id={exp.id} />
+   435→                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+   436→                          <Truck className={`h-5 w-5 ${isSelected ? 'text-[#D4AF37]' : 'text-muted-foreground'}`} />
+   437→                        </div>
+   438→                        <div className="flex-1">
+   439→                          <p className={`text-sm font-semibold ${isSelected ? 'text-[#D4AF37]' : ''}`}>
+   440→                            {exp.name}
+   441→                          </p>
+   442→                            <p className="text-xs text-muted-foreground">
+   443→                            {t('checkout.shippingNote', lang)}: {lang === 'id' ? exp.eta : exp.etaEn}
+   444→                          </p>
+   445→                        </div>
+   446→                        <p className={`text-sm font-bold ${isSelected ? 'text-[#D4AF37]' : ''}`}>
+   447→                          {formatPrice(exp.price, lang)}
+   448→                        </p>
+   449→                      </Label>
+   450→                    );
+   451→                  })}
+   452→                </RadioGroup>
+   453→              </CardContent>
+   454→            </Card>
+   455→          </motion.div>
+   456→
+   457→          {/* Payment Method */}
+   458→          <motion.div
+   459→            ref={paymentRef}
+   460→            initial={{ opacity: 0, y: 15 }}
+   461→            animate={{ opacity: 1, y: 0 }}
+   462→            transition={{ delay: 0.3 }}
+   463→          >
+   464→            <Card className="overflow-hidden">
+   465→              <CardContent className="p-5 sm:p-6">
+   466→                <div className="mb-5 flex items-center gap-2.5">
+   467→                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#D4AF37]/10">
+   468→                    <CreditCard className="h-4 w-4 text-[#D4AF37]" />
+   469→                  </div>
+   470→                  <h2 className="font-heading text-lg font-semibold">{t('checkout.payment', lang)}</h2>
+   471→                </div>
+   472→                <RadioGroup value={payment} onValueChange={setPayment} className="grid gap-3 sm:grid-cols-2">
+   473→                  {PAYMENT_METHODS.map((method) => {
+   474→                    const Icon = method.icon;
+   475→                    const isSelected = payment === method.id;
+   476→                    return (
+   477→                      <Label
+   478→                        key={method.id}
+   479→                        htmlFor={method.id}
+   480→                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all ${
+   481→                          isSelected
+   482→                            ? 'border-[#D4AF37] bg-[#D4AF37]/5 shadow-sm'
+   483→                            : 'border-border hover:border-[#D4AF37]/40'
+   484→                        }`}
+   485→                      >
+   486→                        <RadioGroupItem value={method.id} id={method.id} />
+   487→                        <div
+   488→                          className={`flex h-10 w-10 items-center justify-center rounded-full ${
+   489→                            isSelected ? 'bg-[#D4AF37]/10' : 'bg-muted'
+   490→                          }`}
+   491→                        >
+   492→                          <Icon
+   493→                            className={`h-5 w-5 ${
+   494→                              isSelected ? 'text-[#D4AF37]' : 'text-muted-foreground'
+   495→                            }`}
+   496→                          />
+   497→                        </div>
+   498→                        <div className="min-w-0">
+   499→                          <p
+   500→                            className={`text-sm font-semibold ${isSelected ? 'text-[#D4AF37]' : ''}`}
+   501→                          >
+   502→                            {method.name}
+   503→                          </p>
+   504→                          <p className="truncate text-xs text-muted-foreground">{method.desc}</p>
+   505→                        </div>
+   506→                      </Label>
+   507→                    );
+   508→                  })}
+   509→                </RadioGroup>
+   510→              </CardContent>
+   511→            </Card>
+   512→          </motion.div>
+   513→          <div ref={confirmRef}></div>
+   514→        </div>
+   515→
+   516→        {/* Right Column - Order Summary (Sticky) */
+   517→        <div className="lg:col-span-1">
+   518→          <motion.div
+   519→            initial={{ opacity: 0, x: 20 }}
+   520→            animate={{ opacity: 1, x: 0 }}
+   521→            transition={{ delay: 0.15 }}
+   522→            className="lg:sticky lg:top-24"
+   523→          >
+   524→            <Card className="overflow-hidden">
+   525→              <CardContent className="p-5 sm:p-6">
+   526→                <h2 className="mb-4 font-heading text-lg font-semibold">
+   527→                  {t('checkout.orderSummary', lang)}
+   528→                </h2>
+   529→
+   530→                {/* Compact Item List */}
+   531→                <div className="mb-4 flex max-h-60 flex-col gap-3 overflow-y-auto pr-1">
+   532→                  {items.map((item) => {
+   533→                    const price = item.book.discountPrice ?? item.book.price;
+   534→                    return (
+   535→                      <div key={item.book.id} className="flex gap-3">
+   536→                        <div className="relative h-14 w-10 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+   537→                          <img
+   538→                            src={item.book.coverImage}
+   539→                            alt={item.book.title}
+   540→                            className="h-full w-full object-cover"
+   541→                          />
+   542→                        </div>
+   543→                        <div className="min-w-0 flex-1">
+   544→                          <p className="line-clamp-1 text-xs font-medium">{item.book.title}</p>
+   545→                          <p className="text-[10px] text-muted-foreground">
+   546→                            {item.book.format} × {item.quantity}
+   547→                          </p>
+   548→                          <p className="text-xs font-semibold text-[#D4AF37]">
+   549→                            {formatPrice(price * item.quantity, lang)}
+   550→                          </p>
+   551→                        </div>
+   552→                      </div>
+   553→                    );
+   554→                  })}
+   555→                </div>
+   556→
+   557→                <Separator className="my-4" />
+   558→
+   559→                {/* Voucher */}
+   560→                <div className="mb-4">
+   561→                  <div className="flex gap-2">
+   562→                    <div className="relative flex-1">
+   563→                      <Tag className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   564→                      <Input
+   565→                        value={voucherCode}
+   566→                        onChange={(e) => {
+   567→                          setVoucherCode(e.target.value);
+   568→                          if (voucherApplied) {
+   569→                            setVoucherApplied(false);
+   570→                            setVoucherDiscount(0);
+   571→                            setVoucherError('');
+   572→                          }
+   573→                        }}
+   574→                        placeholder={t('cart.voucher', lang)}
+   575→                        className="pl-8 h-9 text-sm"
+   576→                        disabled={voucherApplied}
+   577→                        onKeyDown={(e) => e.key === 'Enter' && handleApplyVoucher()}
+   578→                      />
+   579→                    </div>
+   580→                    <Button
+   581→                      variant="outline"
+   582→                      size="sm"
+   583→                      onClick={handleApplyVoucher}
+   584→                      disabled={voucherLoading || voucherApplied || !voucherCode.trim()}
+   585→                      className="h-9 border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10 shrink-0 px-3"
+   586→                    >
+   587→                      {voucherLoading
+   588→                        ? t('general.loading', lang)
+   589→                        : voucherApplied
+   590→                          ? '✓'
+   591→                          : t('cart.applyVoucher', lang)}
+   592→                    </Button>
+   593→                  </div>
+   594→                  {voucherError && (
+   595→                    <p className="mt-1 text-xs text-red-500">{voucherError}</p>
+   596→                  )}
+   597→                  {voucherApplied && voucherDiscount > 0 && (
+   598→                    <motion.p
+   599→                      initial={{ opacity: 0, y: -4 }}
+   600→                      animate={{ opacity: 1, y: 0 }}
+   601→                      className="mt-1 text-xs text-green-600 dark:text-green-400"
+   602→                    >
+   603→                      {lang === 'id' ? 'Voucher aktif' : 'Voucher active'}: -{formatPrice(voucherDiscount, lang)}
+   604→                    </motion.p>
+   605→                  )}
+   606→                </div>
+   607→
+   608→                <Separator className="my-4" />
+   609→
+   610→                {/* Price Breakdown */}
+   611→                <div className="flex flex-col gap-2.5">
+   612→                  <div className="flex items-center justify-between text-sm">
+   613→                    <span className="text-muted-foreground">{t('cart.subtotal', lang)}</span>
+   614→                    <span className="font-medium">{formatPrice(subtotal, lang)}</span>
+   615→                  </div>
+   616→                  {savings > 0 && (
+   617→                    <div className="flex items-center justify-between text-sm">
+   618→                      <span className="text-green-600 dark:text-green-400">{t('cart.discount', lang)}</span>
+   619→                      <span className="text-green-600 dark:text-green-400 font-medium">
+   620→                        -{formatPrice(savings, lang)}
+   621→                      </span>
+   622→                    </div>
+   623→                  )}
+   624→                  {voucherApplied && voucherDiscount > 0 && (
+   625→                    <div className="flex items-center justify-between text-sm">
+   626→                      <span className="text-green-600 dark:text-green-400">Voucher</span>
+   627→                      <span className="text-green-600 dark:text-green-400 font-medium">
+   628→                        -{formatPrice(voucherDiscount, lang)}
+   629→                      </span>
+   630→                    </div>
+   631→                  )}
+   632→                  <div className="flex items-center justify-between text-sm">
+   633→                    <span className="text-muted-foreground">{t('cart.shipping', lang)}</span>
+   634→                    <div className="text-right">
+   635→                      <span className="block font-medium">{formatPrice(shippingCost, lang)}</span>
+   636→                      {(() => {
+   637→                        const selectedExp = EXPEDITIONS.find(e => e.id === expedition);
+   638→                        return selectedExp ? (
+   639→                          <span className="text-[10px] text-muted-foreground">
+   640→                            {t('checkout.shippingNote', lang)}: {lang === 'id' ? selectedExp.eta : selectedExp.etaEn}
+   641→                          </span>
+   642→                        ) : null;
+   643→                      })()}
+   644→                    </div>
+   645→                  </div>
+   646→
+   647→                  <Separator />
+   648→
+   649→                  <div className="flex items-center justify-between">
+   650→                    <span className="font-semibold">{t('cart.total', lang)}</span>
+   651→                    <span className="text-xl font-bold text-[#D4AF37]">{formatPrice(total, lang)}</span>
+   652→                  </div>
+   653→                </div>
+   654→
+   655→                {/* Points earned */}
+   656→                {total >= 10000 && (
+   657→                  <div className="mt-2 flex items-center justify-between rounded-lg bg-[#D4AF37]/5 px-3 py-2 text-sm">
+   658→                    <span className="text-muted-foreground">{t('checkout.pointsEarned', lang)}</span>
+   659→                    <span className="font-bold text-[#D4AF37]">
+   660→                      +{Math.floor(total / 10000)} {t('points.label', lang)}
+   661→                    </span>
+   662→                  </div>
+   663→                )}
+   664→
+   665→                {/* Place Order Button */}
+   666→                <Button
+   667→                  onClick={handleSubmit}
+   668→                  disabled={submitting}
+   669→                  className="mt-5 h-12 w-full bg-[#D4AF37] text-black font-semibold text-sm hover:bg-[#C4A030] disabled:opacity-60"
+   670→                >
+   671→                  {submitting ? (
+   672→                    <span className="flex items-center gap-2">
+   673→                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+   674→                      {t('general.loading', lang)}
+   675→                    </span>
+   676→                  ) : (
+   677→                    t('checkout.placeOrder', lang)
+   678→                  )}
+   679→                </Button>
+   680→              </CardContent>
+   681→            </Card>
+   682→          </motion.div>
+   683→        </div>
+   684→      </div>
+   685→    </div>
+   686→  );
+   687→}
+   688→

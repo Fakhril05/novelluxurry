@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Star,
@@ -15,10 +15,14 @@ import {
   Globe,
   Hash,
   AlertCircle,
+  Twitter,
+  Facebook,
+  Link as LinkIcon,
+  MessageCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
@@ -60,12 +64,31 @@ const FORMAT_PRICE_MULTIPLIER: Record<FormatOption, number> = {
   Ebook: 0.7,
 };
 
+/** Generate simulated rating distribution from average */
+function getRatingDistribution(avgRating: number, totalReviews: number) {
+  // Create a bell-curve-like distribution based on the average rating
+  const base = totalReviews || 1;
+  const dist: number[] = [0, 0, 0, 0, 0]; // 5★, 4★, 3★, 2★, 1★
+  for (let i = 0; i < 5; i++) {
+    const starVal = 5 - i;
+    const diff = Math.abs(starVal - avgRating);
+    dist[i] = Math.max(5, Math.round(base * Math.exp(-diff * diff * 0.5)));
+  }
+  // Normalize so sum matches totalReviews
+  const sum = dist.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < 5; i++) {
+    dist[i] = Math.round((dist[i] / sum) * base);
+  }
+  return dist;
+}
+
 export default function BookDetailPage() {
   const {
     pageParams,
     locale,
     setPage,
     isAuthenticated,
+    user,
     wishlist,
     toggleWishlist,
   } = useAppStore();
@@ -115,6 +138,12 @@ export default function BookDetailPage() {
     : 0;
   const isWished = book ? wishlist.includes(book.id) : false;
 
+  // Rating distribution
+  const ratingDistribution = useMemo(
+    () => getRatingDistribution(book?.rating ?? 0, reviews.length),
+    [book?.rating, reviews.length]
+  );
+
   const fetchBook = useCallback(async () => {
     if (!slug) return;
     setLoading(true);
@@ -123,14 +152,25 @@ export default function BookDetailPage() {
     const controller = new AbortController();
 
     try {
-      // Fetch book with reviews
-      const res = await fetch(`/api/books/${slug}?includeReviews=true`, {
+      const res = await fetch(`/api/books/${slug}`, {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error('Failed to fetch book');
       const data = await res.json();
-      setBook(data.book || data);
+      const bookData = data.book || data;
+      setBook(bookData);
       setReviews(data.reviews || []);
+
+      // Track recently viewed
+      if (bookData?.id) {
+        try {
+          let ids: string[] = JSON.parse(localStorage.getItem('noveluxe-recently-viewed') || '[]');
+          ids = ids.filter((id: string) => id !== bookData.id);
+          ids.unshift(bookData.id);
+          ids = ids.slice(0, 8);
+          localStorage.setItem('noveluxe-recently-viewed', JSON.stringify(ids));
+        } catch { /* ignore */ }
+      }
 
       // Fetch recommendations
       if (data.book?.categoryId || data?.categoryId) {
@@ -204,23 +244,51 @@ export default function BookDetailPage() {
       toast.error(locale === 'id' ? 'Pilih rating terlebih dahulu' : 'Please select a rating first');
       return;
     }
+    if (!user) return;
     setSubmittingReview(true);
     try {
-      const res = await fetch(`/api/books/${slug}/reviews`, {
+      const res = await fetch('/api/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
+        body: JSON.stringify({
+          bookId: book.id,
+          rating: reviewRating,
+          comment: reviewComment.trim() || null,
+          userId: user.id,
+        }),
       });
       if (res.ok) {
-        toast.success(locale === 'id' ? 'Ulasan berhasil dikirim' : 'Review submitted successfully');
+        const result = await res.json();
+        toast.success(t('book.reviewSuccess', locale));
+
+        // Append new review to the displayed list
+        const newReview: Review = {
+          id: result.review.id,
+          rating: result.review.rating,
+          comment: result.review.comment,
+          userId: result.review.userId,
+          user: {
+            id: user.id,
+            name: user.name,
+            avatar: null,
+          },
+          createdAt: result.review.createdAt,
+        };
+        setReviews((prev) => [newReview, ...prev]);
+
+        // Update book rating display
+        setBook((prev) => {
+          if (!prev) return prev;
+          const newReviewCount = prev.reviewCount + 1;
+          const newAvgRating = Math.round(
+            ((prev.rating * prev.reviewCount + reviewRating) / newReviewCount) * 10
+          ) / 10;
+          return { ...prev, rating: newAvgRating, reviewCount: newReviewCount };
+        });
+
+        // Reset form
         setReviewRating(0);
         setReviewComment('');
-        // Refetch reviews
-        const dataRes = await fetch(`/api/books/${slug}?includeReviews=true`);
-        if (dataRes.ok) {
-          const data = await dataRes.json();
-          setReviews(data.reviews || []);
-        }
       } else {
         toast.error(locale === 'id' ? 'Gagal mengirim ulasan' : 'Failed to submit review');
       }
@@ -228,6 +296,27 @@ export default function BookDetailPage() {
       toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const handleShare = (platform: string) => {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const text = book?.title ?? '';
+    switch (platform) {
+      case 'twitter':
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+        break;
+      case 'facebook':
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+        break;
+      case 'whatsapp':
+        window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
+        break;
+      case 'copy':
+        navigator.clipboard.writeText(url).then(() => {
+          toast.success(locale === 'id' ? 'Link berhasil disalin!' : 'Link copied!');
+        });
+        break;
     }
   };
 
@@ -543,7 +632,8 @@ export default function BookDetailPage() {
                     ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50'
                     : 'bg-red-500'
                 }`}
-              />\n              <span
+              />
+              <span
                 className={`text-sm font-medium ${
                   book.stock > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
                 }`}
@@ -561,7 +651,13 @@ export default function BookDetailPage() {
               )}
             </div>
 
-            <Separator />
+            {/* Gold Gradient Divider */}
+            <div
+              className="h-px w-full"
+              style={{
+                background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+              }}
+            />
 
             {/* Quantity Selector */}
             <div className="flex items-center gap-4">
@@ -624,11 +720,19 @@ export default function BookDetailPage() {
               </Button>
             </div>
 
-            {/* Book Meta Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4">
+            {/* Gold Gradient Divider */}
+            <div
+              className="h-px w-full"
+              style={{
+                background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+              }}
+            />
+
+            {/* Book Meta Grid with gold left borders */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               {book.pages && (
-                <div className="flex items-center gap-2.5 text-sm">
-                  <BookOpen className="h-4 w-4 text-[#D4AF37] shrink-0" />
+                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+                  <BookOpen className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
                   <div>
                     <p className="text-muted-foreground text-xs">
                       {t('book.pages', locale)}
@@ -638,19 +742,19 @@ export default function BookDetailPage() {
                 </div>
               )}
               {book.publisher && (
-                <div className="flex items-center gap-2.5 text-sm">
-                  <Building className="h-4 w-4 text-[#D4AF37] shrink-0" />
+                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+                  <Building className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
                   <div>
                     <p className="text-muted-foreground text-xs">
                       {t('book.publisher', locale)}
                     </p>
-                    <p className="font-medium truncate max-w-[140px]">{book.publisher}</p>
+                    <p className="font-medium truncate max-w-[160px]">{book.publisher}</p>
                   </div>
                 </div>
               )}
               {book.publishedYear && (
-                <div className="flex items-center gap-2.5 text-sm">
-                  <Calendar className="h-4 w-4 text-[#D4AF37] shrink-0" />
+                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+                  <Calendar className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
                   <div>
                     <p className="text-muted-foreground text-xs">
                       {t('book.year', locale)}
@@ -659,8 +763,8 @@ export default function BookDetailPage() {
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-2.5 text-sm">
-                <Globe className="h-4 w-4 text-[#D4AF37] shrink-0" />
+              <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+                <Globe className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
                 <div>
                   <p className="text-muted-foreground text-xs">
                     {t('book.language', locale)}
@@ -669,14 +773,59 @@ export default function BookDetailPage() {
                 </div>
               </div>
               {book.isbn && (
-                <div className="flex items-center gap-2.5 text-sm">
-                  <Hash className="h-4 w-4 text-[#D4AF37] shrink-0" />
+                <div className="flex items-start gap-3 text-sm border-l-2 border-[#D4AF37]/40 pl-3 py-1">
+                  <Hash className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
                   <div>
                     <p className="text-muted-foreground text-xs">ISBN</p>
-                    <p className="font-medium text-xs truncate max-w-[140px]">{book.isbn}</p>
+                    <p className="font-medium text-xs truncate max-w-[160px]">{book.isbn}</p>
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Gold Gradient Divider */}
+            <div
+              className="h-px w-full"
+              style={{
+                background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+              }}
+            />
+
+            {/* Share Row */}
+            <div className="flex items-center gap-3 pt-1">
+              <span className="text-sm font-medium text-muted-foreground shrink-0">
+                {t('book.share', locale)}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleShare('twitter')}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#1DA1F2] hover:border-[#1DA1F2]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+                  aria-label="Share on Twitter"
+                >
+                  <Twitter className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleShare('facebook')}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#1877F2] hover:border-[#1877F2]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+                  aria-label="Share on Facebook"
+                >
+                  <Facebook className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleShare('whatsapp')}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#25D366] hover:border-[#25D366]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+                  aria-label="Share on WhatsApp"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleShare('copy')}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground hover:text-[#D4AF37] hover:border-[#D4AF37]/40 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+                  aria-label="Copy link"
+                >
+                  <LinkIcon className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -688,75 +837,138 @@ export default function BookDetailPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full justify-start bg-muted/50 h-auto p-1 rounded-xl border border-border overflow-x-auto relative">
+          {/* Custom Tab Navigation */}
+          <div className="w-full">
+            <div className="w-full flex justify-start bg-muted/50 h-auto p-1 rounded-xl border border-border overflow-x-auto relative">
               <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/30 to-transparent" aria-hidden="true" />
-              <TabsTrigger
-                value="synopsis"
-                className="flex-1 sm:flex-none data-[state=active]:text-[#D4AF37] data-[state=active]:bg-transparent rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:w-3/4 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-[#D4AF37]"
-              >
-                {t('book.synopsis', locale)}
-              </TabsTrigger>
-              <TabsTrigger
-                value="author"
-                className="flex-1 sm:flex-none data-[state=active]:text-[#D4AF37] data-[state=active]:bg-transparent rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:w-3/4 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-[#D4AF37]"
-              >
-                {t('book.author', locale)}
-              </TabsTrigger>
-              <TabsTrigger
-                value="reviews"
-                className="flex-1 sm:flex-none data-[state=active]:text-[#D4AF37] data-[state=active]:bg-transparent rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:w-3/4 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-[#D4AF37]"
-              >
-                {t('book.reviews', locale)} ({reviews.length})
-              </TabsTrigger>
-            </TabsList>
+              {['synopsis', 'author', 'reviews'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 sm:flex-none rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative ${
+                    activeTab === tab
+                      ? 'text-[#D4AF37] bg-transparent after:content-[\'\'] after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-3/4 after:h-0.5 after:rounded-full after:bg-[#D4AF37]'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {tab === 'synopsis' && t('book.synopsis', locale)}
+                  {tab === 'author' && t('book.author', locale)}
+                  {tab === 'reviews' && `${t('book.reviews', locale)} (${reviews.length})`}
+                </button>
+              ))}
+            </div>
 
-            {/* Synopsis Tab */}
-            <TabsContent value="synopsis" className="mt-6">
+            {/* Tab Panels */}
+            <div className="mt-6">
+              {activeTab === 'synopsis' && (
+                <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
+                  {book.synopsis ? (
+                    <div className="prose prose-sm sm:prose max-w-none text-muted-foreground leading-relaxed whitespace-pre-line">
+                      {book.synopsis}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground italic">
+                      {locale === 'id'
+                        ? 'Sinopsis belum tersedia untuk buku ini.'
+                        : 'Synopsis is not yet available for this book.'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'author' && (
+                <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
+                  {book.authorBio ? (
+                    <div className="prose prose-sm sm:prose max-w-none text-muted-foreground leading-relaxed whitespace-pre-line">
+                      {book.authorBio}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground italic">
+                      {locale === 'id'
+                        ? 'Informasi penulis belum tersedia.'
+                        : 'Author information is not yet available.'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'reviews' && (
+                <div className="space-y-6">
+              {/* Rating Distribution Summary */}
               <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
-                {book.synopsis ? (
-                  <div className="prose prose-sm sm:prose max-w-none text-muted-foreground leading-relaxed whitespace-pre-line">
-                    {book.synopsis}
+                <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
+                  {/* Left: Overall Rating */}
+                  <div className="flex flex-col items-center justify-center shrink-0">
+                    <p className="text-5xl font-bold text-foreground">{book.rating.toFixed(1)}</p>
+                    <div className="flex items-center mt-1.5 gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`h-4 w-4 ${
+                            i < Math.floor(book.rating)
+                              ? 'fill-[#D4AF37] text-[#D4AF37]'
+                              : i < book.rating
+                              ? 'fill-[#D4AF37]/50 text-[#D4AF37]'
+                              : 'text-muted-foreground/30'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1.5">
+                      {reviews.length} {locale === 'id' ? 'ulasan' : 'reviews'}
+                    </p>
                   </div>
-                ) : (
-                  <p className="text-muted-foreground italic">
-                    {locale === 'id'
-                      ? 'Sinopsis belum tersedia untuk buku ini.'
-                      : 'Synopsis is not yet available for this book.'}
-                  </p>
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Author Tab */}
-            <TabsContent value="author" className="mt-6">
-              <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
-                {book.authorBio ? (
-                  <div className="prose prose-sm sm:prose max-w-none text-muted-foreground leading-relaxed whitespace-pre-line">
-                    {book.authorBio}
+                  {/* Right: Rating Bars */}
+                  <div className="flex-1 space-y-2">
+                    {ratingDistribution.map((count, idx) => {
+                      const starVal = 5 - idx;
+                      const pct = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+                      return (
+                        <div key={starVal} className="flex items-center gap-2.5">
+                          <span className="text-sm font-medium text-muted-foreground w-8 text-right">
+                            {starVal}★
+                          </span>
+                          <div className="flex-1 h-2.5 rounded-full bg-muted/80 overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500 ease-out"
+                              style={{
+                                width: `${Math.min(pct, 100)}%`,
+                                background: `linear-gradient(to right, #D4AF37, #B8960C)`,
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground w-8 text-right">
+                            {count}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                ) : (
-                  <p className="text-muted-foreground italic">
-                    {locale === 'id'
-                      ? 'Informasi penulis belum tersedia.'
-                      : 'Author information is not yet available.'}
-                  </p>
-                )}
+                </div>
               </div>
-            </TabsContent>
 
-            {/* Reviews Tab */}
-            <TabsContent value="reviews" className="mt-6 space-y-6">
-              {/* Write Review Form (authenticated users) */}
-              {isAuthenticated && (
-                <div className="rounded-xl border border-border bg-card p-6 sm:p-8 space-y-5">
-                  <h3 className="font-heading text-lg font-semibold">
+              {/* Gold gradient divider */}
+              <div
+                className="h-px w-full"
+                style={{
+                  background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+                }}
+              />
+
+              {/* Write Review Form (authenticated users only) */}
+              {isAuthenticated ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border border-[#D4AF37]/20 bg-card p-6 sm:p-8 space-y-5"
+                >
+                  <h3 className="font-heading text-lg font-semibold text-gradient-gold">
                     {t('book.writeReview', locale)}
                   </h3>
                   {/* Star selector */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground">
-                      {locale === 'id' ? 'Rating' : 'Rating'}
+                      {t('book.ratingLabel', locale)}
                     </label>
                     <div className="flex items-center gap-1">
                       {Array.from({ length: 5 }).map((_, i) => (
@@ -764,7 +976,7 @@ export default function BookDetailPage() {
                           key={i}
                           onClick={() => setReviewRating(i + 1)}
                           onMouseEnter={() => {}}
-                          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-sm p-0.5"
+                          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-sm p-0.5 transition-transform hover:scale-110"
                           aria-label={`Rate ${i + 1} star${i > 0 ? 's' : ''}`}
                         >
                           <Star
@@ -777,7 +989,7 @@ export default function BookDetailPage() {
                         </button>
                       ))}
                       {reviewRating > 0 && (
-                        <span className="ml-2 text-sm text-muted-foreground">
+                        <span className="ml-2 text-sm font-medium text-[#D4AF37]">
                           {reviewRating}/5
                         </span>
                       )}
@@ -786,19 +998,24 @@ export default function BookDetailPage() {
                   {/* Comment textarea */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground">
-                      {locale === 'id' ? 'Ulasan' : 'Review'}
+                      {t('book.reviewLabel', locale)}
                     </label>
                     <Textarea
                       value={reviewComment}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      placeholder={
-                        locale === 'id'
-                          ? 'Tulis ulasan kamu tentang buku ini...'
-                          : 'Write your review about this book...'
-                      }
+                      onChange={(e) => {
+                        if (e.target.value.length <= 500) {
+                          setReviewComment(e.target.value);
+                        }
+                      }}
+                      placeholder={t('book.reviewPlaceholder', locale)}
                       rows={4}
                       className="resize-none rounded-xl border-border focus-visible:ring-[#D4AF37]"
                     />
+                    <div className="flex justify-end">
+                      <span className={`text-xs ${reviewComment.length >= 500 ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+                        {reviewComment.length}/500
+                      </span>
+                    </div>
                   </div>
                   <Button
                     onClick={handleSubmitReview}
@@ -807,10 +1024,32 @@ export default function BookDetailPage() {
                   >
                     {submittingReview
                       ? t('general.loading', locale)
-                      : t('book.writeReview', locale)}
+                      : t('book.submitReview', locale)}
+                  </Button>
+                </motion.div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
+                  <Heart className="mx-auto h-8 w-8 text-muted-foreground/30 mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    {t('book.loginToReview', locale)}
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="mt-3 border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10"
+                    onClick={() => setPage('login')}
+                  >
+                    {t('auth.login', locale)}
                   </Button>
                 </div>
               )}
+
+              {/* Gold gradient divider */}
+              <div
+                className="h-px w-full"
+                style={{
+                  background: 'linear-gradient(to right, transparent, #D4AF37, rgba(212,175,55,0.3), transparent)',
+                }}
+              />
 
               {/* Reviews List */}
               <div className="space-y-4">
@@ -869,8 +1108,10 @@ export default function BookDetailPage() {
                   </div>
                 )}
               </div>
-            </TabsContent>
-          </Tabs>
+                </div>
+              )}
+            </div>
+          </div>
         </motion.div>
 
         {/* ---- Recommendations Section ---- */}
@@ -881,20 +1122,31 @@ export default function BookDetailPage() {
             transition={{ duration: 0.5, delay: 0.4 }}
             className="space-y-6 pt-4"
           >
-            <div className="flex items-center justify-between">
-              <h2 className="font-heading text-2xl font-bold tracking-tight">
-                {t('book.recommendations', locale)}
-              </h2>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <h2 className="font-heading text-2xl font-bold tracking-tight text-gradient-gold">
+                  {t('book.recommendations', locale)}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {locale === 'id'
+                    ? 'Berdasarkan kategori yang sama'
+                    : 'Based on the same category'}
+                </p>
+              </div>
               <button
                 onClick={() => setPage('catalog')}
-                className="text-sm font-medium text-[#D4AF37] hover:text-[#B8960C] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-md"
+                className="text-sm font-medium text-[#D4AF37] hover:text-[#B8960C] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-md px-3 py-1.5 border border-[#D4AF37]/20 hover:border-[#D4AF37]/40"
               >
                 {t('general.viewAll', locale)} →
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+            {/* Gold divider */}
+            <div className="h-px w-full" style={{ background: 'linear-gradient(to right, #D4AF37, rgba(212,175,55,0.2), transparent)' }} />
+            <div className="flex gap-5 overflow-x-auto scrollbar-hide pb-4 snap-x snap-mandatory px-1">
               {recommendations.map((recBook, idx) => (
-                <BookCard key={recBook.id} book={recBook} index={idx} />
+                <div key={recBook.id} className="w-[180px] sm:w-[200px] shrink-0 snap-start">
+                  <BookCard book={recBook} index={idx} />
+                </div>
               ))}
             </div>
           </motion.section>

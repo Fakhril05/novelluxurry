@@ -117,7 +117,7 @@ function LoginPage({ locale, setPage, setUser }: AuthPageProps) {
 
           <div className="space-y-1.5">
             <CardTitle className="font-heading text-2xl">
-              Masuk ke Noveluxe
+              {locale === 'id' ? 'Masuk ke Noveluxe' : 'Sign In to Noveluxe'}
             </CardTitle>
             <CardDescription>
               {locale === 'id'
@@ -343,7 +343,7 @@ function RegisterPage({ locale, setPage, setUser }: AuthPageProps) {
 
           <div className="space-y-1.5">
             <CardTitle className="font-heading text-2xl">
-              Buat Akun Baru
+              {locale === 'id' ? 'Buat Akun Baru' : 'Create New Account'}
             </CardTitle>
             <CardDescription>
               {locale === 'id'
