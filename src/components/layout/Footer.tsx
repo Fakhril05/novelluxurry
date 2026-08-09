@@ -68,16 +68,19 @@ export default function Footer() {
 
       <footer className="bg-[#111111] text-white mt-auto">
         {/* Subtle gold gradient line at the very top of footer */}
-        <div className="h-px bg-gradient-to-r from-transparent via-[#D4AF37]/40 to-transparent" />
+        <div className="h-px bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent" />
 
         {/* Newsletter Section */}
         <div className="border-b border-white/10">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
               <div className="max-w-md">
-                <h3 className="font-heading text-2xl md:text-3xl font-bold">
+                <h3 className="font-heading text-2xl md:text-3xl font-bold flex items-center gap-2 flex-wrap">
                   {t('newsletter.title', locale).split(' ').slice(0, -1).join(' ')}{' '}
-                  <span className="text-[#E8D48B]">{t('newsletter.title', locale).split(' ').pop()}</span>
+                  <span className="text-[#E8D48B] relative">
+                    {t('newsletter.title', locale).split(' ').pop()}
+                    <span className="absolute -top-1 -right-2.5 w-2 h-2 rounded-full bg-[#D4AF37]" style={{ animation: 'pulse-gold 2s ease-in-out infinite' }} />
+                  </span>
                 </h3>
                 <p className="mt-2 text-white/50 text-sm leading-relaxed">
                   {t('newsletter.subtitle', locale)}
@@ -89,7 +92,7 @@ export default function Footer() {
                   type="email"
                   required
                   placeholder={t('newsletter.placeholder', locale)}
-                  className="h-11 w-full md:w-72 bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-[#D4AF37]/50 focus-visible:border-[#D4AF37]/50"
+                  className="h-11 w-full md:w-72 bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-[#D4AF37] focus-visible:border-[#D4AF37] shadow-[0_0_0_0_rgba(212,175,55,0)] focus-visible:shadow-[0_0_0_3px_rgba(212,175,55,0.15)] transition-all duration-300"
                 />
                 <Button
                   type="submit"
@@ -142,8 +145,8 @@ export default function Footer() {
                       flex h-9 w-9 items-center justify-center rounded-full
                       bg-white/5 border border-white/10
                       text-white/50
-                      hover:bg-[#D4AF37]/20 hover:border-[#D4AF37]/40 hover:text-[#D4AF37] hover:scale-110
-                      transition-all duration-300
+                      hover:bg-[#D4AF37]/20 hover:border-[#D4AF37]/40 hover:text-[#D4AF37]
+                      transition-all duration-300 hover:scale-110 hover:-translate-y-0.5
                     "
                   >
                     <Icon className="h-4 w-4" />

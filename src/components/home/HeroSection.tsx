@@ -2,7 +2,7 @@
 
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Star, Sparkles, TrendingUp, BookOpen, Users } from 'lucide-react';
+import { ArrowRight, Star, Sparkles, BookOpen, Users, Bookmark, Gem } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppStore, formatPrice } from '@/lib/store';
 import { t } from '@/lib/i18n';
@@ -36,6 +36,18 @@ export default function HeroSection({ featuredBook, onExplore, onViewBook }: Her
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
       </div>
+
+      {/* Animated gradient orbs for depth */}
+      <div className="absolute top-10 right-10 w-[500px] h-[500px] bg-[#D4AF37] rounded-full blur-[100px] opacity-15 pointer-events-none z-[1]" />
+      <div className="absolute bottom-20 -left-20 w-[400px] h-[400px] bg-[#C87533] rounded-full blur-[120px] opacity-10 pointer-events-none z-[1]" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[#E8D48B] rounded-full blur-[80px] opacity-[0.07] pointer-events-none z-[1]" />
+
+      {/* Floating decorative icons */}
+      <BookOpen className="absolute top-[15%] right-[12%] w-6 h-6 text-[#D4AF37] opacity-20 pointer-events-none z-[2]" style={{ animation: 'float 6s ease-in-out infinite' }} />
+      <Star className="absolute top-[25%] left-[8%] w-5 h-5 text-[#D4AF37] opacity-15 pointer-events-none z-[2]" style={{ animation: 'float 5s ease-in-out 1s infinite' }} />
+      <Sparkles className="absolute bottom-[30%] right-[18%] w-5 h-5 text-[#D4AF37] opacity-[0.18] pointer-events-none z-[2]" style={{ animation: 'float 7s ease-in-out 0.5s infinite' }} />
+      <Bookmark className="absolute bottom-[40%] left-[15%] w-4 h-4 text-[#D4AF37] opacity-15 pointer-events-none z-[2]" style={{ animation: 'float 5.5s ease-in-out 2s infinite' }} />
+      <Gem className="absolute top-[60%] right-[8%] w-4 h-4 text-[#F5E6A3] opacity-[0.12] pointer-events-none z-[2]" style={{ animation: 'float 6.5s ease-in-out 1.5s infinite' }} />
 
       {/* Content */}
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pt-20">
@@ -91,13 +103,15 @@ export default function HeroSection({ featuredBook, onExplore, onViewBook }: Her
                 </Button>
               </div>
 
-              {/* Stats with Animated Counters */}
-              <div className="mt-12 flex items-center gap-6 sm:gap-8 justify-center lg:justify-start">
-                <StatCounter icon={Users} value={10847} suffix="+" label={t('hero.readers', locale)} locale={locale} />
-                <div className="h-8 w-px bg-white/20" />
-                <StatCounter icon={BookOpen} value={524} suffix="+" label={t('hero.titles', locale)} locale={locale} />
-                <div className="h-8 w-px bg-white/20" />
-                <StatCounter icon={Star} value={4.9} suffix="" label={t('hero.rating', locale)} locale={locale} isRating />
+              {/* Stats with Animated Counters — Frosted Glass */}
+              <div className="mt-12 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-5 inline-block">
+                <div className="flex items-center gap-6 sm:gap-8 justify-center lg:justify-start">
+                  <StatCounter icon={Users} value={10847} suffix="+" label={t('hero.readers', locale)} locale={locale} />
+                  <div className="h-8 w-px bg-white/20" />
+                  <StatCounter icon={BookOpen} value={524} suffix="+" label={t('hero.titles', locale)} locale={locale} />
+                  <div className="h-8 w-px bg-white/20" />
+                  <StatCounter icon={Star} value={4.9} suffix="" label={t('hero.rating', locale)} locale={locale} isRating />
+                </div>
               </div>
             </motion.div>
           </div>

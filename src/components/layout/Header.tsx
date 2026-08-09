@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from 'next-themes';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sun, Moon, ShoppingCart, Search, Menu, X, BookOpen, Heart, User, Globe, LogIn, LayoutDashboard, LogOut, TrendingUp, Clock, ArrowUp } from 'lucide-react';
+import { Sun, Moon, ShoppingCart, Search, Menu, X, BookOpen, Heart, User, Globe, LogIn, LayoutDashboard, LogOut, TrendingUp, Clock, ArrowUp, GitCompare } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,14 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/lib/cart-store';
 import { useAppStore, formatPrice } from '@/lib/store';
 import { t } from '@/lib/i18n';
-
-const TRENDING_SEARCHES = [
-  { id: 'Laut Bercerita', key: 'laut bercerita' },
-  { id: 'Filosofi Teras', key: 'filosofi teras' },
-  { id: 'Bumi Manusia', key: 'bumi manusia' },
-  { id: 'Pulang', key: 'pulang' },
-  { id: 'Laskar Pelangi', key: 'laskar pelangi' },
-];
 
 const navItems = [
   { labelKey: 'nav.home', page: 'home' as const },
@@ -58,13 +50,25 @@ export default function Header() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [highlightedIdx, setHighlightedIdx] = useState(-1);
+  const [trendingBooks, setTrendingBooks] = useState<any[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
   const searchTimeout = useRef<NodeJS.Timeout>();
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const totalItems = useCartStore((s) => s.getTotalItems());
   const openCart = useCartStore((s) => s.openCart);
-  const { page, locale, setLocale, user, isAuthenticated, setUser, setPage, wishlist, searchQuery, setSearchQuery, searchOpen, setSearchOpen } = useAppStore();
+  const { page, locale, setLocale, user, isAuthenticated, setUser, setPage, wishlist, comparison, searchQuery, setSearchQuery, searchOpen, setSearchOpen } = useAppStore();
+
+  useEffect(() => {
+    if (searchOpen && trendingBooks.length === 0) {
+      fetch('/api/books/trending')
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) setTrendingBooks(data);
+        })
+        .catch(() => {});
+    }
+  }, [searchOpen, trendingBooks.length]);
 
   const searchHistory = getSearchHistory();
   const showTrending = searchOpen && !searchQuery.trim() && searchHistory.length === 0;
@@ -215,14 +219,34 @@ export default function Header() {
                               </span>
                             </div>
                             <div className="space-y-0.5">
-                              {TRENDING_SEARCHES.map((s, idx) => (
+                              {trendingBooks.map((book, idx) => (
                                 <button
-                                  key={s.id}
-                                  onClick={() => { setSearchQuery(s.key); handleSearch(s.key); }}
-                                  className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm text-left transition-colors ${highlightedIdx === idx ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-foreground hover:bg-secondary/50'}`}
+                                  key={book.id}
+                                  onClick={() => {
+                                    if (book.slug) {
+                                      setPage('book-detail', { slug: book.slug });
+                                      setSearchOpen(false);
+                                      setSearchQuery('');
+                                    } else {
+                                      setSearchQuery(book.title);
+                                      handleSearch(book.title);
+                                    }
+                                  }}
+                                  className={`flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg text-sm text-left transition-colors ${highlightedIdx === idx ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-foreground hover:bg-secondary/50'}`}
                                 >
-                                  <span className="text-xs text-muted-foreground w-4 text-right">{idx + 1}</span>
-                                  <span>{s.id}</span>
+                                  <span className="text-xs text-muted-foreground w-4 text-right font-medium">{idx + 1}</span>
+                                  {book.coverImage ? (
+                                    <img src={book.coverImage} alt={book.title} className="h-7 w-5 rounded object-cover" />
+                                  ) : (
+                                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground/40" />
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm">{book.title}</p>
+                                    {book.author && <p className="text-[10px] text-muted-foreground truncate">{book.author}</p>}
+                                  </div>
+                                  {book.discountPrice || book.price ? (
+                                    <span className="text-[11px] font-semibold text-[#D4AF37] shrink-0">{formatPrice(book.discountPrice || book.price, locale)}</span>
+                                  ) : null}
                                 </button>
                               ))}
                             </div>
@@ -318,6 +342,12 @@ export default function Header() {
             <Button variant="ghost" size="icon" onClick={() => handleNavClick('wishlist')} className="relative h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Wishlist">
               <Heart className="h-4 w-4" />
               {wishlist.length > 0 && <span className="absolute -right-0.5 -top-0.5 h-4 min-w-4 flex items-center justify-center rounded-full bg-[#D4AF37] px-1 text-[9px] font-bold text-white">{wishlist.length}</span>}
+            </Button>
+
+            {/* Compare */}
+            <Button variant="ghost" size="icon" onClick={() => handleNavClick('compare')} className="relative h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Compare">
+              <GitCompare className="h-4 w-4" />
+              {comparison.length > 0 && <span className="absolute -right-0.5 -top-0.5 h-4 min-w-4 flex items-center justify-center rounded-full bg-[#D4AF37] px-1 text-[9px] font-bold text-white">{comparison.length}</span>}
             </Button>
 
             {/* Cart */}

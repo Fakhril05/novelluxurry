@@ -16,7 +16,9 @@ export type Page =
   | 'blog'
   | 'blog-detail'
   | 'categories'
-  | 'wishlist';
+  | 'wishlist'
+  | 'order-success'
+  | 'compare';
 
 export interface CartItem {
   id: string;
@@ -72,6 +74,12 @@ interface AppState {
   wishlist: string[];
   toggleWishlist: (bookId: string) => void;
   isInWishlist: (bookId: string) => boolean;
+
+  // Comparison
+  comparison: string[];
+  toggleComparison: (bookId: string) => void;
+  clearComparison: () => void;
+  isInComparison: (bookId: string) => boolean;
 
   // Search
   searchQuery: string;
@@ -179,6 +187,30 @@ export const useAppStore = create<AppState>()(
         return get().wishlist.includes(bookId);
       },
 
+      // Comparison
+      comparison: [],
+      toggleComparison: (bookId) => {
+        const { comparison } = get();
+        if (comparison.includes(bookId)) {
+          set({ comparison: comparison.filter((id) => id !== bookId) });
+        } else {
+          if (comparison.length >= 3) {
+            get().showNotification(
+              get().locale === 'id'
+                ? 'Maksimal 3 buku untuk dibandingkan'
+                : 'Maximum 3 books for comparison',
+              'info'
+            );
+            return;
+          }
+          set({ comparison: [...comparison, bookId] });
+        }
+      },
+      clearComparison: () => set({ comparison: [] }),
+      isInComparison: (bookId) => {
+        return get().comparison.includes(bookId);
+      },
+
       // Search
       searchQuery: '',
       setSearchQuery: (query) => set({ searchQuery: query }),
@@ -211,6 +243,7 @@ export const useAppStore = create<AppState>()(
         locale: state.locale,
         cart: state.cart,
         wishlist: state.wishlist,
+        comparison: state.comparison,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),

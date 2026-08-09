@@ -212,7 +212,7 @@ export default function CheckoutPage() {
           { description: data.orderNumber || '' }
         );
         clearCart();
-        setPage('dashboard', { tab: 'orders' });
+        setPage('order-success', { orderNumber: data.orderNumber });
       } else {
         toast.error(data.message || (lang === 'id' ? 'Gagal membuat pesanan' : 'Failed to place order'));
       }

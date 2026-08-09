@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Star, Heart, ShoppingCart, Eye, Sparkles } from 'lucide-react';
+import { Star, Heart, ShoppingCart, Eye, Sparkles, GitCompare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/lib/cart-store';
 import { useAppStore, formatPrice } from '@/lib/store';
@@ -32,8 +32,9 @@ interface BookCardProps {
 
 export default function BookCard({ book, index = 0, className = '' }: BookCardProps) {
   const addItem = useCartStore((s) => s.addItem);
-  const { locale, setPage, wishlist, toggleWishlist } = useAppStore();
+  const { locale, setPage, wishlist, toggleWishlist, comparison, toggleComparison } = useAppStore();
   const isWished = wishlist.includes(book.id);
+  const isCompared = comparison.includes(book.id);
   const hasDiscount = book.discountPrice && book.discountPrice < book.price;
   const [quickViewOpen, setQuickViewOpen] = useState(false);
   const hoverTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -48,6 +49,14 @@ export default function BookCard({ book, index = 0, className = '' }: BookCardPr
     e.stopPropagation();
     toggleWishlist(book.id);
     if (!isWished) toast.success(locale === 'id' ? 'Ditambahkan ke wishlist' : 'Added to wishlist', { description: book.title });
+  };
+
+  const handleCompare = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleComparison(book.id);
+    if (!isCompared) {
+      toast.success(locale === 'id' ? 'Ditambahkan ke perbandingan' : 'Added to comparison', { description: book.title });
+    }
   };
 
   const handleQuickView = useCallback((e: React.MouseEvent) => {
@@ -78,15 +87,16 @@ export default function BookCard({ book, index = 0, className = '' }: BookCardPr
           className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-2xl cursor-pointer"
           aria-label={`View details for ${book.title}`}
         >
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-card transition-all duration-500 hover:border-[#D4AF37]/40 hover:-translate-y-1 book-card-glow">
-            {/* Shine effect on hover */}
-            <div className="absolute inset-0 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"
-              style={{
-                background: 'linear-gradient(105deg, transparent 40%, rgba(212,175,55,0.08) 45%, rgba(212,175,55,0.15) 50%, rgba(212,175,55,0.08) 55%, transparent 60%)',
-                backgroundSize: '200% 100%',
-                animation: 'shimmer 1.5s ease-in-out',
-              }}
-            />
+          <div
+            className="relative overflow-hidden rounded-2xl border border-border bg-card transition-all duration-500 hover:border-[#D4AF37]/40 hover:-translate-y-1 book-card-glow [transform-style:preserve-3d]"
+            onMouseEnter={(e) => { const el = e.currentTarget; el.style.transform = 'perspective(800px) rotateY(-2deg) rotateX(1deg) translateY(-4px)'; el.style.borderColor = 'rgba(212,175,55,0.4)'; el.style.boxShadow = '0 20px 40px rgba(212,175,55,0.15), 0 0 0 1px rgba(212,175,55,0.2)'; el.style.backgroundImage = 'linear-gradient(135deg, rgba(212,175,55,0.08), rgba(245,230,163,0.04), rgba(184,150,12,0.08))'; el.style.backgroundSize = '400% 400%'; el.style.animation = 'shimmer 3s ease-in-out infinite'; }}
+            onMouseLeave={(e) => { const el = e.currentTarget; el.style.transform = 'perspective(800px) rotateY(0deg) rotateX(0deg) translateY(0)'; el.style.borderColor = ''; el.style.boxShadow = ''; el.style.backgroundImage = ''; el.style.animation = ''; }}
+          >
+            {/* Shimmer border overlay on hover */}
+            <div className="absolute inset-0 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl" style={{
+              background: 'linear-gradient(135deg, transparent 30%, rgba(212,175,55,0.06) 45%, rgba(212,175,55,0.12) 50%, rgba(212,175,55,0.06) 55%, transparent 70%)',
+              backgroundSize: '200% 100%',
+            }} />
 
             {/* Cover */}
             <div className="relative aspect-[2/3] overflow-hidden bg-secondary">
@@ -149,6 +159,13 @@ export default function BookCard({ book, index = 0, className = '' }: BookCardPr
                   aria-label={t('book.wishlist', locale)}
                 >
                   <Heart className={`h-4 w-4 ${isWished ? 'fill-current' : ''}`} />
+                </button>
+                <button
+                  onClick={handleCompare}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg hover:scale-110 transition-all ${isCompared ? 'bg-[#D4AF37] text-white shadow-[#D4AF37]/30' : 'bg-white/90 text-foreground hover:bg-[#D4AF37] hover:text-white'}`}
+                  aria-label={t('book.compare', locale)}
+                >
+                  <GitCompare className="h-4 w-4" />
                 </button>
               </div>
             </div>
