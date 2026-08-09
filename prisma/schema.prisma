@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?
+  avatar        String?
+  phone         String?
+  address       String?
+  city          String?
+  postalCode    String?
+  role          String    @default("user")
+  points        Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  orders        Order[]
+  reviews       Review[]
+  wishlists     Wishlist[]
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  nameEn      String?
+  slug        String   @unique
+  description String?
+  image       String?
+  books       Book[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Book {
+  id            String    @id @default(cuid())
+  title         String
+  slug          String    @unique
+  author        String
+  authorBio     String?
+  isbn          String?
+  synopsis      String?
+  coverImage    String
+  galleryImages String?
+  price         Float
+  discountPrice Float?
+  stock         Int       @default(0)
+  format        String    @default("Paperback")
+  pages         Int?
+  publisher     String?
+  language      String    @default("Indonesia")
+  publishedYear Int?
+  rating        Float     @default(0)
+  reviewCount   Int       @default(0)
+  soldCount     Int       @default(0)
+  isBestSeller  Boolean   @default(false)
+  isNewArrival  Boolean   @default(false)
+  isFeatured    Boolean   @default(false)
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  reviews       Review[]
+  orderItems    OrderItem[]
+  wishlists     Wishlist[]
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  comment   String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id            String    @id @default(cuid())
+  orderNumber   String    @unique
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  status        String    @default("pending")
+  subtotal      Float
+  shippingCost  Float     @default(0)
+  discount      Float     @default(0)
+  total         Float
+  shippingName  String?
+  shippingPhone String?
+  shippingAddr  String?
+  shippingCity  String?
+  shippingCode  String?
+  expedition    String?
+  paymentMethod String?
+  paymentStatus String    @default("pending")
+  voucherCode   String?
+  voucherDisc   Float     @default(0)
+  pointsEarned  Int       @default(0)
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  items         OrderItem[]
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id])
+  bookId      String
+  book        Book    @relation(fields: [bookId], references: [id])
+  title       String
+  price       Float
+  quantity    Int
+  format      String?
+  createdAt   DateTime @default(now())
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id])
+  createdAt DateTime @default(now())
+  @@unique([userId, bookId])
+}
+
+model Voucher {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  discount  Float
+  minOrder  Float    @default(0)
+  maxDisc   Float?
+  validFrom DateTime
+  validTo   DateTime
+  isActive  Boolean  @default(true)
+  usageLimit Int     @default(0)
+  usedCount Int     @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Blog {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  excerpt   String?
+  content   String?
+  image     String?
+  author    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Testimonial {
+  id        String   @id @default(cuid())
+  name      String
+  avatar    String?
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+}
+
+model FAQ {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
