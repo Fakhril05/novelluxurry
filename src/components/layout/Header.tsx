@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, Moon, ShoppingCart, Search, Menu, X, BookOpen, Heart, User, Globe, LogIn, LayoutDashboard, LogOut } from 'lucide-react';
+import NotificationBell from '@/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -155,6 +156,9 @@ export default function Header() {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Notifications */}
+            <NotificationBell />
 
             {/* Locale Toggle */}
             <Button variant="ghost" size="icon" onClick={toggleLocale} className="h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Toggle language">

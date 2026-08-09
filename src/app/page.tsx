@@ -5,6 +5,9 @@ import { useAppStore } from '@/lib/store';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import CartDrawer from '@/components/CartDrawer';
+import LiveChat from '@/components/LiveChat';
+import ScrollToTop from '@/components/ScrollToTop';
+import CookieConsent from '@/components/CookieConsent';
 import HomePage from '@/components/home/HomePage';
 import CatalogPage from '@/components/pages/CatalogPage';
 import BookDetailPage from '@/components/pages/BookDetailPage';
@@ -59,7 +62,11 @@ export default function MainApp() {
           </motion.div>
         </AnimatePresence>
       </main>
-      <Footer />\n      <CartDrawer />
+      <Footer />
+      <CartDrawer />
+      <LiveChat />
+      <ScrollToTop />
+      <CookieConsent />
     </div>
   );
 }
