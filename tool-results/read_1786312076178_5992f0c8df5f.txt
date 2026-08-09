@@ -1,0 +1,961 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Search,
+     7→  Filter,
+     8→  X,
+     9→  SlidersHorizontal,
+    10→  ChevronLeft,
+    11→  ChevronRight,
+    12→  Star,
+    13→  Sparkles,
+    14→  TrendingUp,
+    15→} from 'lucide-react';
+    16→import { Button } from '@/components/ui/button';
+    17→import { Input } from '@/components/ui/input';
+    18→import { Checkbox } from '@/components/ui/checkbox';
+    19→import { Skeleton } from '@/components/ui/skeleton';
+    20→import { Badge } from '@/components/ui/badge';
+    21→import {
+    22→  Sheet,
+    23→  SheetTrigger,
+    24→  SheetContent,
+    25→  SheetHeader,
+    26→  SheetTitle,
+    27→  SheetDescription,
+    28→} from '@/components/ui/sheet';
+    29→import { ScrollArea } from '@/components/ui/scroll-area';
+    30→import {
+    31→  Breadcrumb,
+    32→  BreadcrumbItem,
+    33→  BreadcrumbLink,
+    34→  BreadcrumbList,
+    35→  BreadcrumbPage,
+    36→  BreadcrumbSeparator,
+    37→} from '@/components/ui/breadcrumb';
+    38→import { useAppStore, formatPrice } from '@/lib/store';
+    39→import { t } from '@/lib/i18n';
+    40→import BookCard from '@/components/BookCard';
+    41→import type { Book, Category } from '@/types';
+    42→
+    43→const LIMIT = 12;
+    44→
+    45→const SORT_OPTIONS = [
+    46→  { value: 'newest', labelKey: 'catalog.sort.newest' },
+    47→  { value: 'bestseller', labelKey: 'catalog.sort.bestseller' },
+    48→  { value: 'priceLow', labelKey: 'catalog.sort.priceLow' },
+    49→  { value: 'priceHigh', labelKey: 'catalog.sort.priceHigh' },
+    50→  { value: 'rating', labelKey: 'catalog.sort.rating' },
+    51→];
+    52→
+    53→interface BooksResponse {
+    54→  books: Book[];
+    55→  total: number;
+    56→  page: number;
+    57→  limit: number;
+    58→}
+    59→
+    60→interface FilterState {
+    61→  genre?: string;
+    62→  minPrice?: number;
+    63→  maxPrice?: number;
+    64→  minRating?: number;
+    65→  sort: string;
+    66→}
+    67→
+    68→function StarSelector({
+    69→  value,
+    70→  onChange,
+    71→}: {
+    72→  value: number;
+    73→  onChange: (val: number) => void;
+    74→}) {
+    75→  const [hovered, setHovered] = useState(0);
+    76→
+    77→  return (
+    78→    <div className="flex items-center gap-0.5">
+    79→      {[1, 2, 3, 4, 5].map((star) => (
+    80→        <button
+    81→          key={star}
+    82→          type="button"
+    83→          onMouseEnter={() => setHovered(star)}
+    84→          onMouseLeave={() => setHovered(0)}
+    85→          onClick={() => onChange(value === star ? 0 : star)}
+    86→          className="p-0.5 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded"
+    87→          aria-label={`${star} stars`}
+    88→        >
+    89→          <Star
+    90→            className={`h-5 w-5 transition-colors ${
+    91→              star <= (hovered || value)
+    92→                ? 'fill-[#D4AF37] text-[#D4AF37]'
+    93→                : 'text-muted-foreground/30'
+    94→            }`}
+    95→          />
+    96→        </button>
+    97→      ))}
+    98→      {value > 0 && (
+    99→        <span className="ml-1 text-xs text-muted-foreground">{value}+</span>
+   100→      )}
+   101→    </div>
+   102→  );
+   103→}
+   104→
+   105→function FilterSidebar({
+   106→  categories,
+   107→  filters,
+   108→  onFilterChange,
+   109→  onReset,
+   110→  locale,
+   111→}: {
+   112→  categories: Category[];
+   113→  filters: FilterState;
+   114→  onFilterChange: (filters: Record<string, unknown>) => void;
+   115→  onReset: () => void;
+   116→  locale: 'id' | 'en';
+   117→}) {
+   118→  const [localPriceMin, setLocalPriceMin] = useState(
+   119→    filters.minPrice ? String(filters.minPrice) : ''
+   120→  );
+   121→  const [localPriceMax, setLocalPriceMax] = useState(
+   122→    filters.maxPrice ? String(filters.maxPrice) : ''
+   123→  );
+   124→
+   125→  const handlePriceSubmit = () => {
+   126→    const min = localPriceMin ? parseInt(localPriceMin, 10) : undefined;
+   127→    const max = localPriceMax ? parseInt(localPriceMax, 10) : undefined;
+   128→    onFilterChange({ minPrice: min, maxPrice: max });
+   129→  };
+   130→
+   131→  const selectedGenres = filters.genre
+   132→    ? filters.genre.split(',').filter(Boolean)
+   133→    : [];
+   134→
+   135→  const toggleGenre = (slug: string) => {
+   136→    const updated = selectedGenres.includes(slug)
+   137→      ? selectedGenres.filter((g) => g !== slug)
+   138→      : [...selectedGenres, slug];
+   139→    onFilterChange({ genre: updated.length > 0 ? updated.join(',') : undefined });
+   140→  };
+   141→
+   142→  return (
+   143→    <div className="space-y-6 border-t-2 border-[#D4AF37]/20 pt-6">
+   144→      {/* Sort */}
+   145→      <div>
+   146→        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+   147→          {t('catalog.sort', locale)}
+   148→        </h3>
+   149→        <div className="space-y-2">
+   150→          {SORT_OPTIONS.map((opt) => (
+   151→            <button
+   152→              key={opt.value}
+   153→              type="button"
+   154→              onClick={() => onFilterChange({ sort: opt.value })}
+   155→              className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-all duration-200 ${
+   156→                filters.sort === opt.value
+   157→                  ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium border border-[#D4AF37]/30 shadow-sm shadow-[#D4AF37]/10'
+   158→                  : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
+   159→              }`}
+   160→            >
+   161→              {t(opt.labelKey, locale)}
+   162→            </button>
+   163→          ))}
+   164→        </div>
+   165→      </div>
+   166→
+   167→      {/* Divider */}
+   168→      <div className="border-t border-border" />
+   169→
+   170→      {/* Genre */}
+   171→      <div>
+   172→        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+   173→          {t('catalog.filter.genre', locale)}
+   174→        </h3>
+   175→        <ScrollArea className="max-h-56 overflow-y-auto">
+   176→          <div className="space-y-2.5 pr-1">
+   177→            {categories.map((cat) => (
+   178→              <label
+   179→                key={cat.id}
+   180→                className="flex items-center gap-2.5 cursor-pointer group"
+   181→              >
+   182→                <Checkbox
+   183→                  checked={selectedGenres.includes(cat.slug)}
+   184→                  onCheckedChange={() => toggleGenre(cat.slug)}
+   185→                  className="data-[state=checked]:bg-[#D4AF37] data-[state=checked]:border-[#D4AF37]"
+   186→                />
+   187→                <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors flex-1">
+   188→                  {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
+   189→                </span>
+   190→                <span className="text-xs text-muted-foreground/60">
+   191→                  {cat._count?.books || 0}
+   192→                </span>
+   193→              </label>
+   194→            ))}
+   195→          </div>
+   196→        </ScrollArea>
+   197→      </div>
+   198→
+   199→      {/* Divider */}
+   200→      <div className="border-t border-border" />
+   201→
+   202→      {/* Price Range */}
+   203→      <div>
+   204→        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+   205→          {t('catalog.filter.price', locale)}
+   206→        </h3>
+   207→        <div className="flex items-center gap-2">
+   208→          <Input
+   209→            type="number"
+   210→            placeholder="Min"
+   211→            value={localPriceMin}
+   212→            onChange={(e) => setLocalPriceMin(e.target.value)}
+   213→            className="h-9 text-sm"
+   214→            onKeyDown={(e) => e.key === 'Enter' && handlePriceSubmit()}
+   215→          />
+   216→          <span className="text-muted-foreground text-sm">—</span>
+   217→          <Input
+   218→            type="number"
+   219→            placeholder="Max"
+   220→            value={localPriceMax}
+   221→            onChange={(e) => setLocalPriceMax(e.target.value)}
+   222→            className="h-9 text-sm"
+   223→            onKeyDown={(e) => e.key === 'Enter' && handlePriceSubmit()}
+   224→          />
+   225→        </div>
+   226→        <Button
+   227→          variant="outline"
+   228→          size="sm"
+   229→          onClick={handlePriceSubmit}
+   230→          className="mt-2 w-full h-8 text-xs border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]"
+   231→        >
+   232→          {t('catalog.filter.apply', locale)}
+   233→        </Button>
+   234→      </div>
+   235→
+   236→      {/* Divider */}
+   237→      <div className="border-t border-border" />
+   238→
+   239→      {/* Rating */}
+   240→      <div>
+   241→        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+   242→          {t('catalog.filter.rating', locale)}
+   243→        </h3>
+   244→        <StarSelector
+   245→          value={filters.minRating || 0}
+   246→          onChange={(val) => onFilterChange({ minRating: val || undefined })}
+   247→        />
+   248→      </div>
+   249→
+   250→      {/* Reset */}
+   251→      <div className="pt-2">
+   252→        <Button
+   253→          variant="ghost"
+   254→          size="sm"
+   255→          onClick={onReset}
+   256→          className="w-full text-muted-foreground hover:text-foreground"
+   257→        >
+   258→          {t('catalog.filter.reset', locale)}
+   259→        </Button>
+   260→      </div>
+   261→    </div>
+   262→  );
+   263→}
+   264→
+   265→function BookGridSkeleton() {
+   266→  return (
+   267→    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+   268→      {Array.from({ length: 8 }).map((_, i) => (
+   269→        <div key={i} className="space-y-3">
+   270→          <Skeleton className="aspect-[2/3] w-full rounded-xl" />
+   271→          <Skeleton className="h-3 w-16" />
+   272→          <Skeleton className="h-4 w-full" />
+   273→          <Skeleton className="h-3 w-24" />
+   274→          <div className="flex items-center gap-1">
+   275→            {Array.from({ length: 5 }).map((_, j) => (
+   276→              <Skeleton key={j} className="h-3 w-3 rounded-full" />
+   277→            ))}
+   278→          </div>
+   279→          <Skeleton className="h-5 w-28" />
+   280→        </div>
+   281→      ))}
+   282→    </div>
+   283→  );
+   284→}
+   285→
+   286→function EmptyState({ locale, onReset }: { locale: 'id' | 'en'; onReset: () => void }) {
+   287→  return (
+   288→    <motion.div
+   289→      initial={{ opacity: 0, y: 20 }}
+   290→      animate={{ opacity: 1, y: 0 }}
+   291→      className="flex flex-col items-center justify-center py-20 px-4"
+   292→    >
+   293→      {/* SVG Illustration */}
+   294→      <motion.div
+   295→        initial={{ scale: 0.9 }}
+   296→        animate={{ scale: 1 }}
+   297→        transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+   298→        className="relative mb-8"
+   299→      >
+   300→        <svg width="180" height="140" viewBox="0 0 180 140" fill="none" className="drop-shadow-sm">
+   301→          {/* Book stack */}
+   302→          <rect x="50" y="50" width="80" height="90" rx="4" fill="rgba(212,175,55,0.1)" stroke="rgba(212,175,55,0.25)" strokeWidth="1.5" />
+   303→          <rect x="58" y="42" width="80" height="90" rx="4" fill="rgba(212,175,55,0.15)" stroke="rgba(212,175,55,0.3)" strokeWidth="1.5" />
+   304→          <rect x="66" y="34" width="80" height="90" rx="4" fill="rgba(212,175,55,0.2)" stroke="rgba(212,175,55,0.4)" strokeWidth="1.5" />
+   305→          {/* Open book */}
+   306→          <path d="M72 38 Q106 28 140 38 L140 100 Q106 90 72 100 Z" fill="rgba(212,175,55,0.08)" stroke="#D4AF37" strokeWidth="1.5" strokeLinejoin="round" />
+   307→          <path d="M72 38 Q106 48 140 38" fill="none" stroke="#D4AF37" strokeWidth="1" />
+   308→          {/* Lines on page */}
+   309→          <line x1="82" y1="50" x2="128" y2="50" stroke="rgba(212,175,55,0.25)" strokeWidth="1" />
+   310→          <line x1="82" y1="58" x2="120" y2="58" stroke="rgba(212,175,55,0.2)" strokeWidth="1" />
+   311→          <line x1="82" y1="66" x2="124" y2="66" stroke="rgba(212,175,55,0.15)" strokeWidth="1" />
+   312→          <line x1="82" y1="74" x2="116" y2="74" stroke="rgba(212,175,55,0.12)" strokeWidth="1" />
+   313→          {/* Magnifying glass */}
+   314→          <circle cx="134" cy="28" r="14" fill="rgba(212,175,55,0.06)" stroke="#D4AF37" strokeWidth="1.5" />
+   315→          <line x1="144" y1="38" x2="152" y2="46" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round" />
+   316→          {/* Sparkle dots */}
+   317→          <circle cx="42" cy="36" r="2" fill="#D4AF37" opacity="0.5" />
+   318→          <circle cx="36" cy="68" r="1.5" fill="#E8D48B" opacity="0.6" />
+   319→          <circle cx="152" cy="60" r="2" fill="#D4AF37" opacity="0.4" />
+   320→          <circle cx="48" cy="110" r="1.5" fill="#E8D48B" opacity="0.5" />
+   321→        </svg>
+   322→        <motion.div
+   323→          animate={{ y: [0, -4, 0] }}
+   324→          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+   325→          className="absolute -top-3 -right-3 h-7 w-7 rounded-full bg-[#D4AF37]/15 flex items-center justify-center"
+   326→        >
+   327→          <Sparkles className="h-3.5 w-3.5 text-[#D4AF37]" />
+   328→        </motion.div>
+   329→      </motion.div>
+   330→      <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
+   331→        {t('catalog.noResults', locale)}
+   332→      </h3>
+   333→      <p className="text-sm text-muted-foreground text-center max-w-sm mb-6">
+   334→        {locale === 'id'
+   335→          ? 'Coba ubah filter atau kata kunci pencarian kamu'
+   336→          : 'Try adjusting your filters or search keywords'}
+   337→      </p>
+   338→      <Button
+   339→        variant="outline"
+   340→        onClick={onReset}
+   341→        className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10"
+   342→      >
+   343→        {locale === 'id' ? 'Reset Semua Filter' : 'Reset All Filters'}
+   344→      </Button>
+   345→    </motion.div>
+   346→  );
+   347→}
+   348→
+   349→export default function CatalogPage() {
+   350→  const { locale, pageParams, setPage, filters, setFilters, resetFilters } =
+   351→    useAppStore();
+   352→
+   353→  const [books, setBooks] = useState<Book[]>([]);
+   354→  const [categories, setCategories] = useState<Category[]>([]);
+   355→  const [total, setTotal] = useState(0);
+   356→  const [currentPage, setCurrentPage] = useState(1);
+   357→  const [loading, setLoading] = useState(true);
+   358→  const [categoriesLoading, setCategoriesLoading] = useState(true);
+   359→  const [searchInput, setSearchInput] = useState('');
+   360→  const [sheetOpen, setSheetOpen] = useState(false);
+   361→
+   362→  // Sync genre from pageParams on mount
+   363→  useEffect(() => {
+   364→    if (pageParams.genre && !filters.genre) {
+   365→      setFilters({ genre: pageParams.genre });
+   366→    }
+   367→    if (pageParams.search) {
+   368→      setSearchInput(pageParams.search);
+   369→    }
+   370→  }, []);
+   371→
+   372→  // Fetch categories
+   373→  useEffect(() => {
+   374→    let cancelled = false;
+   375→    const fetchCategories = async () => {
+   376→      try {
+   377→        const res = await fetch('/api/categories');
+   378→        if (res.ok && !cancelled) {
+   379→          const data = await res.json();
+   380→          setCategories(Array.isArray(data) ? data : data.categories || []);
+   381→        }
+   382→      } catch {
+   383→        // silently fail
+   384→      } finally {
+   385→        if (!cancelled) setCategoriesLoading(false);
+   386→      }
+   387→    };
+   388→    fetchCategories();
+   389→    return () => {
+   390→      cancelled = true;
+   391→    };
+   392→  }, []);
+   393→
+   394→  // Reset to page 1 when filters change (except page itself)
+   395→  useEffect(() => {
+   396→    setCurrentPage(1);
+   397→  }, [filters.genre, filters.minPrice, filters.maxPrice, filters.minRating, filters.sort, pageParams.search]);
+   398→
+   399→  // Fetch books
+   400→  useEffect(() => {
+   401→    let cancelled = false;
+   402→    const doFetch = async () => {
+   403→      setLoading(true);
+   404→      try {
+   405→        const params = new URLSearchParams();
+   406→        params.set('limit', String(LIMIT));
+   407→        params.set('page', String(currentPage));
+   408→
+   409→        if (filters.genre) params.set('genre', filters.genre);
+   410→        if (filters.minPrice !== undefined && filters.minPrice > 0)
+   411→          params.set('minPrice', String(filters.minPrice));
+   412→        if (filters.maxPrice !== undefined && filters.maxPrice > 0)
+   413→          params.set('maxPrice', String(filters.maxPrice));
+   414→        if (filters.minRating !== undefined && filters.minRating > 0)
+   415→          params.set('minRating', String(filters.minRating));
+   416→        if (filters.sort) params.set('sort', filters.sort);
+   417→        if (pageParams.search) params.set('search', pageParams.search);
+   418→
+   419→        const res = await fetch(`/api/books?${params.toString()}`);
+   420→        if (res.ok && !cancelled) {
+   421→          const data: BooksResponse = await res.json();
+   422→          setBooks(data.books || []);
+   423→          setTotal(data.total || 0);
+   424→        }
+   425→      } catch {
+   426→        // silently fail
+   427→      } finally {
+   428→        if (!cancelled) setLoading(false);
+   429→      }
+   430→    };
+   431→    doFetch();
+   432→    return () => {
+   433→      cancelled = true;
+   434→    };
+   435→  }, [filters, currentPage, pageParams.search]);
+   436→
+   437→  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+   438→
+   439→  const handleFilterChange = useCallback(
+   440→    (newFilters: Record<string, unknown>) => {
+   441→      setFilters(newFilters as Partial<FilterState>);
+   442→    },
+   443→    [setFilters]
+   444→  );
+   445→
+   446→  const handleReset = useCallback(() => {
+   447→    resetFilters();
+   448→    setSearchInput('');
+   449→    setCurrentPage(1);
+   450→    setPage('catalog', {});
+   451→  }, [resetFilters, setPage]);
+   452→
+   453→  const handleSearch = useCallback(
+   454→    (e: React.FormEvent) => {
+   455→      e.preventDefault();
+   456→      setPage('catalog', { ...pageParams, search: searchInput.trim() });
+   457→      setCurrentPage(1);
+   458→    },
+   459→    [searchInput, pageParams, setPage]
+   460→  );
+   461→
+   462→  // Active filter badges
+   463→  const activeFilters = useMemo(() => {
+   464→    const items: { key: string; label: string; clear: () => void }[] = [];
+   465→
+   466→    if (filters.genre) {
+   467→      const slugs = filters.genre.split(',').filter(Boolean);
+   468→      slugs.forEach((slug) => {
+   469→        const cat = categories.find((c) => c.slug === slug);
+   470→        const name = cat
+   471→          ? locale === 'en' && cat.nameEn
+   472→            ? cat.nameEn
+   473→            : cat.name
+   474→          : slug;
+   475→        items.push({
+   476→          key: `genre-${slug}`,
+   477→          label: name,
+   478→          clear: () => {
+   479→            const updated = slugs.filter((s) => s !== slug);
+   480→            setFilters({ genre: updated.length > 0 ? updated.join(',') : undefined });
+   481→          },
+   482→        });
+   483→      });
+   484→    }
+   485→
+   486→    if (filters.minPrice !== undefined && filters.minPrice > 0) {
+   487→      items.push({
+   488→        key: 'minPrice',
+   489→        label: `Min ${formatPrice(filters.minPrice, locale)}`,
+   490→        clear: () => setFilters({ minPrice: undefined }),
+   491→      });
+   492→    }
+   493→
+   494→    if (filters.maxPrice !== undefined && filters.maxPrice > 0) {
+   495→      items.push({
+   496→        key: 'maxPrice',
+   497→        label: `Max ${formatPrice(filters.maxPrice, locale)}`,
+   498→        clear: () => setFilters({ maxPrice: undefined }),
+   499→      });
+   500→    }
+   501→
+   502→    if (filters.minRating !== undefined && filters.minRating > 0) {
+   503→      items.push({
+   504→        key: 'minRating',
+   505→        label: `${filters.minRating}+ \u2605`,
+   506→        clear: () => setFilters({ minRating: undefined }),
+   507→      });
+   508→    }
+   509→
+   510→    if (pageParams.search) {
+   511→      items.push({
+   512→        key: 'search',
+   513→        label: `"${pageParams.search}"`,
+   514→        clear: () => {
+   515→          setSearchInput('');
+   516→          setPage('catalog', { ...pageParams, search: '' });
+   517→        },
+   518→      });
+   519→    }
+   520→
+   521→    return items;
+   522→  }, [filters, categories, locale, pageParams, setFilters, setPage]);
+   523→
+   524→  // Breadcrumb: if single genre filtered, show the category name
+   525→  const genreCategory = useMemo(() => {
+   526→    if (!filters.genre) return null;
+   527→    const slugs = filters.genre.split(',').filter(Boolean);
+   528→    if (slugs.length === 1) {
+   529→      return categories.find((c) => c.slug === slugs[0]) || null;
+   530→    }
+   531→    return null;
+   532→  }, [filters.genre, categories]);
+   533→
+   534→  const hasActiveFilters = activeFilters.length > 0;
+   535→
+   536→  const filterSidebar = (
+   537→    <FilterSidebar
+   538→      categories={categories}
+   539→      filters={filters}
+   540→      onFilterChange={handleFilterChange}
+   541→      onReset={handleReset}
+   542→      locale={locale}
+   543→    />
+   544→  );
+   545→
+   546→  // Pagination range
+   547→  const paginationRange = useMemo(() => {
+   548→    const pages: (number | string)[] = [];
+   549→    if (totalPages <= 7) {
+   550→      for (let i = 1; i <= totalPages; i++) pages.push(i);
+   551→    } else {
+   552→      pages.push(1);
+   553→      if (currentPage > 3) pages.push('...');
+   554→      const start = Math.max(2, currentPage - 1);
+   555→      const end = Math.min(totalPages - 1, currentPage + 1);
+   556→      for (let i = start; i <= end; i++) pages.push(i);
+   557→      if (currentPage < totalPages - 2) pages.push('...');
+   558→      pages.push(totalPages);
+   559→    }
+   560→    return pages;
+   561→  }, [currentPage, totalPages]);
+   562→
+   563→  return (
+   564→    <section className="relative min-h-screen bg-background">
+   565→      {/* Subtle gold gradient overlay at top */}
+   566→      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#D4AF37]/5 to-transparent pointer-events-none" aria-hidden="true" />
+   567→      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+   568→        {/* Breadcrumb */}
+   569→        <motion.div
+   570→          initial={{ opacity: 0, y: -10 }}
+   571→          animate={{ opacity: 1, y: 0 }}
+   572→          transition={{ duration: 0.3 }}
+   573→          className="mb-6"
+   574→        >
+   575→          <Breadcrumb>
+   576→            <BreadcrumbList>
+   577→              <BreadcrumbItem>
+   578→                <BreadcrumbLink
+   579→                  href="#"
+   580→                  onClick={(e) => {
+   581→                    e.preventDefault();
+   582→                    setPage('home');
+   583→                  }}
+   584→                >
+   585→                  {t('nav.home', locale)}
+   586→                </BreadcrumbLink>
+   587→              </BreadcrumbItem>
+   588→              <BreadcrumbSeparator />
+   589→              {genreCategory ? (
+   590→                <>
+   591→                  <BreadcrumbItem>
+   592→                    <BreadcrumbLink
+   593→                      href="#"
+   594→                      onClick={(e) => {
+   595→                        e.preventDefault();
+   596→                        handleReset();
+   597→                      }}
+   598→                    >
+   599→                      {t('nav.catalog', locale)}
+   600→                    </BreadcrumbLink>
+   601→                  </BreadcrumbItem>
+   602→                  <BreadcrumbSeparator />
+   603→                  <BreadcrumbItem>
+   604→                    <BreadcrumbPage>
+   605→                      {locale === 'en' && genreCategory.nameEn
+   606→                        ? genreCategory.nameEn
+   607→                        : genreCategory.name}
+   608→                    </BreadcrumbPage>
+   609→                  </BreadcrumbItem>
+   610→                </>
+   611→              ) : (
+   612→                <BreadcrumbItem>
+   613→                  <BreadcrumbPage>
+   614→                    {t('catalog.title', locale)}
+   615→                  </BreadcrumbPage>
+   616→                </BreadcrumbItem>
+   617→              )}
+   618→            </BreadcrumbList>
+   619→          </Breadcrumb>
+   620→        </motion.div>
+   621→
+   622→        {/* Page Header */}
+   623→        <motion.div
+   624→          initial={{ opacity: 0, y: -10 }}
+   625→          animate={{ opacity: 1, y: 0 }}
+   626→          transition={{ duration: 0.3, delay: 0.05 }}
+   627→          className="mb-6 relative"
+   628→        >
+   629→          {/* Gold gradient accent behind title */}
+   630→          <div className="absolute -left-2 -top-2 -right-2 -bottom-1 bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent rounded-lg -z-10 blur-sm" aria-hidden="true" />
+   631→          <h1 className="font-heading text-2xl md:text-3xl font-bold text-gradient-gold">
+   632→            {genreCategory
+   633→              ? locale === 'en' && genreCategory.nameEn
+   634→                ? genreCategory.nameEn
+   635→                : genreCategory.name
+   636→              : t('catalog.title', locale)}
+   637→          </h1>
+   638→          <p className="text-sm text-muted-foreground mt-1">
+   639→            {!loading && (
+   640→              <>
+   641→                {total} {t('catalog.results', locale)}
+   642→              </>
+   643→            )}
+   644→          </p>
+   645→        </motion.div>
+   646→
+   647→        {/* Search & Filter Bar */}
+   648→        <motion.div
+   649→          initial={{ opacity: 0, y: -10 }}
+   650→          animate={{ opacity: 1, y: 0 }}
+   651→          transition={{ duration: 0.3, delay: 0.1 }}
+   652→          className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6"
+   653→        >
+   654→          {/* Search */}
+   655→          <form onSubmit={handleSearch} className="relative flex-1">
+   656→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   657→            <Input
+   658→              type="text"
+   659→              placeholder={t('nav.search', locale)}
+   660→              value={searchInput}
+   661→              onChange={(e) => setSearchInput(e.target.value)}
+   662→              className="pl-10 h-10 bg-background border-border"
+   663→            />
+   664→          </form>
+   665→
+   666→          {/* Sort Select (Desktop) */}
+   667→          <div className="hidden sm:flex items-center gap-2">
+   668→            <span className="text-sm text-muted-foreground whitespace-nowrap">
+   669→              {t('catalog.sort', locale)}:
+   670→            </span>
+   671→            <div className="relative">
+   672→              <select
+   673→                value={filters.sort}
+   674→                onChange={(e) => handleFilterChange({ sort: e.target.value })}
+   675→                className="appearance-none h-10 pl-3 pr-8 text-sm rounded-lg border border-[#D4AF37]/20 bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37]/50 shadow-sm shadow-[#D4AF37]/5 hover:border-[#D4AF37]/40 transition-colors"
+   676→              >
+   677→                {SORT_OPTIONS.map((opt) => (
+   678→                  <option key={opt.value} value={opt.value}>
+   679→                    {t(opt.labelKey, locale)}
+   680→                  </option>
+   681→                ))}
+   682→              </select>
+   683→              <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground rotate-90 pointer-events-none" />
+   684→            </div>
+   685→          </div>
+   686→
+   687→          {/* Mobile Filter Button */}
+   688→          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+   689→            <SheetTrigger asChild>
+   690→              <Button
+   691→                variant="outline"
+   692→                className="lg:hidden h-10 border-border gap-2"
+   693→              >
+   694→                <SlidersHorizontal className="h-4 w-4" />
+   695→                <span>{t('catalog.filter', locale)}</span>
+   696→                {hasActiveFilters && (
+   697→                  <Badge className="h-5 w-5 p-0 flex items-center justify-center bg-[#D4AF37] text-white border-0 text-[10px] rounded-full shadow-sm shadow-[#D4AF37]/30">
+   698→                    {activeFilters.length}
+   699→                  </Badge>
+   700→                )}
+   701→              </Button>
+   702→            </SheetTrigger>
+   703→            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl glass backdrop-blur-xl bg-background/80 border-t border-[#D4AF37]/20 transition-all duration-300 ease-in-out">
+   704→              <SheetHeader className="pb-2">
+   705→                <SheetTitle className="font-heading text-lg">
+   706→                  {t('catalog.filter', locale)}
+   707→                </SheetTitle>
+   708→                <SheetDescription>
+   709→                  {locale === 'id'
+   710→                    ? 'Sesuaikan pencarian kamu'
+   711→                    : 'Refine your search'}
+   712→                </SheetDescription>
+   713→              </SheetHeader>
+   714→              <ScrollArea className="flex-1 px-4 pb-4">
+   715→                {filterSidebar}
+   716→              </ScrollArea>
+   717→              <div className="p-4 border-t border-border">
+   718→                <Button
+   719→                  className="w-full bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+   720→                  onClick={() => setSheetOpen(false)}
+   721→                >
+   722→                  {locale === 'id'
+   723→                    ? 'Tampilkan Hasil'
+   724→                    : 'Show Results'}
+   725→                </Button>
+   726→              </div>
+   727→            </SheetContent>
+   728→          </Sheet>
+   729→        </motion.div>
+   730→
+   731→        {/* Animated Filter Tags (quick genre filters) */}
+   732→        <motion.div
+   733→          initial={{ opacity: 0, y: -5 }}
+   734→          animate={{ opacity: 1, y: 0 }}
+   735→          transition={{ duration: 0.3, delay: 0.15 }}
+   736→          className="mb-4 hidden md:flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1"
+   737→        >
+   738→          <span className="text-xs text-muted-foreground font-medium shrink-0">
+   739→            <TrendingUp className="h-3 w-3 inline mr-1" />
+   740→            {locale === 'id' ? 'Populer:' : 'Trending:'}
+   741→          </span>
+   742→          {categories.slice(0, 6).map((cat) => {
+   743→            const isActive = filters.genre === cat.slug;
+   744→            return (
+   745→              <motion.button
+   746→                key={cat.id}
+   747→                whileHover={{ scale: 1.05 }}
+   748→                whileTap={{ scale: 0.95 }}
+   749→                onClick={() => {
+   750→                  if (isActive) {
+   751→                    handleFilterChange({ genre: undefined });
+   752→                  } else {
+   753→                    handleFilterChange({ genre: cat.slug });
+   754→                  }
+   755→                }}
+   756→                className={`filter-tag shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 ${
+   757→                  isActive
+   758→                    ? 'bg-[#D4AF37] text-white border-[#D4AF37] shadow-sm shadow-[#D4AF37]/20'
+   759→                    : 'border-border text-muted-foreground hover:border-[#D4AF37]/40 hover:text-[#D4AF37]'
+   760→                }`}
+   761→              >
+   762→                {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
+   763→              </motion.button>
+   764→            );
+   765→          })}
+   766→        </motion.div>
+   767→
+   768→        {/* Active Filter Badges */}
+   769→        <AnimatePresence>
+   770→          {hasActiveFilters && (
+   771→            <motion.div
+   772→              initial={{ opacity: 0, height: 0 }}
+   773→              animate={{ opacity: 1, height: 'auto' }}
+   774→              exit={{ opacity: 0, height: 0 }}
+   775→              className="mb-6"
+   776→            >
+   777→              <div className="flex flex-wrap items-center gap-2">
+   778→                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+   779→                  <Filter className="h-3 w-3 inline mr-1" />
+   780→                  {locale === 'id' ? 'Filter aktif:' : 'Active filters:'}
+   781→                </span>
+   782→                {activeFilters.map((filter) => (
+   783→                  <motion.div
+   784→                    key={filter.key}
+   785→                    initial={{ scale: 0.8, opacity: 0 }}
+   786→                    animate={{ scale: 1, opacity: 1 }}
+   787→                    exit={{ scale: 0.8, opacity: 0 }}
+   788→                    transition={{ duration: 0.2 }}
+   789→                  >
+   790→                    <Badge
+   791→                      variant="secondary"
+   792→                      className="gap-1.5 pr-1 py-1 text-xs bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20 hover:bg-[#D4AF37]/20 cursor-default"
+   793→                    >
+   794→                      <span>{filter.label}</span>
+   795→                      <button
+   796→                        onClick={filter.clear}
+   797→                        className="ml-0.5 rounded-full p-0.5 hover:bg-[#D4AF37]/20 transition-colors"
+   798→                        aria-label={`Remove ${filter.label} filter`}
+   799→                      >
+   800→                        <X className="h-3 w-3" />
+   801→                      </button>
+   802→                    </Badge>
+   803→                  </motion.div>
+   804→                ))}
+   805→                <button
+   806→                  onClick={handleReset}
+   807→                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+   808→                >
+   809→                  {t('catalog.filter.reset', locale)}
+   810→                </button>
+   811→              </div>
+   812→            </motion.div>
+   813→          )}
+   814→        </AnimatePresence>
+   815→
+   816→        {/* Main Content: Sidebar + Grid */}
+   817→        <div className="flex gap-8">
+   818→          {/* Desktop Sidebar */}
+   819→          <motion.aside
+   820→            initial={{ opacity: 0, x: -20 }}
+   821→            animate={{ opacity: 1, x: 0 }}
+   822→            transition={{ duration: 0.3, delay: 0.15 }}
+   823→            className="hidden lg:block w-[240px] shrink-0 glass-card backdrop-blur-sm border border-[#D4AF37]/10"
+   824→          >
+   825→            <div className="sticky top-24">
+   826→              {categoriesLoading ? (
+   827→                <div className="space-y-6">
+   828→                  <Skeleton className="h-5 w-24" />
+   829→                  <div className="space-y-3">
+   830→                    {Array.from({ length: 5 }).map((_, i) => (
+   831→                      <Skeleton key={i} className="h-8 w-full" />
+   832→                    ))}
+   833→                  </div>
+   834→                  <Skeleton className="h-5 w-20" />
+   835→                  <div className="space-y-3">
+   836→                    {Array.from({ length: 6 }).map((_, i) => (
+   837→                      <div key={i} className="flex items-center gap-2.5">
+   838→                        <Skeleton className="h-4 w-4 rounded" />
+   839→                        <Skeleton className="h-4 flex-1" />
+   840→                      </div>
+   841→                    ))}
+   842→                  </div>
+   843→                  <Skeleton className="h-5 w-16" />
+   844→                  <div className="flex gap-2">
+   845→                    <Skeleton className="h-9 flex-1" />
+   846→                    <Skeleton className="h-9 flex-1" />
+   847→                  </div>
+   848→                  <Skeleton className="h-5 w-16" />
+   849→                  <Skeleton className="h-5 w-28" />
+   850→                </div>
+   851→              ) : (
+   852→                filterSidebar
+   853→              )}
+   854→            </div>
+   855→          </motion.aside>
+   856→
+   857→          {/* Book Grid + Pagination */}
+   858→          <div className="flex-1 min-w-0">
+   859→            {loading ? (
+   860→              <BookGridSkeleton />
+   861→            ) : books.length === 0 ? (
+   862→              <EmptyState locale={locale} onReset={handleReset} />
+   863→            ) : (
+   864→              <>
+   865→                {/* Books Grid */}
+   866→                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+   867→                  <AnimatePresence mode="popLayout">
+   868→                    {books.map((book, index) => (
+   869→                      <motion.div
+   870→                        key={book.id}
+   871→                        layout
+   872→                        initial={{ opacity: 0, scale: 0.95 }}
+   873→                        animate={{ opacity: 1, scale: 1 }}
+   874→                        exit={{ opacity: 0, scale: 0.95 }}
+   875→                        transition={{ duration: 0.3, delay: index * 0.03 }}
+   876→                        whileHover={{ y: -4 }}
+   877→                        className="rounded-xl book-card-glow transition-shadow duration-300"
+   878→                      >
+   879→                        <BookCard book={book} index={index} />
+   880→                      </motion.div>
+   881→                    ))}
+   882→                  </AnimatePresence>
+   883→                </div>
+   884→
+   885→                {/* Pagination */}
+   886→                {totalPages > 1 && (
+   887→                  <motion.nav
+   888→                    initial={{ opacity: 0, y: 10 }}
+   889→                    animate={{ opacity: 1, y: 0 }}
+   890→                    transition={{ duration: 0.3, delay: 0.2 }}
+   891→                    className="mt-10 flex items-center justify-center gap-1.5"
+   892→                    aria-label="Pagination"
+   893→                  >
+   894→                    {/* Prev */}
+   895→                    <Button
+   896→                      variant="outline"
+   897→                      size="icon"
+   898→                      className="h-9 w-9 border-border disabled:opacity-40"
+   899→                      disabled={currentPage <= 1}
+   900→                      onClick={() =>
+   901→                        setCurrentPage((p) => Math.max(1, p - 1))
+   902→                      }
+   903→                      aria-label={t('general.previous', locale)}
+   904→                    >
+   905→                      <ChevronLeft className="h-4 w-4" />
+   906→                    </Button>
+   907→
+   908→                    {/* Page Numbers */}
+   909→                    {paginationRange.map((item, idx) =>
+   910→                      item === '...' ? (
+   911→                        <span
+   912→                          key={`ellipsis-${idx}`}
+   913→                          className="flex h-9 w-9 items-center justify-center text-sm text-muted-foreground"
+   914→                        >
+   915→                          ...
+   916→                        </span>
+   917→                      ) : (
+   918→                        <Button
+   919→                          key={item}
+   920→                          variant={currentPage === item ? 'default' : 'outline'}
+   921→                          size="icon"
+   922→                          className={`h-9 w-9 transition-all duration-200 ${
+   923→                            currentPage === item
+   924→                              ? 'bg-[#D4AF37] text-white hover:bg-[#B8960C] border-[#D4AF37] shadow-md shadow-[#D4AF37]/30'
+   925→                              : 'border-border text-foreground hover:bg-muted hover:text-foreground hover:border-[#D4AF37]/30'
+   926→                          }`}
+   927→                          onClick={() => setCurrentPage(item as number)}
+   928→                          aria-label={`Page ${item}`}
+   929→                          aria-current={
+   930→                            currentPage === item ? 'page' : undefined
+   931→                          }
+   932→                        >
+   933→                          {item}
+   934→                        </Button>
+   935→                      )
+   936→                    )}
+   937→
+   938→                    {/* Next */}
+   939→                    <Button
+   940→                      variant="outline"
+   941→                      size="icon"
+   942→                      className="h-9 w-9 border-border disabled:opacity-40"
+   943→                      disabled={currentPage >= totalPages}
+   944→                      onClick={() =>
+   945→                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+   946→                      }
+   947→                      aria-label={t('general.next', locale)}
+   948→                    >
+   949→                      <ChevronRight className="h-4 w-4" />
+   950→                    </Button>
+   951→                  </motion.nav>
+   952→                )}
+   953→              </>
+   954→            )}
+   955→          </div>
+   956→        </div>
+   957→      </div>
+   958→    </section>
+   959→  );
+   960→}
+   961→

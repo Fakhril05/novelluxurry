@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from 'next-themes';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sun, Moon, ShoppingCart, Search, Menu, X, BookOpen, Heart, User, Globe, LogIn, LayoutDashboard, LogOut, TrendingUp, Clock, ArrowUp, GitCompare, Library } from 'lucide-react';
+import { Sun, Moon, ShoppingCart, Search, Menu, X, BookOpen, Heart, User, Globe, LogIn, LayoutDashboard, LogOut, TrendingUp, Clock, ArrowUp, GitCompare, Library, Award } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,7 @@ const navItems = [
   { labelKey: 'nav.home', page: 'home' as const },
   { labelKey: 'nav.catalog', page: 'catalog' as const },
   { labelKey: 'nav.categories', page: 'categories' as const },
-  { labelKey: 'nav.promo', page: 'catalog' as const, params: { promo: 'true' } },
+  { labelKey: 'nav.promo', page: 'vouchers' as const },
   { labelKey: 'nav.blog', page: 'blog' as const },
   { labelKey: 'nav.faq', page: 'faq' as const },
 ];
@@ -374,6 +374,7 @@ export default function Header() {
                         <button onClick={() => { setPage('dashboard'); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><User className="h-4 w-4" />{t('nav.profile', locale)}</button>
                         <button onClick={() => { setPage('dashboard', { tab: 'orders' }); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><ShoppingCart className="h-4 w-4" />{t('nav.orders', locale)}</button>
                         <button onClick={() => { setPage('reading-lists'); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><Library className="h-4 w-4" />{t('readingLists.title', locale)}</button>
+                        <button onClick={() => { setPage('loyalty'); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><Award className="h-4 w-4" />{t('nav.loyalty', locale)}</button>
                         {user?.role === 'admin' && (
                           <button onClick={() => { setPage('admin'); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><LayoutDashboard className="h-4 w-4" />{t('nav.admin', locale)}</button>
                         )}
@@ -415,6 +416,7 @@ export default function Header() {
                 <>
                   <button onClick={() => { setPage('dashboard'); setIsMobileMenuOpen(false); }} className="text-left px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground">{t('nav.profile', locale)}</button>
                   <button onClick={() => { setPage('reading-lists'); setIsMobileMenuOpen(false); }} className="text-left px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground flex items-center gap-2"><Library className="h-4 w-4" />{t('readingLists.title', locale)}</button>
+                  <button onClick={() => { setPage('loyalty'); setIsMobileMenuOpen(false); }} className="text-left px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground flex items-center gap-2"><Award className="h-4 w-4" />{t('nav.loyalty', locale)}</button>
                   <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="text-left px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground">{t('nav.logout', locale)}</button>
                 </>
               ) : (

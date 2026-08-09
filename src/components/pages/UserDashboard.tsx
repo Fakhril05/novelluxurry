@@ -94,12 +94,12 @@ const MOCK_POINTS_HISTORY: PointsHistoryEntry[] = [
   { id: '8', type: 'earned', amount: 90, description: 'Purchase order #NVX-20241101', date: '2024-11-01' },
 ];
 
-const STATUS_CONFIG: Record<string, { labelKey: string; color: string }> = {
-  pending: { labelKey: 'dashboard.pending', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-300' },
-  processing: { labelKey: 'dashboard.processing', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-300' },
-  shipped: { labelKey: 'dashboard.shipped', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-300' },
-  delivered: { labelKey: 'dashboard.delivered', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-300' },
-  cancelled: { labelKey: 'dashboard.cancelled', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-300' },
+const STATUS_CONFIG: Record<string, { labelKey: string; color: string; gradient: string }> = {
+  pending: { labelKey: 'dashboard.pending', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-300', gradient: 'linear-gradient(135deg, #F59E0B, #D97706)' },
+  processing: { labelKey: 'dashboard.processing', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-300', gradient: 'linear-gradient(135deg, #3B82F6, #2563EB)' },
+  shipped: { labelKey: 'dashboard.shipped', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-300', gradient: 'linear-gradient(135deg, #A855F7, #7C3AED)' },
+  delivered: { labelKey: 'dashboard.delivered', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-300', gradient: 'linear-gradient(135deg, #22C55E, #16A34A)' },
+  cancelled: { labelKey: 'dashboard.cancelled', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-300', gradient: 'linear-gradient(135deg, #EF4444, #DC2626)' },
 };
 
 // --- Component ---
@@ -283,7 +283,7 @@ export default function UserDashboard() {
         {/* Desktop: Sidebar Layout */}
         <div className="hidden lg:grid lg:grid-cols-[240px_1fr] lg:gap-8">
           {/* Sidebar */}
-          <aside className="space-y-1">
+          <aside className="space-y-1 relative">
             {tabItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.value;
@@ -291,13 +291,21 @@ export default function UserDashboard() {
                 <button
                   key={item.value}
                   onClick={() => handleTabChange(item.value)}
-                  className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                  className={`relative flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     isActive
                       ? 'bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  {isActive && (
+                    <motion.div
+                      layoutId="dashboard-tab-underline"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full"
+                      style={{ background: 'linear-gradient(180deg, #D4AF37, #B8960C)' }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                    />
+                  )}
+                  <Icon className={`h-4 w-4 ${isActive ? 'text-[#D4AF37]' : ''}`} />
                   <span>{item.label}</span>
                   {item.value === 'wishlist' && wishlist.length > 0 && (
                     <span className={`ml-auto text-xs rounded-full px-2 py-0.5 ${
@@ -398,21 +406,29 @@ export default function UserDashboard() {
         {/* Mobile: Horizontal Tabs */}
         <div className="lg:hidden">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList className="w-full bg-muted/50 h-auto p-1 flex flex-wrap gap-1">
+            <div className="relative w-full bg-muted/50 h-auto p-1 flex flex-wrap gap-1 rounded-lg">
               {tabItems.map((item) => {
                 const Icon = item.icon;
+                const isActive = activeTab === item.value;
                 return (
-                  <TabsTrigger
+                  <button
                     key={item.value}
-                    value={item.value}
-                    className="flex items-center gap-1.5 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-white data-[state=active]:shadow-sm text-xs px-3 py-2 rounded-md flex-1 justify-center"
+                    onClick={() => handleTabChange(item.value)}
+                    className="relative flex items-center gap-1.5 text-xs px-3 py-2 rounded-md flex-1 justify-center transition-colors duration-200"
                   >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">{item.label}</span>
-                  </TabsTrigger>
+                    {isActive && (
+                      <motion.div
+                        layoutId="dashboard-mobile-tab-bg"
+                        className="absolute inset-0 bg-[#D4AF37] rounded-md shadow-sm shadow-[#D4AF37]/25"
+                        transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                      />
+                    )}
+                    <Icon className={`relative z-10 h-3.5 w-3.5 ${isActive ? 'text-white' : 'text-muted-foreground'}`} />
+                    <span className={`relative z-10 hidden sm:inline ${isActive ? 'text-white' : 'text-muted-foreground'}`}>{item.label}</span>
+                  </button>
                 );
               })}
-            </TabsList>
+            </div>
 
             <div className="mt-6">
               <AnimatePresence mode="wait">
@@ -565,18 +581,29 @@ function ProfileTab({ user, locale, isEditing, editForm, setEditForm, onStartEdi
         <div className="flex flex-col sm:flex-row gap-6">
           {/* Avatar & Name Section */}
           <div className="flex flex-col items-center sm:items-start gap-4 sm:min-w-[200px]">
-            <Avatar className="h-20 w-20 border-2 border-[#D4AF37] shadow-lg shadow-[#D4AF37]/20">
-              <AvatarFallback className="bg-[#D4AF37] text-white text-2xl font-bold">
-                {getInitials(user.name)}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <div className="absolute -inset-0.5 rounded-full bg-gradient-to-br from-[#D4AF37] via-[#F5E6A3] to-[#B8960C] opacity-80 blur-[1px]" />
+              <Avatar className="relative h-20 w-20 border-2 border-[#D4AF37] shadow-lg shadow-[#D4AF37]/20">
+                <AvatarFallback
+                  className="bg-gradient-to-br from-[#D4AF37] to-[#B8960C] text-white text-2xl font-bold"
+                >
+                  {getInitials(user.name)}
+                </AvatarFallback>
+              </Avatar>
+            </div>
             <div className="text-center sm:text-left">
               {isEditing ? (
-                <Input
-                  value={editForm.name}
-                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                  className="max-w-[240px] h-9"
-                />
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Input
+                    value={editForm.name}
+                    onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                    className="max-w-[240px] h-9 border-[#D4AF37]/30 focus:border-[#D4AF37]"
+                  />
+                </motion.div>
               ) : (
                 <h3 className="font-heading text-lg font-semibold text-foreground">{user.name}</h3>
               )}
@@ -586,11 +613,26 @@ function ProfileTab({ user, locale, isEditing, editForm, setEditForm, onStartEdi
                   {user.points.toLocaleString()} {t('points.label', locale)}
                 </span>
               </div>
+              {/* Member since badge */}
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/5 px-3 py-1">
+                <Calendar className="h-3 w-3 text-[#D4AF37]" />
+                <span className="text-[11px] font-medium text-[#D4AF37]">
+                  {locale === 'id' ? 'Member sejak Jan 2024' : 'Member since Jan 2024'}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Details Section */}
-          <div className="flex-1 space-y-4">
+          {/* Details Section - gold bordered when editing */}
+          <motion.div
+            className={`flex-1 space-y-4 rounded-xl p-4 transition-all duration-300 ${
+              isEditing
+                ? 'border border-[#D4AF37]/20 bg-[#D4AF37]/[0.02]'
+                : ''
+            }`}
+            animate={isEditing ? { borderColor: ['rgba(212,175,55,0.2)', 'rgba(212,175,55,0.4)', 'rgba(212,175,55,0.2)'] } : {}}
+            transition={isEditing ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
+          >
             <Separator />
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -617,12 +659,18 @@ function ProfileTab({ user, locale, isEditing, editForm, setEditForm, onStartEdi
                     {t('checkout.phone', locale)}
                   </p>
                   {isEditing ? (
-                    <Input
-                      value={editForm.phone}
-                      onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
-                      className="h-9 mt-0.5"
-                      placeholder="08xxxxxxxxxx"
-                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: 0.05 }}
+                    >
+                      <Input
+                        value={editForm.phone}
+                        onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                        className="h-9 mt-0.5 border-[#D4AF37]/30 focus:border-[#D4AF37]"
+                        placeholder="08xxxxxxxxxx"
+                      />
+                    </motion.div>
                   ) : (
                     <p className="text-sm font-medium text-foreground">
                       {user.phone || (locale === 'id' ? 'Belum diisi' : 'Not set')}
@@ -641,12 +689,18 @@ function ProfileTab({ user, locale, isEditing, editForm, setEditForm, onStartEdi
                     {t('checkout.addressField', locale)}
                   </p>
                   {isEditing ? (
-                    <Input
-                      value={editForm.address}
-                      onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
-                      className="h-9 mt-0.5"
-                      placeholder={locale === 'id' ? 'Jl. Contoh No. 123' : '123 Example St.'}
-                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: 0.1 }}
+                    >
+                      <Input
+                        value={editForm.address}
+                        onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+                        className="h-9 mt-0.5 border-[#D4AF37]/30 focus:border-[#D4AF37]"
+                        placeholder={locale === 'id' ? 'Jl. Contoh No. 123' : '123 Example St.'}
+                      />
+                    </motion.div>
                   ) : (
                     <p className="text-sm font-medium text-foreground">
                       {user.address || (locale === 'id' ? 'Belum diisi' : 'Not set')}
@@ -665,12 +719,18 @@ function ProfileTab({ user, locale, isEditing, editForm, setEditForm, onStartEdi
                     {t('checkout.city', locale)}
                   </p>
                   {isEditing ? (
-                    <Input
-                      value={editForm.city}
-                      onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
-                      className="h-9 mt-0.5"
-                      placeholder={locale === 'id' ? 'Jakarta' : 'City'}
-                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: 0.15 }}
+                    >
+                      <Input
+                        value={editForm.city}
+                        onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
+                        className="h-9 mt-0.5 border-[#D4AF37]/30 focus:border-[#D4AF37]"
+                        placeholder={locale === 'id' ? 'Jakarta' : 'City'}
+                      />
+                    </motion.div>
                   ) : (
                     <p className="text-sm font-medium text-foreground">
                       {user.city || (locale === 'id' ? 'Belum diisi' : 'Not set')}
@@ -689,12 +749,18 @@ function ProfileTab({ user, locale, isEditing, editForm, setEditForm, onStartEdi
                     {t('checkout.postal', locale)}
                   </p>
                   {isEditing ? (
-                    <Input
-                      value={editForm.postalCode}
-                      onChange={(e) => setEditForm((f) => ({ ...f, postalCode: e.target.value }))}
-                      className="h-9 mt-0.5"
-                      placeholder="12345"
-                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: 0.2 }}
+                    >
+                      <Input
+                        value={editForm.postalCode}
+                        onChange={(e) => setEditForm((f) => ({ ...f, postalCode: e.target.value }))}
+                        className="h-9 mt-0.5 border-[#D4AF37]/30 focus:border-[#D4AF37]"
+                        placeholder="12345"
+                      />
+                    </motion.div>
                   ) : (
                     <p className="text-sm font-medium text-foreground">
                       {user.postalCode || (locale === 'id' ? 'Belum diisi' : 'Not set')}
@@ -703,7 +769,7 @@ function ProfileTab({ user, locale, isEditing, editForm, setEditForm, onStartEdi
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </CardContent>
     </Card>
@@ -826,7 +892,7 @@ function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
             className="grid grid-cols-2 sm:grid-cols-4 gap-3"
           >
             {/* Total Orders */}
-            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+            <Card className="gold-border-gradient border-border/50 border-l-4 border-l-[#D4AF37] transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg hover:shadow-[#D4AF37]/10">
               <CardContent className="p-4">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#D4AF37]/10 mb-2">
                   <Package className="h-4 w-4 text-[#D4AF37]" />
@@ -837,7 +903,7 @@ function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
             </Card>
 
             {/* Total Spent */}
-            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+            <Card className="gold-border-gradient border-border/50 border-l-4 border-l-[#D4AF37] transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg hover:shadow-[#D4AF37]/10">
               <CardContent className="p-4">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#D4AF37]/10 mb-2">
                   <TrendingUp className="h-4 w-4 text-[#D4AF37]" />
@@ -848,7 +914,7 @@ function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
             </Card>
 
             {/* Active Orders */}
-            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+            <Card className="gold-border-gradient border-border/50 border-l-4 border-l-[#D4AF37] transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg hover:shadow-[#D4AF37]/10">
               <CardContent className="p-4">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30 mb-2">
                   <Truck className="h-4 w-4 text-purple-600 dark:text-purple-400" />
@@ -859,7 +925,7 @@ function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
             </Card>
 
             {/* Completed Orders */}
-            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+            <Card className="gold-border-gradient border-border/50 border-l-4 border-l-[#D4AF37] transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg hover:shadow-[#D4AF37]/10">
               <CardContent className="p-4">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30 mb-2">
                   <PackageCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -882,7 +948,9 @@ function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: idx * 0.05 }}
                 >
-                  <Card className="border-border/50 hover:border-[#D4AF37]/20 transition-colors">
+                  <Card className={`border-border/50 transition-all duration-300 hover:border-[#D4AF37]/20 ${
+                    idx % 2 === 0 ? 'bg-background' : 'bg-[#D4AF37]/[0.02]'
+                  } hover:bg-[#D4AF37]/[0.04]`}>
                     <CardContent className="p-5">
                       {/* Header Row */}
                       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -901,12 +969,14 @@ function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
                               <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                             )}
                           </button>
-                          <Badge
-                            variant="outline"
-                            className={`${statusCfg.color} text-[11px] font-semibold border`}
-                          >
-                            {t(statusCfg.labelKey, locale)}
-                          </Badge>
+                          <div className="relative">
+                            <Badge
+                              variant="outline"
+                              className={`${statusCfg.color} text-[11px] font-semibold border-l-[3px] border-l-[#D4AF37]`}
+                            >
+                              {t(statusCfg.labelKey, locale)}
+                            </Badge>
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Calendar className="h-3.5 w-3.5" />

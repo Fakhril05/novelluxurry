@@ -1,0 +1,1232 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  User,
+     7→  Package,
+     8→  Heart,
+     9→  Star,
+    10→  Award,
+    11→  Edit,
+    12→  Save,
+    13→  X,
+    14→  BookOpen,
+    15→  MapPin,
+    16→  Phone,
+    17→  Mail,
+    18→  Calendar,
+    19→  Clock,
+    20→  ChevronRight,
+    21→  Copy,
+    22→  Check,
+    23→  ShoppingBag,
+    24→  TrendingUp,
+    25→  Truck,
+    26→  PackageCheck,
+    27→} from 'lucide-react';
+    28→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    29→import { Button } from '@/components/ui/button';
+    30→import { Input } from '@/components/ui/input';
+    31→import { Card, CardContent, CardHeader } from '@/components/ui/card';
+    32→import { Badge } from '@/components/ui/badge';
+    33→import { Separator } from '@/components/ui/separator';
+    34→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    35→import { Progress } from '@/components/ui/progress';
+    36→import { Skeleton } from '@/components/ui/skeleton';
+    37→import { useAppStore, formatPrice } from '@/lib/store';
+    38→import { t } from '@/lib/i18n';
+    39→import type { Book } from '@/types';
+    40→import BookCard from '@/components/BookCard';
+    41→import { toast } from 'sonner';
+    42→
+    43→// --- Types ---
+    44→interface OrderItem {
+    45→  title: string;
+    46→  quantity: number;
+    47→  price: number;
+    48→  format: string;
+    49→  bookId?: string;
+    50→}
+    51→
+    52→interface Order {
+    53→  id: string;
+    54→  orderNumber: string;
+    55→  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+    56→  total: number;
+    57→  createdAt: string;
+    58→  items: OrderItem[];
+    59→}
+    60→
+    61→interface PointsHistoryEntry {
+    62→  id: string;
+    63→  type: 'earned' | 'redeemed';
+    64→  amount: number;
+    65→  description: string;
+    66→  date: string;
+    67→}
+    68→
+    69→interface TierInfo {
+    70→  name: string;
+    71→  min: number;
+    72→  max: number;
+    73→  color: string;
+    74→  bgColor: string;
+    75→  borderColor: string;
+    76→  icon: string;
+    77→}
+    78→
+    79→const TIERS: TierInfo[] = [
+    80→  { name: 'Bronze', min: 0, max: 499, color: 'text-amber-700', bgColor: 'bg-amber-100 dark:bg-amber-900/30', borderColor: 'border-amber-400', icon: '🥉' },
+    81→  { name: 'Silver', min: 500, max: 1999, color: 'text-gray-500 dark:text-gray-300', bgColor: 'bg-gray-100 dark:bg-gray-800', borderColor: 'border-gray-400', icon: '🥈' },
+    82→  { name: 'Gold', min: 2000, max: 4999, color: 'text-[#D4AF37]', bgColor: 'bg-[#D4AF37]/10', borderColor: 'border-[#D4AF37]', icon: '🥇' },
+    83→  { name: 'Platinum', min: 5000, max: Infinity, color: 'text-slate-400 dark:text-slate-200', bgColor: 'bg-slate-100 dark:bg-slate-800', borderColor: 'border-slate-400', icon: '💎' },
+    84→];
+    85→
+    86→const MOCK_POINTS_HISTORY: PointsHistoryEntry[] = [
+    87→  { id: '1', type: 'earned', amount: 150, description: 'Purchase order #NVX-20250115', date: '2025-01-15' },
+    88→  { id: '2', type: 'earned', amount: 80, description: 'Purchase order #NVX-20250102', date: '2025-01-02' },
+    89→  { id: '3', type: 'redeemed', amount: -500, description: 'Redeemed Rp5,000 voucher', date: '2024-12-28' },
+    90→  { id: '4', type: 'earned', amount: 200, description: 'Purchase order #NVX-20241220', date: '2024-12-20' },
+    91→  { id: '5', type: 'earned', amount: 120, description: 'Purchase order #NVX-20241210', date: '2024-12-10' },
+    92→  { id: '6', type: 'earned', amount: 300, description: 'Purchase order #NVX-20241125', date: '2024-11-25' },
+    93→  { id: '7', type: 'redeemed', amount: -200, description: 'Redeemed Rp2,000 voucher', date: '2024-11-15' },
+    94→  { id: '8', type: 'earned', amount: 90, description: 'Purchase order #NVX-20241101', date: '2024-11-01' },
+    95→];
+    96→
+    97→const STATUS_CONFIG: Record<string, { labelKey: string; color: string }> = {
+    98→  pending: { labelKey: 'dashboard.pending', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-300' },
+    99→  processing: { labelKey: 'dashboard.processing', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-300' },
+   100→  shipped: { labelKey: 'dashboard.shipped', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-300' },
+   101→  delivered: { labelKey: 'dashboard.delivered', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-300' },
+   102→  cancelled: { labelKey: 'dashboard.cancelled', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-300' },
+   103→};
+   104→
+   105→// --- Component ---
+   106→export default function UserDashboard() {
+   107→  const { user, isAuthenticated, locale, pageParams, setPage, wishlist, setUser } = useAppStore();
+   108→
+   109→  // Redirect if not authenticated
+   110→  useEffect(() => {
+   111→    if (!isAuthenticated || !user) {
+   112→      setPage('login');
+   113→    }
+   114→  }, [isAuthenticated, user, setPage]);
+   115→
+   116→  const activeTab = pageParams.tab || 'profile';
+   117→
+   118→  // --- Profile Edit State ---
+   119→  const [isEditing, setIsEditing] = useState(false);
+   120→  const [editForm, setEditForm] = useState({
+   121→    name: '',
+   122→    phone: '',
+   123→    address: '',
+   124→    city: '',
+   125→    postalCode: '',
+   126→  });
+   127→
+   128→  const startEditing = useCallback(() => {
+   129→    if (!user) return;
+   130→    setEditForm({
+   131→      name: user.name,
+   132→      phone: user.phone || '',
+   133→      address: user.address || '',
+   134→      city: user.city || '',
+   135→      postalCode: user.postalCode || '',
+   136→    });
+   137→    setIsEditing(true);
+   138→  }, [user]);
+   139→
+   140→  const cancelEditing = useCallback(() => {
+   141→    setIsEditing(false);
+   142→  }, []);
+   143→
+   144→  const saveProfile = useCallback(() => {
+   145→    if (!user) return;
+   146→    setUser({ ...user, ...editForm });
+   147→    setIsEditing(false);
+   148→    toast.success(locale === 'id' ? 'Profil berhasil diperbarui' : 'Profile updated successfully');
+   149→  }, [user, editForm, setUser, locale]);
+   150→
+   151→  // --- Orders State ---
+   152→  const [orders, setOrders] = useState<Order[]>([]);
+   153→  const [ordersLoading, setOrdersLoading] = useState(false);
+   154→
+   155→  const fetchOrders = useCallback(async () => {
+   156→    if (!user) return;
+   157→    setOrdersLoading(true);
+   158→    try {
+   159→      const res = await fetch(`/api/orders?userId=${user.id}`);
+   160→      if (res.ok) {
+   161→        const data = await res.json();
+   162→        setOrders(data.orders || data || []);
+   163→      }
+   164→    } catch {
+   165→      // silently fail
+   166→    } finally {
+   167→      setOrdersLoading(false);
+   168→    }
+   169→  }, [user]);
+   170→
+   171→  useEffect(() => {
+   172→    if (activeTab === 'orders') {
+   173→      fetchOrders();
+   174→    }
+   175→  }, [activeTab, fetchOrders]);
+   176→
+   177→  // --- Wishlist Books State ---
+   178→  const [wishlistBooks, setWishlistBooks] = useState<Book[]>([]);
+   179→  const [wishlistLoading, setWishlistLoading] = useState(false);
+   180→
+   181→  const fetchWishlistBooks = useCallback(async () => {
+   182→    if (wishlist.length === 0) {
+   183→      setWishlistBooks([]);
+   184→      return;
+   185→    }
+   186→    setWishlistLoading(true);
+   187→    try {
+   188→      const res = await fetch(`/api/books?ids=${wishlist.join(',')}`);
+   189→      if (res.ok) {
+   190→        const data = await res.json();
+   191→        setWishlistBooks(data.books || data || []);
+   192→      }
+   193→    } catch {
+   194→      // silently fail
+   195→    } finally {
+   196→      setWishlistLoading(false);
+   197→    }
+   198→  }, [wishlist]);
+   199→
+   200→  useEffect(() => {
+   201→    if (activeTab === 'wishlist') {
+   202→      fetchWishlistBooks();
+   203→    }
+   204→  }, [activeTab, fetchWishlistBooks]);
+   205→
+   206→  // --- Helpers ---
+   207→  const getInitials = (name: string) => {
+   208→    return name
+   209→      .split(' ')
+   210→      .map((n) => n[0])
+   211→      .join('')
+   212→      .toUpperCase()
+   213→      .slice(0, 2);
+   214→  };
+   215→
+   216→  const getCurrentTier = (points: number): TierInfo => {
+   217→    return TIERS.find((tier) => points >= tier.min && points < tier.max) || TIERS[TIERS.length - 1];
+   218→  };
+   219→
+   220→  const getNextTier = (points: number): TierInfo | null => {
+   221→    const currentIdx = TIERS.findIndex((tier) => points >= tier.min && points < tier.max);
+   222→    if (currentIdx === -1 || currentIdx === TIERS.length - 1) return null;
+   223→    return TIERS[currentIdx + 1];
+   224→  };
+   225→
+   226→  const getTierProgress = (points: number): number => {
+   227→    const current = getCurrentTier(points);
+   228→    const next = getNextTier(points);
+   229→    if (!next) return 100;
+   230→    const range = next.min - current.min;
+   231→    const progress = points - current.min;
+   232→    return Math.min(Math.round((progress / range) * 100), 100);
+   233→  };
+   234→
+   235→  const formatDate = (dateStr: string) => {
+   236→    const date = new Date(dateStr);
+   237→    return date.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+   238→      year: 'numeric',
+   239→      month: 'short',
+   240→      day: 'numeric',
+   241→    });
+   242→  };
+   243→
+   244→  // Don't render until auth check is done
+   245→  if (!isAuthenticated || !user) {
+   246→    return null;
+   247→  }
+   248→
+   249→  const currentTier = getCurrentTier(user.points);
+   250→  const nextTier = getNextTier(user.points);
+   251→  const tierProgress = getTierProgress(user.points);
+   252→
+   253→  // --- Sidebar Tab Items ---
+   254→  const tabItems = [
+   255→    { value: 'profile', label: t('dashboard.profile', locale), icon: User },
+   256→    { value: 'orders', label: t('dashboard.orders', locale), icon: Package },
+   257→    { value: 'wishlist', label: t('dashboard.wishlist', locale), icon: Heart },
+   258→    { value: 'points', label: t('dashboard.points', locale), icon: Star },
+   259→  ];
+   260→
+   261→  const handleTabChange = (value: string) => {
+   262→    setPage('dashboard', { tab: value });
+   263→  };
+   264→
+   265→  return (
+   266→    <motion.div
+   267→      initial={{ opacity: 0, y: 20 }}
+   268→      animate={{ opacity: 1, y: 0 }}
+   269→      transition={{ duration: 0.4 }}
+   270→      className="min-h-screen"
+   271→    >
+   272→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+   273→        {/* Page Header */}
+   274→        <div className="mb-8">
+   275→          <h1 className="font-heading text-3xl font-bold text-foreground">
+   276→            {t('dashboard.title', locale)}
+   277→          </h1>
+   278→          <p className="mt-1 text-muted-foreground">
+   279→            {locale === 'id' ? 'Kelola akun dan lihat aktivitasmu' : 'Manage your account and view your activity'}
+   280→          </p>
+   281→        </div>
+   282→
+   283→        {/* Desktop: Sidebar Layout */}
+   284→        <div className="hidden lg:grid lg:grid-cols-[240px_1fr] lg:gap-8">
+   285→          {/* Sidebar */}
+   286→          <aside className="space-y-1">
+   287→            {tabItems.map((item) => {
+   288→              const Icon = item.icon;
+   289→              const isActive = activeTab === item.value;
+   290→              return (
+   291→                <button
+   292→                  key={item.value}
+   293→                  onClick={() => handleTabChange(item.value)}
+   294→                  className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 ${
+   295→                    isActive
+   296→                      ? 'bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20'
+   297→                      : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
+   298→                  }`}
+   299→                >
+   300→                  <Icon className="h-4 w-4" />
+   301→                  <span>{item.label}</span>
+   302→                  {item.value === 'wishlist' && wishlist.length > 0 && (
+   303→                    <span className={`ml-auto text-xs rounded-full px-2 py-0.5 ${
+   304→                      isActive ? 'bg-[#D4AF37] text-white' : 'bg-muted text-muted-foreground'
+   305→                    }`}>
+   306→                      {wishlist.length}
+   307→                    </span>
+   308→                  )}
+   309→                  {item.value === 'points' && (
+   310→                    <span className={`ml-auto text-xs font-semibold ${
+   311→                      isActive ? 'text-[#D4AF37]' : 'text-muted-foreground'
+   312→                    }`}>
+   313→                      {user.points.toLocaleString()}
+   314→                    </span>
+   315→                  )}
+   316→                </button>
+   317→              );
+   318→            })}
+   319→          </aside>
+   320→
+   321→          {/* Content */}
+   322→          <div>
+   323→            <AnimatePresence mode="wait">
+   324→              {activeTab === 'profile' && (
+   325→                <motion.div
+   326→                  key="profile"
+   327→                  initial={{ opacity: 0, x: 20 }}
+   328→                  animate={{ opacity: 1, x: 0 }}
+   329→                  exit={{ opacity: 0, x: -20 }}
+   330→                  transition={{ duration: 0.3 }}
+   331→                >
+   332→                  <ProfileTab
+   333→                    user={user}
+   334→                    locale={locale}
+   335→                    isEditing={isEditing}
+   336→                    editForm={editForm}
+   337→                    setEditForm={setEditForm}
+   338→                    onStartEdit={startEditing}
+   339→                    onCancelEdit={cancelEditing}
+   340→                    onSave={saveProfile}
+   341→                    getInitials={getInitials}
+   342→                  />
+   343→                </motion.div>
+   344→              )}
+   345→              {activeTab === 'orders' && (
+   346→                <motion.div
+   347→                  key="orders"
+   348→                  initial={{ opacity: 0, x: 20 }}
+   349→                  animate={{ opacity: 1, x: 0 }}
+   350→                  exit={{ opacity: 0, x: -20 }}
+   351→                  transition={{ duration: 0.3 }}
+   352→                >
+   353→                  <OrdersTab
+   354→                    orders={orders}
+   355→                    loading={ordersLoading}
+   356→                    locale={locale}
+   357→                    formatDate={formatDate}
+   358→                  />
+   359→                </motion.div>
+   360→              )}
+   361→              {activeTab === 'wishlist' && (
+   362→                <motion.div
+   363→                  key="wishlist"
+   364→                  initial={{ opacity: 0, x: 20 }}
+   365→                  animate={{ opacity: 1, x: 0 }}
+   366→                  exit={{ opacity: 0, x: -20 }}
+   367→                  transition={{ duration: 0.3 }}
+   368→                >
+   369→                  <WishlistTab
+   370→                    books={wishlistBooks}
+   371→                    loading={wishlistLoading}
+   372→                    locale={locale}
+   373→                  />
+   374→                </motion.div>
+   375→              )}
+   376→              {activeTab === 'points' && (
+   377→                <motion.div
+   378→                  key="points"
+   379→                  initial={{ opacity: 0, x: 20 }}
+   380→                  animate={{ opacity: 1, x: 0 }}
+   381→                  exit={{ opacity: 0, x: -20 }}
+   382→                  transition={{ duration: 0.3 }}
+   383→                >
+   384→                  <PointsTab
+   385→                    points={user.points}
+   386→                    currentTier={currentTier}
+   387→                    nextTier={nextTier}
+   388→                    tierProgress={tierProgress}
+   389→                    locale={locale}
+   390→                    formatDate={formatDate}
+   391→                  />
+   392→                </motion.div>
+   393→              )}
+   394→            </AnimatePresence>
+   395→          </div>
+   396→        </div>
+   397→
+   398→        {/* Mobile: Horizontal Tabs */}
+   399→        <div className="lg:hidden">
+   400→          <Tabs value={activeTab} onValueChange={handleTabChange}>
+   401→            <TabsList className="w-full bg-muted/50 h-auto p-1 flex flex-wrap gap-1">
+   402→              {tabItems.map((item) => {
+   403→                const Icon = item.icon;
+   404→                return (
+   405→                  <TabsTrigger
+   406→                    key={item.value}
+   407→                    value={item.value}
+   408→                    className="flex items-center gap-1.5 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-white data-[state=active]:shadow-sm text-xs px-3 py-2 rounded-md flex-1 justify-center"
+   409→                  >
+   410→                    <Icon className="h-3.5 w-3.5" />
+   411→                    <span className="hidden sm:inline">{item.label}</span>
+   412→                  </TabsTrigger>
+   413→                );
+   414→              })}
+   415→            </TabsList>
+   416→
+   417→            <div className="mt-6">
+   418→              <AnimatePresence mode="wait">
+   419→                <TabsContent value="profile" forceMount={activeTab === 'profile'}>
+   420→                  {activeTab === 'profile' && (
+   421→                    <motion.div
+   422→                      initial={{ opacity: 0, y: 10 }}
+   423→                      animate={{ opacity: 1, y: 0 }}
+   424→                      exit={{ opacity: 0, y: -10 }}
+   425→                      transition={{ duration: 0.25 }}
+   426→                    >
+   427→                      <ProfileTab
+   428→                        user={user}
+   429→                        locale={locale}
+   430→                        isEditing={isEditing}
+   431→                        editForm={editForm}
+   432→                        setEditForm={setEditForm}
+   433→                        onStartEdit={startEditing}
+   434→                        onCancelEdit={cancelEditing}
+   435→                        onSave={saveProfile}
+   436→                        getInitials={getInitials}
+   437→                      />
+   438→                    </motion.div>
+   439→                  )}
+   440→                </TabsContent>
+   441→                <TabsContent value="orders" forceMount={activeTab === 'orders'}>
+   442→                  {activeTab === 'orders' && (
+   443→                    <motion.div
+   444→                      initial={{ opacity: 0, y: 10 }}
+   445→                      animate={{ opacity: 1, y: 0 }}
+   446→                      exit={{ opacity: 0, y: -10 }}
+   447→                      transition={{ duration: 0.25 }}
+   448→                    >
+   449→                      <OrdersTab
+   450→                        orders={orders}
+   451→                        loading={ordersLoading}
+   452→                        locale={locale}
+   453→                        formatDate={formatDate}
+   454→                      />
+   455→                    </motion.div>
+   456→                  )}
+   457→                </TabsContent>
+   458→                <TabsContent value="wishlist" forceMount={activeTab === 'wishlist'}>
+   459→                  {activeTab === 'wishlist' && (
+   460→                    <motion.div
+   461→                      initial={{ opacity: 0, y: 10 }}
+   462→                      animate={{ opacity: 1, y: 0 }}
+   463→                      exit={{ opacity: 0, y: -10 }}
+   464→                      transition={{ duration: 0.25 }}
+   465→                    >
+   466→                      <WishlistTab
+   467→                        books={wishlistBooks}
+   468→                        loading={wishlistLoading}
+   469→                        locale={locale}
+   470→                      />
+   471→                    </motion.div>
+   472→                  )}
+   473→                </TabsContent>
+   474→                <TabsContent value="points" forceMount={activeTab === 'points'}>
+   475→                  {activeTab === 'points' && (
+   476→                    <motion.div
+   477→                      initial={{ opacity: 0, y: 10 }}
+   478→                      animate={{ opacity: 1, y: 0 }}
+   479→                      exit={{ opacity: 0, y: -10 }}
+   480→                      transition={{ duration: 0.25 }}
+   481→                    >
+   482→                      <PointsTab
+   483→                        points={user.points}
+   484→                        currentTier={currentTier}
+   485→                        nextTier={nextTier}
+   486→                        tierProgress={tierProgress}
+   487→                        locale={locale}
+   488→                        formatDate={formatDate}
+   489→                      />
+   490→                    </motion.div>
+   491→                  )}
+   492→                </TabsContent>
+   493→              </AnimatePresence>
+   494→            </div>
+   495→          </Tabs>
+   496→        </div>
+   497→      </div>
+   498→    </motion.div>
+   499→  );
+   500→}
+   501→
+   502→// --- Profile Tab ---
+   503→interface ProfileTabProps {
+   504→  user: {
+   505→    name: string;
+   506→    email: string;
+   507→    phone?: string | null;
+   508→    address?: string | null;
+   509→    city?: string | null;
+   510→    postalCode?: string | null;
+   511→    points: number;
+   512→  };
+   513→  locale: 'id' | 'en';
+   514→  isEditing: boolean;
+   515→  editForm: { name: string; phone: string; address: string; city: string; postalCode: string };
+   516→  setEditForm: React.Dispatch<React.SetStateAction<typeof editForm>>;
+   517→  onStartEdit: () => void;
+   518→  onCancelEdit: () => void;
+   519→  onSave: () => void;
+   520→  getInitials: (name: string) => string;
+   521→}
+   522→
+   523→function ProfileTab({ user, locale, isEditing, editForm, setEditForm, onStartEdit, onCancelEdit, onSave, getInitials }: ProfileTabProps) {
+   524→  return (
+   525→    <Card className="border-border/50">
+   526→      <CardHeader className="pb-4">
+   527→        <div className="flex items-center justify-between">
+   528→          <h2 className="font-heading text-xl font-semibold text-foreground">
+   529→            {t('dashboard.profile', locale)}
+   530→          </h2>
+   531→          {!isEditing ? (
+   532→            <Button
+   533→              variant="outline"
+   534→              size="sm"
+   535→              onClick={onStartEdit}
+   536→              className="gap-1.5 border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10"
+   537→            >
+   538→              <Edit className="h-3.5 w-3.5" />
+   539→              {t('dashboard.editProfile', locale)}
+   540→            </Button>
+   541→          ) : (
+   542→            <div className="flex gap-2">
+   543→              <Button
+   544→                size="sm"
+   545→                onClick={onSave}
+   546→                className="gap-1.5 bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+   547→              >
+   548→                <Save className="h-3.5 w-3.5" />
+   549→                {t('general.save', locale)}
+   550→              </Button>
+   551→              <Button
+   552→                variant="outline"
+   553→                size="sm"
+   554→                onClick={onCancelEdit}
+   555→                className="gap-1.5"
+   556→              >
+   557→                <X className="h-3.5 w-3.5" />
+   558→                {t('general.cancel', locale)}
+   559→              </Button>
+   560→            </div>
+   561→          )}
+   562→        </div>
+   563→      </CardHeader>
+   564→      <CardContent>
+   565→        <div className="flex flex-col sm:flex-row gap-6">
+   566→          {/* Avatar & Name Section */}
+   567→          <div className="flex flex-col items-center sm:items-start gap-4 sm:min-w-[200px]">
+   568→            <Avatar className="h-20 w-20 border-2 border-[#D4AF37] shadow-lg shadow-[#D4AF37]/20">
+   569→              <AvatarFallback className="bg-[#D4AF37] text-white text-2xl font-bold">
+   570→                {getInitials(user.name)}
+   571→              </AvatarFallback>
+   572→            </Avatar>
+   573→            <div className="text-center sm:text-left">
+   574→              {isEditing ? (
+   575→                <Input
+   576→                  value={editForm.name}
+   577→                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+   578→                  className="max-w-[240px] h-9"
+   579→                />
+   580→              ) : (
+   581→                <h3 className="font-heading text-lg font-semibold text-foreground">{user.name}</h3>
+   582→              )}
+   583→              <div className="flex items-center gap-1.5 mt-1.5">
+   584→                <Star className="h-4 w-4 fill-[#D4AF37] text-[#D4AF37]" />
+   585→                <span className="text-sm font-bold text-[#D4AF37]">
+   586→                  {user.points.toLocaleString()} {t('points.label', locale)}
+   587→                </span>
+   588→              </div>
+   589→            </div>
+   590→          </div>
+   591→
+   592→          {/* Details Section */}
+   593→          <div className="flex-1 space-y-4">
+   594→            <Separator />
+   595→
+   596→            <div className="grid gap-4 sm:grid-cols-2">
+   597→              {/* Email */}
+   598→              <div className="flex items-start gap-3">
+   599→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   600→                  <Mail className="h-4 w-4 text-muted-foreground" />
+   601→                </div>
+   602→                <div className="min-w-0">
+   603→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   604→                    {t('auth.email', locale)}
+   605→                  </p>
+   606→                  <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
+   607→                </div>
+   608→              </div>
+   609→
+   610→              {/* Phone */}
+   611→              <div className="flex items-start gap-3">
+   612→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   613→                  <Phone className="h-4 w-4 text-muted-foreground" />
+   614→                </div>
+   615→                <div className="min-w-0 flex-1">
+   616→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   617→                    {t('checkout.phone', locale)}
+   618→                  </p>
+   619→                  {isEditing ? (
+   620→                    <Input
+   621→                      value={editForm.phone}
+   622→                      onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+   623→                      className="h-9 mt-0.5"
+   624→                      placeholder="08xxxxxxxxxx"
+   625→                    />
+   626→                  ) : (
+   627→                    <p className="text-sm font-medium text-foreground">
+   628→                      {user.phone || (locale === 'id' ? 'Belum diisi' : 'Not set')}
+   629→                    </p>
+   630→                  )}
+   631→                </div>
+   632→              </div>
+   633→
+   634→              {/* Address */}
+   635→              <div className="flex items-start gap-3 sm:col-span-2">
+   636→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   637→                  <MapPin className="h-4 w-4 text-muted-foreground" />
+   638→                </div>
+   639→                <div className="min-w-0 flex-1">
+   640→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   641→                    {t('checkout.addressField', locale)}
+   642→                  </p>
+   643→                  {isEditing ? (
+   644→                    <Input
+   645→                      value={editForm.address}
+   646→                      onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+   647→                      className="h-9 mt-0.5"
+   648→                      placeholder={locale === 'id' ? 'Jl. Contoh No. 123' : '123 Example St.'}
+   649→                    />
+   650→                  ) : (
+   651→                    <p className="text-sm font-medium text-foreground">
+   652→                      {user.address || (locale === 'id' ? 'Belum diisi' : 'Not set')}
+   653→                    </p>
+   654→                  )}
+   655→                </div>
+   656→              </div>
+   657→
+   658→              {/* City */}
+   659→              <div className="flex items-start gap-3">
+   660→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   661→                  <MapPin className="h-4 w-4 text-muted-foreground" />
+   662→                </div>
+   663→                <div className="min-w-0 flex-1">
+   664→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   665→                    {t('checkout.city', locale)}
+   666→                  </p>
+   667→                  {isEditing ? (
+   668→                    <Input
+   669→                      value={editForm.city}
+   670→                      onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
+   671→                      className="h-9 mt-0.5"
+   672→                      placeholder={locale === 'id' ? 'Jakarta' : 'City'}
+   673→                    />
+   674→                  ) : (
+   675→                    <p className="text-sm font-medium text-foreground">
+   676→                      {user.city || (locale === 'id' ? 'Belum diisi' : 'Not set')}
+   677→                    </p>
+   678→                  )}
+   679→                </div>
+   680→              </div>
+   681→
+   682→              {/* Postal Code */}
+   683→              <div className="flex items-start gap-3">
+   684→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   685→                  <MapPin className="h-4 w-4 text-muted-foreground" />
+   686→                </div>
+   687→                <div className="min-w-0 flex-1">
+   688→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   689→                    {t('checkout.postal', locale)}
+   690→                  </p>
+   691→                  {isEditing ? (
+   692→                    <Input
+   693→                      value={editForm.postalCode}
+   694→                      onChange={(e) => setEditForm((f) => ({ ...f, postalCode: e.target.value }))}
+   695→                      className="h-9 mt-0.5"
+   696→                      placeholder="12345"
+   697→                    />
+   698→                  ) : (
+   699→                    <p className="text-sm font-medium text-foreground">
+   700→                      {user.postalCode || (locale === 'id' ? 'Belum diisi' : 'Not set')}
+   701→                    </p>
+   702→                  )}
+   703→                </div>
+   704→              </div>
+   705→            </div>
+   706→          </div>
+   707→        </div>
+   708→      </CardContent>
+   709→    </Card>
+   710→  );
+   711→}
+   712→
+   713→// --- Orders Tab ---
+   714→interface OrdersTabProps {
+   715→  orders: Order[];
+   716→  loading: boolean;
+   717→  locale: 'id' | 'en';
+   718→  formatDate: (dateStr: string) => string;
+   719→}
+   720→
+   721→function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
+   722→  const [copiedId, setCopiedId] = useState<string | null>(null);
+   723→
+   724→  const copyOrderNumber = (orderNumber: string, orderId: string) => {
+   725→    navigator.clipboard.writeText(orderNumber).then(() => {
+   726→      setCopiedId(orderId);
+   727→      toast.success(t('dashboard.orderCopied', locale));
+   728→      setTimeout(() => setCopiedId(null), 2000);
+   729→    });
+   730→  };
+   731→
+   732→  // Compute statistics
+   733→  const totalOrders = orders.length;
+   734→  const totalSpent = orders.reduce((sum, o) => sum + o.total, 0);
+   735→  const activeOrders = orders.filter((o) => ['pending', 'processing', 'shipped'].includes(o.status)).length;
+   736→  const completedOrders = orders.filter((o) => o.status === 'delivered').length;
+   737→
+   738→  if (loading) {
+   739→    return (
+   740→      <div className="space-y-4">
+   741→        <h2 className="font-heading text-xl font-semibold text-foreground">
+   742→          {t('dashboard.orderHistory', locale)}
+   743→        </h2>
+   744→        {/* Stats skeleton */}
+   745→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   746→          {Array.from({ length: 4 }).map((_, i) => (
+   747→            <Card key={i} className="border-border/50">
+   748→              <CardContent className="p-4">
+   749→                <Skeleton className="h-8 w-8 rounded-lg mb-2" />
+   750→                <Skeleton className="h-4 w-20 mb-1" />
+   751→                <Skeleton className="h-6 w-12" />
+   752→              </CardContent>
+   753→            </Card>
+   754→          ))}
+   755→        </div>
+   756→        {/* Orders skeleton */}
+   757→        {Array.from({ length: 3 }).map((_, i) => (
+   758→          <Card key={i} className="border-border/50">
+   759→            <CardContent className="p-6 space-y-3">
+   760→              <div className="flex justify-between">
+   761→                <Skeleton className="h-5 w-32" />
+   762→                <Skeleton className="h-6 w-20 rounded-full" />
+   763→              </div>
+   764→              <Skeleton className="h-4 w-24" />
+   765→              <Separator />
+   766→              <div className="space-y-2">
+   767→                <Skeleton className="h-4 w-full" />
+   768→                <Skeleton className="h-4 w-3/4" />
+   769→              </div>
+   770→            </CardContent>
+   771→          </Card>
+   772→        ))}
+   773→      </div>
+   774→    );
+   775→  }
+   776→
+   777→  return (
+   778→    <div>
+   779→      <h2 className="font-heading text-xl font-semibold text-foreground mb-6">
+   780→        {t('dashboard.orderHistory', locale)}
+   781→      </h2>
+   782→
+   783→      {orders.length === 0 ? (
+   784→        <motion.div
+   785→          initial={{ opacity: 0, scale: 0.95 }}
+   786→          animate={{ opacity: 1, scale: 1 }}
+   787→          className="flex flex-col items-center justify-center py-16 text-center"
+   788→        >
+   789→          <div className="relative mb-6">
+   790→            <motion.div
+   791→              className="flex h-20 w-20 items-center justify-center rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/20"
+   792→              animate={{ scale: [1, 1.05, 1] }}
+   793→              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   794→            >
+   795→              <ShoppingBag className="h-10 w-10 text-[#D4AF37]" />
+   796→            </motion.div>
+   797→            <motion.div
+   798→              className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-[#D4AF37]"
+   799→              animate={{ opacity: [1, 0.3, 1] }}
+   800→              transition={{ duration: 1.5, repeat: Infinity }}
+   801→            />
+   802→          </div>
+   803→          <p className="text-lg font-semibold text-foreground mb-2">
+   804→            {t('dashboard.noOrders', locale)}
+   805→          </p>
+   806→          <p className="text-sm text-muted-foreground max-w-xs">
+   807→            {locale === 'id'
+   808→              ? 'Mulai belanja dan pesananmu akan muncul di sini'
+   809→              : 'Start shopping and your orders will appear here'}
+   810→          </p>
+   811→          <Button
+   812→            onClick={() => useAppStore.getState().setPage('catalog')}
+   813→            className="mt-6 bg-gradient-to-r from-[#D4AF37] to-[#B8960C] text-white hover:from-[#B8960C] hover:to-[#9A7B0A] shadow-md shadow-[#D4AF37]/20"
+   814→          >
+   815→            <BookOpen className="h-4 w-4 mr-2" />
+   816→            {locale === 'id' ? 'Belanja Sekarang' : 'Shop Now'}
+   817→          </Button>
+   818→        </motion.div>
+   819→      ) : (
+   820→        <div className="space-y-6">
+   821→          {/* Statistics Cards */}
+   822→          <motion.div
+   823→            initial={{ opacity: 0, y: 10 }}
+   824→            animate={{ opacity: 1, y: 0 }}
+   825→            transition={{ duration: 0.4 }}
+   826→            className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+   827→          >
+   828→            {/* Total Orders */}
+   829→            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+   830→              <CardContent className="p-4">
+   831→                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#D4AF37]/10 mb-2">
+   832→                  <Package className="h-4 w-4 text-[#D4AF37]" />
+   833→                </div>
+   834→                <p className="text-xs text-muted-foreground font-medium">{t('dashboard.totalOrders', locale)}</p>
+   835→                <p className="text-xl font-bold text-foreground mt-0.5">{totalOrders}</p>
+   836→              </CardContent>
+   837→            </Card>
+   838→
+   839→            {/* Total Spent */}
+   840→            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+   841→              <CardContent className="p-4">
+   842→                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#D4AF37]/10 mb-2">
+   843→                  <TrendingUp className="h-4 w-4 text-[#D4AF37]" />
+   844→                </div>
+   845→                <p className="text-xs text-muted-foreground font-medium">{t('dashboard.totalSpent', locale)}</p>
+   846→                <p className="text-xl font-bold text-[#D4AF37] mt-0.5">{formatPrice(totalSpent, locale)}</p>
+   847→              </CardContent>
+   848→            </Card>
+   849→
+   850→            {/* Active Orders */}
+   851→            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+   852→              <CardContent className="p-4">
+   853→                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30 mb-2">
+   854→                  <Truck className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+   855→                </div>
+   856→                <p className="text-xs text-muted-foreground font-medium">{t('dashboard.activeOrders', locale)}</p>
+   857→                <p className="text-xl font-bold text-foreground mt-0.5">{activeOrders}</p>
+   858→              </CardContent>
+   859→            </Card>
+   860→
+   861→            {/* Completed Orders */}
+   862→            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+   863→              <CardContent className="p-4">
+   864→                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30 mb-2">
+   865→                  <PackageCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+   866→                </div>
+   867→                <p className="text-xs text-muted-foreground font-medium">{t('dashboard.completedOrders', locale)}</p>
+   868→                <p className="text-xl font-bold text-foreground mt-0.5">{completedOrders}</p>
+   869→              </CardContent>
+   870→            </Card>
+   871→          </motion.div>
+   872→
+   873→          {/* Orders List */}
+   874→          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1 scrollbar-thin">
+   875→            {orders.map((order, idx) => {
+   876→              const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+   877→              const isCopied = copiedId === order.id;
+   878→              return (
+   879→                <motion.div
+   880→                  key={order.id}
+   881→                  initial={{ opacity: 0, y: 10 }}
+   882→                  animate={{ opacity: 1, y: 0 }}
+   883→                  transition={{ duration: 0.3, delay: idx * 0.05 }}
+   884→                >
+   885→                  <Card className="border-border/50 hover:border-[#D4AF37]/20 transition-colors">
+   886→                    <CardContent className="p-5">
+   887→                      {/* Header Row */}
+   888→                      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+   889→                        <div className="flex items-center gap-2">
+   890→                          <span className="font-mono text-sm font-semibold text-foreground">
+   891→                            {order.orderNumber}
+   892→                          </span>
+   893→                          <button
+   894→                            onClick={() => copyOrderNumber(order.orderNumber, order.id)}
+   895→                            className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-muted transition-colors"
+   896→                            aria-label="Copy order number"
+   897→                          >
+   898→                            {isCopied ? (
+   899→                              <Check className="h-3.5 w-3.5 text-green-500" />
+   900→                            ) : (
+   901→                              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+   902→                            )}
+   903→                          </button>
+   904→                          <Badge
+   905→                            variant="outline"
+   906→                            className={`${statusCfg.color} text-[11px] font-semibold border`}
+   907→                          >
+   908→                            {t(statusCfg.labelKey, locale)}
+   909→                          </Badge>
+   910→                        </div>
+   911→                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   912→                          <Calendar className="h-3.5 w-3.5" />
+   913→                          {formatDate(order.createdAt)}
+   914→                        </div>
+   915→                      </div>
+   916→
+   917→                      {/* Items List */}
+   918→                      <div className="space-y-2 mb-4">
+   919→                        {order.items?.map((item, i) => (
+   920→                          <div
+   921→                            key={i}
+   922→                            className="flex items-center gap-3 py-1.5"
+   923→                          >
+   924→                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+   925→                              <BookOpen className="h-4 w-4 text-muted-foreground" />
+   926→                            </div>
+   927→                            <div className="flex-1 min-w-0">
+   928→                              <p className="text-sm font-medium text-foreground truncate">
+   929→                                {item.title}
+   930→                              </p>
+   931→                              <p className="text-xs text-muted-foreground">
+   932→                                {item.format} × {item.quantity}
+   933→                              </p>
+   934→                            </div>
+   935→                            <span className="text-sm font-medium text-foreground shrink-0">
+   936→                              {formatPrice(item.price * item.quantity, locale)}
+   937→                            </span>
+   938→                          </div>
+   939→                        ))}
+   940→                      </div>
+   941→
+   942→                      <Separator className="mb-3" />
+   943→
+   944→                      {/* Total & Track */}
+   945→                      <div className="flex items-center justify-between">
+   946→                        <div className="flex items-center gap-2">
+   947→                          <span className="text-sm text-muted-foreground">
+   948→                            {t('cart.total', locale)}
+   949→                          </span>
+   950→                          <span className="text-base font-bold text-[#D4AF37]">
+   951→                            {formatPrice(order.total, locale)}
+   952→                          </span>
+   953→                        </div>
+   954→                        {order.status !== 'cancelled' && order.status !== 'delivered' && (
+   955→                          <Button
+   956→                            size="sm"
+   957→                            variant="outline"
+   958→                            onClick={() => useAppStore.getState().setPage('order-tracking', { orderNumber: order.orderNumber })}
+   959→                            className="gap-1.5 border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 text-xs"
+   960→                          >
+   961→                            <Truck className="h-3.5 w-3.5" />
+   962→                            {t('dashboard.trackOrder', locale)}
+   963→                          </Button>
+   964→                        )}
+   965→                      </div>
+   966→                    </CardContent>
+   967→                  </Card>
+   968→                </motion.div>
+   969→              );
+   970→            })}
+   971→          </div>
+   972→        </div>
+   973→      )}
+   974→    </div>
+   975→  );
+   976→}
+   977→
+   978→// --- Wishlist Tab ---
+   979→interface WishlistTabProps {
+   980→  books: Book[];
+   981→  loading: boolean;
+   982→  locale: 'id' | 'en';
+   983→}
+   984→
+   985→function WishlistTab({ books, loading, locale }: WishlistTabProps) {
+   986→  const wishlist = useAppStore((s) => s.wishlist);
+   987→
+   988→  if (loading) {
+   989→    return (
+   990→      <div>
+   991→        <h2 className="font-heading text-xl font-semibold text-foreground mb-6">
+   992→          {t('dashboard.wishlist', locale)}
+   993→        </h2>
+   994→        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+   995→          {Array.from({ length: 4 }).map((_, i) => (
+   996→            <div key={i} className="space-y-2.5">
+   997→              <Skeleton className="aspect-[2/3] w-full rounded-xl" />
+   998→              <Skeleton className="h-4 w-3/4" />
+   999→              <Skeleton className="h-3 w-1/2" />
+  1000→              <Skeleton className="h-4 w-1/3" />
+  1001→            </div>
+  1002→          ))}
+  1003→        </div>
+  1004→      </div>
+  1005→    );
+  1006→  }
+  1007→
+  1008→  return (
+  1009→    <div>
+  1010→      <h2 className="font-heading text-xl font-semibold text-foreground mb-6">
+  1011→        {t('dashboard.wishlist', locale)}
+  1012→      </h2>
+  1013→
+  1014→      {wishlist.length === 0 ? (
+  1015→        <motion.div
+  1016→          initial={{ opacity: 0, scale: 0.95 }}
+  1017→          animate={{ opacity: 1, scale: 1 }}
+  1018→          className="flex flex-col items-center justify-center py-16 text-center"
+  1019→        >
+  1020→          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
+  1021→            <Heart className="h-8 w-8 text-muted-foreground" />
+  1022→          </div>
+  1023→          <p className="text-lg font-medium text-foreground mb-1">
+  1024→            {locale === 'id' ? 'Wishlist kosong' : 'Wishlist is empty'}
+  1025→          </p>
+  1026→          <p className="text-sm text-muted-foreground">
+  1027→            {locale === 'id'
+  1028→              ? 'Simpan novel favoritmu agar mudah ditemukan'
+  1029→              : 'Save your favorite novels for easy access'}
+  1030→          </p>
+  1031→          <Button
+  1032→            onClick={() => useAppStore.getState().setPage('catalog')}
+  1033→            className="mt-6 bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+  1034→          >
+  1035→            {locale === 'id' ? 'Jelajahi Katalog' : 'Explore Catalog'}
+  1036→          </Button>
+  1037→        </motion.div>
+  1038→      ) : (
+  1039→        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+  1040→          {books.map((book, idx) => (
+  1041→            <BookCard key={book.id} book={book} index={idx} />
+  1042→          ))}
+  1043→        </div>
+  1044→      )}
+  1045→    </div>
+  1046→  );
+  1047→}
+  1048→
+  1049→// --- Points Tab ---
+  1050→interface PointsTabProps {
+  1051→  points: number;
+  1052→  currentTier: TierInfo;
+  1053→  nextTier: TierInfo | null;
+  1054→  tierProgress: number;
+  1055→  locale: 'id' | 'en';
+  1056→  formatDate: (dateStr: string) => string;
+  1057→}
+  1058→
+  1059→function PointsTab({ points, currentTier, nextTier, tierProgress, locale, formatDate }: PointsTabProps) {
+  1060→  return (
+  1061→    <div className="space-y-6">
+  1062→      <h2 className="font-heading text-xl font-semibold text-foreground">
+  1063→        {t('dashboard.points', locale)}
+  1064→      </h2>
+  1065→
+  1066→      {/* Points Summary Card */}
+  1067→      <Card className="border-border/50 overflow-hidden">
+  1068→        <div className="bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent p-6">
+  1069→          <div className="flex flex-col sm:flex-row items-center gap-6">
+  1070→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+  1071→              <Award className="h-10 w-10 text-[#D4AF37]" />
+  1072→            </div>
+  1073→            <div className="flex-1 text-center sm:text-left">
+  1074→              <p className="text-sm text-muted-foreground mb-1">
+  1075→                {locale === 'id' ? 'Total Poin Kamu' : 'Your Total Points'}
+  1076→              </p>
+  1077→              <p className="text-4xl font-bold text-[#D4AF37] font-heading">
+  1078→                {points.toLocaleString()}
+  1079→              </p>
+  1080→              <p className="text-sm text-muted-foreground mt-1">
+  1081→                {locale === 'id'
+  1082→                  ? `Tier saat ini: `
+  1083→                  : 'Current tier: '}
+  1084→                <span className={`font-semibold ${currentTier.color}`}>
+  1085→                  {currentTier.icon} {currentTier.name}
+  1086→                </span>
+  1087→              </p>
+  1088→            </div>
+  1089→          </div>
+  1090→        </div>
+  1091→
+  1092→        <CardContent className="p-6">
+  1093→          {/* Tier Progress */}
+  1094→          {nextTier && (
+  1095→            <div className="space-y-3">
+  1096→              <div className="flex items-center justify-between text-sm">
+  1097→                <span className={`font-medium ${currentTier.color}`}>
+  1098→                  {currentTier.icon} {currentTier.name}
+  1099→                </span>
+  1100→                <span className="text-muted-foreground">
+  1101→                  <ChevronRight className="inline h-4 w-4" />
+  1102→                </span>
+  1103→                <span className={`font-medium ${nextTier.color}`}>
+  1104→                  {nextTier.icon} {nextTier.name}
+  1105→                </span>
+  1106→              </div>
+  1107→              <div className="relative">
+  1108→                <Progress
+  1109→                  value={tierProgress}
+  1110→                  className="h-3 bg-muted rounded-full"
+  1111→                />
+  1112→                <div
+  1113→                  className="absolute top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-[#D4AF37] border-2 border-background shadow-md transition-all duration-500"
+  1114→                  style={{ left: `calc(${tierProgress}% - 10px)` }}
+  1115→                />
+  1116→              </div>
+  1117→              <div className="flex justify-between text-xs text-muted-foreground">
+  1118→                <span>{currentTier.min.toLocaleString()}</span>
+  1119→                <span>{locale === 'id'
+  1120→                  ? `${(nextTier.min - points).toLocaleString()} poin lagi`
+  1121→                  : `${(nextTier.min - points).toLocaleString()} points to go`}
+  1122→                </span>
+  1123→                <span>{nextTier.min.toLocaleString()}</span>
+  1124→              </div>
+  1125→            </div>
+  1126→          )}
+  1127→
+  1128→          {!nextTier && (
+  1129→            <div className="text-center py-4">
+  1130→              <p className="text-sm text-muted-foreground">
+  1131→                {locale === 'id'
+  1132→                  ? '🎉 Kamu sudah mencapai tier tertinggi!'
+  1133→                  : '🎉 You\'ve reached the highest tier!'}
+  1134→              </p>
+  1135→            </div>
+  1136→          )}
+  1137→        </CardContent>
+  1138→      </Card>
+  1139→
+  1140→      {/* Tier Overview */}
+  1141→      <Card className="border-border/50">
+  1142→        <CardHeader className="pb-3">
+  1143→          <h3 className="font-heading text-lg font-semibold text-foreground">
+  1144→            {locale === 'id' ? 'Tier Overview' : 'Tier Overview'}
+  1145→          </h3>
+  1146→        </CardHeader>
+  1147→        <CardContent>
+  1148→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  1149→            {TIERS.map((tier) => {
+  1150→              const isCurrentTier = tier.name === currentTier.name;
+  1151→              return (
+  1152→                <div
+  1153→                  key={tier.name}
+  1154→                  className={`rounded-xl border p-4 text-center transition-all ${
+  1155→                    isCurrentTier
+  1156→                      ? `${tier.bgColor} ${tier.borderColor} border-2 shadow-md`
+  1157→                      : 'border-border/50 bg-card'
+  1158→                  }`}
+  1159→                >
+  1160→                  <span className="text-2xl">{tier.icon}</span>
+  1161→                  <p className={`text-sm font-semibold mt-1.5 ${isCurrentTier ? tier.color : 'text-foreground'}`}>
+  1162→                    {tier.name}
+  1163→                  </p>
+  1164→                  <p className="text-xs text-muted-foreground mt-0.5">
+  1165→                    {tier.max === Infinity
+  1166→                      ? `${tier.min.toLocaleString()}+`
+  1167→                      : `${tier.min.toLocaleString()} - ${tier.max.toLocaleString()}`}
+  1168→                  </p>
+  1169→                </div>
+  1170→              );
+  1171→            })}
+  1172→          </div>
+  1173→        </CardContent>
+  1174→      </Card>
+  1175→
+  1176→      {/* Points History */}
+  1177→      <Card className="border-border/50">
+  1178→        <CardHeader className="pb-3">
+  1179→          <h3 className="font-heading text-lg font-semibold text-foreground">
+  1180→            {locale === 'id' ? 'Riwayat Poin' : 'Points History'}
+  1181→          </h3>
+  1182→        </CardHeader>
+  1183→        <CardContent>
+  1184→          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1 scrollbar-thin">
+  1185→            {MOCK_POINTS_HISTORY.map((entry, idx) => (
+  1186→              <motion.div
+  1187→                key={entry.id}
+  1188→                initial={{ opacity: 0, x: -10 }}
+  1189→                animate={{ opacity: 1, x: 0 }}
+  1190→                transition={{ duration: 0.2, delay: idx * 0.03 }}
+  1191→                className="flex items-center gap-4 py-2.5"
+  1192→              >
+  1193→                <div
+  1194→                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+  1195→                    entry.type === 'earned'
+  1196→                      ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+  1197→                      : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+  1198→                  }`}
+  1199→                >
+  1200→                  {entry.type === 'earned' ? (
+  1201→                    <Star className="h-4 w-4" />
+  1202→                  ) : (
+  1203→                    <X className="h-4 w-4" />
+  1204→                  )}
+  1205→                </div>
+  1206→                <div className="flex-1 min-w-0">
+  1207→                  <p className="text-sm font-medium text-foreground truncate">
+  1208→                    {entry.description}
+  1209→                  </p>
+  1210→                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+  1211→                    <Clock className="h-3 w-3" />
+  1212→                    {formatDate(entry.date)}
+  1213→                  </div>
+  1214→                </div>
+  1215→                <span
+  1216→                  className={`text-sm font-bold shrink-0 ${
+  1217→                    entry.type === 'earned'
+  1218→                      ? 'text-emerald-600 dark:text-emerald-400'
+  1219→                      : 'text-red-600 dark:text-red-400'
+  1220→                  }`}
+  1221→                >
+  1222→                  {entry.amount > 0 ? '+' : ''}{entry.amount.toLocaleString()}
+  1223→                </span>
+  1224→              </motion.div>
+  1225→            ))}
+  1226→          </div>
+  1227→        </CardContent>
+  1228→      </Card>
+  1229→    </div>
+  1230→  );
+  1231→}
+  1232→

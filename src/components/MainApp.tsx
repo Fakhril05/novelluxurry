@@ -24,6 +24,8 @@ import WishlistPage from '@/components/pages/WishlistPage';
 import OrderSuccessPage from '@/components/pages/OrderSuccessPage';
 import ComparePage from '@/components/pages/ComparePage';
 import ReadingListsPage from '@/components/pages/ReadingListsPage';
+import LoyaltyPage from '@/components/pages/LoyaltyPage';
+import VoucherPage from '@/components/pages/VoucherPage';
 
 const pageVariants = {
   initial: { opacity: 0, y: 16, scale: 0.995 },
@@ -82,6 +84,8 @@ export default function MainApp() {
       case 'wishlist': return <WishlistPage />;
       case 'compare': return <ComparePage />;
       case 'reading-lists': return <ReadingListsPage />;
+      case 'loyalty': return <LoyaltyPage />;
+      case 'vouchers': return <VoucherPage />;
       case 'order-success': return <OrderSuccessPage />;
       default: return <HomePage />;
     }

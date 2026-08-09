@@ -106,6 +106,7 @@ import {
   Phone,
   FileText,
   Search,
+  Factory,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -221,7 +222,7 @@ const TIMELINE_STEPS: TimelineStep[] = [
     key: 'processing',
     titleKey: 'tracking.stepProcessing',
     descKey: 'tracking.stepProcessingDesc',
-    icon: Package,
+    icon: Factory,
     isCompleted: (status) => ['processing', 'shipped', 'delivered'].includes(status),
     isActive: (status) => status === 'processing',
     isHidden: (status) => status === 'cancelled',
@@ -239,7 +240,7 @@ const TIMELINE_STEPS: TimelineStep[] = [
     key: 'delivered',
     titleKey: 'tracking.stepDelivered',
     descKey: 'tracking.stepDeliveredDesc',
-    icon: CheckCircle,
+    icon: MapPin,
     isCompleted: (status) => status === 'delivered',
     isActive: (status) => status === 'delivered',
     isHidden: (status) => status === 'cancelled',
@@ -308,6 +309,31 @@ function getEstimatedDate(orderDate: string, daysOffset: number, locale: 'id' | 
   return d.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
     weekday: 'short', month: 'short', day: 'numeric',
   });
+}
+
+// --- Gold section heading component ---
+function GoldSectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="font-heading text-lg font-semibold text-foreground mb-4 flex items-center gap-2.5">
+      <span
+        className="inline-block h-5 w-1 rounded-full shrink-0"
+        style={{ background: 'linear-gradient(180deg, #D4AF37, #F0D060)' }}
+      />
+      {children}
+    </h2>
+  );
+}
+
+// --- Gold card wrapper ---
+function GoldCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <Card
+      className={`border-border/50 overflow-hidden ${className}`}
+      style={{ boxShadow: '0 4px 24px -4px rgba(212,175,55,0.08)' }}
+    >
+      {children}
+    </Card>
+  );
 }
 
 // --- Component ---
@@ -401,8 +427,13 @@ export default function OrderTrackingPage() {
   // --- Loading Skeleton ---
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-background relative overflow-hidden">
+        {/* Subtle gold radial gradient background pattern */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ background: 'radial-gradient(ellipse 600px 400px at 20% 10%, rgba(212,175,55,0.04) 0%, transparent 70%), radial-gradient(ellipse 500px 350px at 80% 80%, rgba(212,175,55,0.03) 0%, transparent 70%)' }}
+        />
+        <div className="relative mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
           <motion.div
             initial="hidden"
             animate="visible"
@@ -425,7 +456,8 @@ export default function OrderTrackingPage() {
 
             {/* Order summary skeleton */}
             <motion.div variants={fadeInUp}>
-              <Card className="border-border/50">
+              <GoldCard>
+                <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, #D4AF37, #F0D060, #D4AF37)' }} />
                 <CardContent className="p-6 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="space-y-2">
@@ -441,18 +473,18 @@ export default function OrderTrackingPage() {
                     <Skeleton className="h-16 w-full rounded-lg" />
                   </div>
                 </CardContent>
-              </Card>
+              </GoldCard>
             </motion.div>
 
             {/* Timeline skeleton */}
             <motion.div variants={fadeInUp}>
               <Skeleton className="h-6 w-40 mb-4" />
-              <Card className="border-border/50">
+              <GoldCard>
                 <CardContent className="p-6">
                   <div className="space-y-6">
                     {Array.from({ length: 4 }).map((_, i) => (
                       <div key={i} className="flex gap-4">
-                        <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                        <Skeleton className="h-11 w-11 rounded-full shrink-0" />
                         <div className="flex-1 space-y-2">
                           <Skeleton className="h-4 w-36" />
                           <Skeleton className="h-3 w-24" />
@@ -462,13 +494,13 @@ export default function OrderTrackingPage() {
                     ))}
                   </div>
                 </CardContent>
-              </Card>
+              </GoldCard>
             </motion.div>
 
             {/* Items skeleton */}
             <motion.div variants={fadeInUp}>
               <Skeleton className="h-6 w-32 mb-4" />
-              <Card className="border-border/50">
+              <GoldCard>
                 <CardContent className="p-6 space-y-4">
                   {Array.from({ length: 2 }).map((_, i) => (
                     <div key={i} className="flex items-center justify-between">
@@ -480,29 +512,29 @@ export default function OrderTrackingPage() {
                     </div>
                   ))}
                 </CardContent>
-              </Card>
+              </GoldCard>
             </motion.div>
 
             {/* Shipping & Payment skeleton */}
             <div className="grid gap-6 sm:grid-cols-2">
               <motion.div variants={fadeInUp}>
                 <Skeleton className="h-6 w-36 mb-4" />
-                <Card className="border-border/50">
+                <GoldCard>
                   <CardContent className="p-6 space-y-3">
                     <Skeleton className="h-4 w-32" />
                     <Skeleton className="h-4 w-full" />
                     <Skeleton className="h-4 w-24" />
                   </CardContent>
-                </Card>
+                </GoldCard>
               </motion.div>
               <motion.div variants={fadeInUp}>
                 <Skeleton className="h-6 w-36 mb-4" />
-                <Card className="border-border/50">
+                <GoldCard>
                   <CardContent className="p-6 space-y-3">
                     <Skeleton className="h-4 w-28" />
                     <Skeleton className="h-4 w-36" />
                   </CardContent>
-                </Card>
+                </GoldCard>
               </motion.div>
             </div>
           </motion.div>
@@ -514,8 +546,13 @@ export default function OrderTrackingPage() {
   // --- Search Form (no orderId in params) ---
   if (!orderId && !order) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-background relative overflow-hidden">
+        {/* Subtle gold radial gradient background pattern */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ background: 'radial-gradient(ellipse 600px 400px at 30% 20%, rgba(212,175,55,0.05) 0%, transparent 70%), radial-gradient(ellipse 500px 350px at 70% 70%, rgba(212,175,55,0.04) 0%, transparent 70%)' }}
+        />
+        <div className="relative mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
           <motion.div
             initial="hidden"
             animate="visible"
@@ -532,7 +569,7 @@ export default function OrderTrackingPage() {
                         e.preventDefault();
                         setPage('home');
                       }}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-muted-foreground hover:text-[#D4AF37] transition-colors"
                     >
                       {t('nav.home', locale)}
                     </BreadcrumbLink>
@@ -549,35 +586,62 @@ export default function OrderTrackingPage() {
 
             {/* Search Card */}
             <motion.div variants={fadeInUp}>
-              <Card className="border-border/50 overflow-hidden">
-                <div className="bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent p-8 text-center">
+              <GoldCard className="overflow-visible">
+                {/* Gold gradient top border */}
+                <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, #D4AF37, #F0D060, #D4AF37)' }} />
+                <div className="bg-gradient-to-br from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent p-8 sm:p-12 text-center">
+                  {/* Large gold Truck icon in animated circle */}
                   <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
+                    initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-                    className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/20"
+                    transition={{ delay: 0.15, type: 'spring', stiffness: 180, damping: 12 }}
+                    className="relative mx-auto mb-6"
                   >
-                    <Search className="h-8 w-8 text-[#D4AF37]" />
+                    <motion.div
+                      className="absolute inset-0 rounded-full"
+                      style={{ border: '2px solid rgba(212,175,55,0.2)' }}
+                      animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0, 0.5] }}
+                      transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    <motion.div
+                      className="absolute -inset-1.5 rounded-full"
+                      style={{ border: '1px solid rgba(212,175,55,0.1)' }}
+                      animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0, 0.3] }}
+                      transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
+                    />
+                    <div
+                      className="flex h-24 w-24 sm:h-28 sm:w-28 items-center justify-center rounded-full"
+                      style={{
+                        background: 'linear-gradient(135deg, #D4AF37 0%, #F0D060 50%, #D4AF37 100%)',
+                        boxShadow: '0 8px 32px -4px rgba(212,175,55,0.35)',
+                      }}
+                    >
+                      <Truck className="h-11 w-11 sm:h-12 sm:w-12 text-white" />
+                    </div>
                   </motion.div>
-                  <h1 className="font-heading text-2xl font-bold text-foreground mb-2">
+                  <h1 className="font-heading text-2xl sm:text-3xl font-bold text-foreground mb-2">
                     {t('tracking.searchTitle', locale)}
                   </h1>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
                     {t('tracking.searchSubtitle', locale)}
                   </p>
                 </div>
-                <CardContent className="p-6">
+                <CardContent className="p-6 sm:p-8">
                   <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder={t('tracking.searchPlaceholder', locale)}
-                      className="flex-1 h-11"
-                    />
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                      <Input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder={t('tracking.searchPlaceholder', locale)}
+                        className="pl-10 h-12 text-base focus-visible:ring-[#D4AF37]/40 focus-visible:border-[#D4AF37]/50 transition-all"
+                      />
+                    </div>
                     <Button
                       type="submit"
                       disabled={searching || !searchQuery.trim()}
-                      className="h-11 bg-[#D4AF37] text-white hover:bg-[#B8960C] px-8 shrink-0"
+                      className="h-12 px-8 shrink-0 text-white font-semibold transition-all hover:shadow-lg hover:shadow-[#D4AF37]/25"
+                      style={{ background: 'linear-gradient(135deg, #D4AF37 0%, #F0D060 100%)' }}
                     >
                       {searching ? (
                         <motion.div
@@ -606,7 +670,7 @@ export default function OrderTrackingPage() {
                     </motion.div>
                   )}
                 </CardContent>
-              </Card>
+              </GoldCard>
             </motion.div>
           </motion.div>
         </div>
@@ -617,8 +681,13 @@ export default function OrderTrackingPage() {
   // --- Error State (order not found) ---
   if (error || (!order && orderId)) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-background relative overflow-hidden">
+        {/* Subtle gold radial gradient background pattern */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ background: 'radial-gradient(ellipse 600px 400px at 50% 30%, rgba(212,175,55,0.04) 0%, transparent 70%)' }}
+        />
+        <div className="relative mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
           <motion.div
             initial="hidden"
             animate="visible"
@@ -635,7 +704,7 @@ export default function OrderTrackingPage() {
                         e.preventDefault();
                         setPage('home');
                       }}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-muted-foreground hover:text-[#D4AF37] transition-colors"
                     >
                       {t('nav.home', locale)}
                     </BreadcrumbLink>
@@ -648,7 +717,7 @@ export default function OrderTrackingPage() {
                         e.preventDefault();
                         setPage('dashboard', { tab: 'orders' });
                       }}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-muted-foreground hover:text-[#D4AF37] transition-colors"
                     >
                       {t('nav.orders', locale)}
                     </BreadcrumbLink>
@@ -664,15 +733,16 @@ export default function OrderTrackingPage() {
             </motion.div>
 
             <motion.div variants={fadeInUp}>
-              <Card className="border-border/50">
+              <GoldCard>
+                <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, #D4AF37, #F0D060, #D4AF37)' }} />
                 <CardContent className="py-16 flex flex-col items-center text-center">
                   <motion.div
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
-                    className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted"
+                    className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/20"
                   >
-                    <FileText className="h-8 w-8 text-muted-foreground" />
+                    <FileText className="h-8 w-8 text-[#D4AF37]" />
                   </motion.div>
                   <h2 className="font-heading text-xl font-semibold text-foreground mb-2">
                     {t('tracking.notFoundTitle', locale)}
@@ -684,20 +754,21 @@ export default function OrderTrackingPage() {
                     <Button
                       variant="outline"
                       onClick={handleBack}
-                      className="border-border"
+                      className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] transition-all"
                     >
                       <ArrowLeft className="h-4 w-4 mr-2" />
                       {t('tracking.backToOrders', locale)}
                     </Button>
                     <Button
                       onClick={() => fetchOrder(orderId)}
-                      className="bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+                      className="text-white transition-all hover:shadow-lg hover:shadow-[#D4AF37]/20"
+                      style={{ background: 'linear-gradient(135deg, #D4AF37 0%, #F0D060 100%)' }}
                     >
                       {t('tracking.tryAgain', locale)}
                     </Button>
                   </div>
                 </CardContent>
-              </Card>
+              </GoldCard>
             </motion.div>
           </motion.div>
         </div>
@@ -713,8 +784,16 @@ export default function OrderTrackingPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Subtle gold radial gradient background pattern */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 700px 500px at 15% 5%, rgba(212,175,55,0.05) 0%, transparent 70%), radial-gradient(ellipse 500px 400px at 85% 90%, rgba(212,175,55,0.04) 0%, transparent 70%), radial-gradient(ellipse 400px 300px at 50% 50%, rgba(212,175,55,0.02) 0%, transparent 70%)',
+        }}
+      />
+      <div className="relative mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <motion.div
           initial="hidden"
           animate="visible"
@@ -732,7 +811,7 @@ export default function OrderTrackingPage() {
                       e.preventDefault();
                       setPage('home');
                     }}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-muted-foreground hover:text-[#D4AF37] transition-colors"
                   >
                     {t('nav.home', locale)}
                   </BreadcrumbLink>
@@ -745,14 +824,14 @@ export default function OrderTrackingPage() {
                       e.preventDefault();
                       setPage('dashboard', { tab: 'orders' });
                     }}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-muted-foreground hover:text-[#D4AF37] transition-colors"
                   >
                     {t('nav.orders', locale)}
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-foreground font-medium font-mono text-sm">
+                  <BreadcrumbPage className="font-medium font-mono text-sm text-[#D4AF37]">
                     {order.orderNumber}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
@@ -765,7 +844,7 @@ export default function OrderTrackingPage() {
             <Button
               variant="ghost"
               onClick={handleBack}
-              className="-ml-2 text-muted-foreground hover:text-foreground hover:bg-muted"
+              className="-ml-2 text-muted-foreground hover:text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-all"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               {t('tracking.backToOrders', locale)}
@@ -774,22 +853,25 @@ export default function OrderTrackingPage() {
 
           {/* ========== 1. Order Summary Card ========== */}
           <motion.div variants={fadeInUp}>
-            <Card className="border-border/50 overflow-hidden">
-              <div className="bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent p-5">
-                <h2 className="font-heading text-lg font-semibold text-foreground">
+            <GoldCard>
+              {/* Gold gradient top border */}
+              <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, #D4AF37, #F0D060, #D4AF37)' }} />
+              <div className="bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent p-5 sm:p-6">
+                <h2 className="font-heading text-lg font-semibold text-foreground flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-[#D4AF37]" />
                   {t('tracking.orderSummary', locale)}
                 </h2>
               </div>
               <CardContent className="p-5 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-                  <div className="space-y-1">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+                  <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm text-muted-foreground">
                         {t('tracking.orderNumber', locale)}
                       </span>
                     </div>
-                    <p className="font-mono text-lg font-bold text-foreground">
+                    <p className="font-mono text-lg font-bold text-[#D4AF37]">
                       {order.orderNumber}
                     </p>
                   </div>
@@ -803,11 +885,14 @@ export default function OrderTrackingPage() {
                   </div>
                 </div>
 
-                <Separator className="mb-4" />
+                <Separator
+                  className="mb-5"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)' }}
+                />
 
                 <div className="grid gap-4 sm:grid-cols-3">
                   {/* Status */}
-                  <div className="rounded-lg bg-muted/50 p-3">
+                  <div className="rounded-lg bg-muted/50 p-3.5 border border-border/30">
                     <p className="text-xs text-muted-foreground mb-1.5">
                       {t('tracking.orderStatus', locale)}
                     </p>
@@ -822,16 +907,14 @@ export default function OrderTrackingPage() {
                   </div>
 
                   {/* Items Count */}
-                  <div className="rounded-lg bg-muted/50 p-3">
+                  <div className="rounded-lg bg-muted/50 p-3.5 border border-border/30">
                     <p className="text-xs text-muted-foreground mb-1.5">
                       {t('tracking.items', locale)}
                     </p>
                     <p className="text-sm font-semibold text-foreground">
                       {order.items.length}{' '}
                       {locale === 'id'
-                        ? order.items.length > 1
-                          ? 'item'
-                          : 'item'
+                        ? 'item'
                         : order.items.length > 1
                           ? 'items'
                           : 'item'}
@@ -839,7 +922,10 @@ export default function OrderTrackingPage() {
                   </div>
 
                   {/* Total */}
-                  <div className="rounded-lg bg-muted/50 p-3">
+                  <div
+                    className="rounded-lg p-3.5 border border-[#D4AF37]/20"
+                    style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.08), rgba(212,175,55,0.03))' }}
+                  >
                     <p className="text-xs text-muted-foreground mb-1.5">
                       {t('tracking.total', locale)}
                     </p>
@@ -849,15 +935,13 @@ export default function OrderTrackingPage() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </GoldCard>
           </motion.div>
 
           {/* ========== 2. Timeline / Stepper ========== */}
           <motion.div variants={fadeInUp}>
-            <h2 className="font-heading text-lg font-semibold text-foreground mb-4">
-              {t('tracking.progress', locale)}
-            </h2>
-            <Card className="border-border/50">
+            <GoldSectionHeading>{t('tracking.progress', locale)}</GoldSectionHeading>
+            <GoldCard>
               <CardContent className="p-5 sm:p-6">
                 <div className="relative">
                   {visibleSteps.map((step, idx) => {
@@ -865,48 +949,71 @@ export default function OrderTrackingPage() {
                     const completed = step.isCompleted(order.status);
                     const active = step.isActive(order.status);
                     const isLast = idx === visibleSteps.length - 1;
+                    const nextCompleted = !isLast && visibleSteps[idx + 1]?.isCompleted(order.status);
 
                     return (
                       <div key={step.key} className="relative flex gap-4">
-                        {/* Vertical Line */}
+                        {/* Animated gold gradient connecting line */}
                         {!isLast && (
-                          <div
-                            className="absolute left-5 top-12 w-0.5 h-[calc(100%-2rem)]"
-                            style={{
-                              backgroundColor:
-                                completed
-                                  ? '#D4AF37'
-                                  : 'hsl(var(--border))',
-                              opacity: completed ? 0.4 : 0.3,
-                            }}
-                          />
+                          <div className="absolute left-[21px] top-12 w-0.5 h-[calc(100%-2rem)]">
+                            <motion.div
+                              className="w-full h-full rounded-full"
+                              initial={{ background: 'hsl(var(--border))', opacity: 0.3 }}
+                              animate={{
+                                background:
+                                  completed && nextCompleted
+                                    ? 'linear-gradient(180deg, #D4AF37, #F0D060)'
+                                    : completed
+                                      ? 'linear-gradient(180deg, #D4AF37, hsl(var(--border)))'
+                                      : 'hsl(var(--border))',
+                                opacity: completed ? 0.6 : 0.3,
+                              }}
+                              transition={{ delay: idx * 0.15, duration: 0.6, ease: 'easeOut' }}
+                            />
+                          </div>
                         )}
 
-                        {/* Icon Circle */}
+                        {/* Icon Circle with gold gradient + outer ring */}
                         <div className="relative z-10 shrink-0">
                           <motion.div
-                            initial={{ scale: 0.8, opacity: 0 }}
+                            initial={{ scale: 0, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
-                            transition={{ delay: idx * 0.1, type: 'spring', stiffness: 200 }}
-                            className={`
-                              flex h-10 w-10 items-center justify-center rounded-full
-                              transition-colors duration-300
-                              ${
-                                order.status === 'cancelled' && step.key === 'cancelled'
-                                  ? 'bg-red-100 dark:bg-red-900/30 ring-2 ring-red-400 dark:ring-red-600'
+                            transition={{
+                              delay: idx * 0.12,
+                              type: 'spring',
+                              stiffness: 220,
+                              damping: 15,
+                            }}
+                            className={
+                              'flex h-11 w-11 items-center justify-center rounded-full transition-all duration-300 ' +
+                              (order.status === 'cancelled' && step.key === 'cancelled'
+                                ? 'bg-red-100 dark:bg-red-900/30 ring-2 ring-red-400 dark:ring-red-600'
+                                : active
+                                  ? 'text-white ring-[3px] ring-[#D4AF37]/20'
                                   : completed
-                                    ? 'bg-[#D4AF37] text-white'
-                                    : 'bg-muted text-muted-foreground'
-                              }
-                            `}
+                                    ? 'text-white'
+                                    : 'bg-muted text-muted-foreground')
+                            }
+                            style={
+                              order.status === 'cancelled' && step.key === 'cancelled'
+                                ? undefined
+                                : active
+                                  ? {
+                                      background: 'linear-gradient(135deg, #D4AF37 0%, #F0D060 100%)',
+                                      boxShadow: '0 4px 16px -2px rgba(212,175,55,0.4)',
+                                    }
+                                  : completed
+                                    ? { background: 'linear-gradient(135deg, #D4AF37 0%, #C9A22E 100%)' }
+                                    : undefined
+                            }
                           >
                             <Icon className="h-5 w-5" />
                           </motion.div>
-                          {/* Pulse ring on active step */}
+                          {/* Animated pulse ring on active step */}
                           {active && order.status !== 'cancelled' && (
                             <motion.div
-                              className="absolute inset-0 rounded-full border-2 border-[#D4AF37]"
-                              animate={{ scale: [1, 1.35, 1], opacity: [0.6, 0, 0.6] }}
+                              className="absolute inset-[-3px] rounded-full border-2 border-[#D4AF37]"
+                              animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0, 0.5] }}
                               transition={{
                                 duration: 2,
                                 repeat: Infinity,
@@ -916,8 +1023,8 @@ export default function OrderTrackingPage() {
                           )}
                           {active && order.status === 'cancelled' && (
                             <motion.div
-                              className="absolute inset-0 rounded-full border-2 border-red-400 dark:border-red-600"
-                              animate={{ scale: [1, 1.35, 1], opacity: [0.6, 0, 0.6] }}
+                              className="absolute inset-[-3px] rounded-full border-2 border-red-400 dark:border-red-600"
+                              animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0, 0.5] }}
                               transition={{
                                 duration: 2,
                                 repeat: Infinity,
@@ -928,24 +1035,35 @@ export default function OrderTrackingPage() {
                         </div>
 
                         {/* Content */}
-                        <div className="pb-8 min-w-0 flex-1">
+                        <motion.div
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.12 + 0.08, duration: 0.4, ease: 'easeOut' }}
+                          className="pb-8 min-w-0 flex-1"
+                        >
                           <div className="flex flex-wrap items-center gap-2 mb-0.5">
                             <h3
-                              className={`
-                                text-sm font-semibold transition-colors
-                                ${
-                                  order.status === 'cancelled' && step.key === 'cancelled'
-                                    ? 'text-red-600 dark:text-red-400'
+                              className={
+                                'text-sm font-semibold transition-colors ' +
+                                (order.status === 'cancelled' && step.key === 'cancelled'
+                                  ? 'text-red-600 dark:text-red-400'
+                                  : active
+                                    ? 'text-[#D4AF37]'
                                     : completed
                                       ? 'text-foreground'
-                                      : 'text-muted-foreground'
-                                }
-                              `}
+                                      : 'text-muted-foreground')
+                              }
                             >
                               {t(step.titleKey, locale)}
                             </h3>
                             {completed && order.status !== 'cancelled' && (
-                              <CheckCircle className="h-3.5 w-3.5 text-[#D4AF37]" />
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ delay: idx * 0.12 + 0.2, type: 'spring', stiffness: 300 }}
+                              >
+                                <CheckCircle className="h-3.5 w-3.5 text-[#D4AF37]" />
+                              </motion.div>
                             )}
                             {order.status === 'cancelled' && step.key === 'cancelled' && (
                               <XCircle className="h-3.5 w-3.5 text-red-500" />
@@ -972,30 +1090,28 @@ export default function OrderTrackingPage() {
                           )}
 
                           <p
-                            className={`
-                              text-xs leading-relaxed
-                              ${completed ? 'text-muted-foreground' : 'text-muted-foreground/60'}
-                            `}
+                            className={
+                              'text-xs leading-relaxed ' +
+                              (completed ? 'text-muted-foreground' : 'text-muted-foreground/60')
+                            }
                           >
                             {t(step.descKey, locale)}
                           </p>
-                        </div>
+                        </motion.div>
                       </div>
                     );
                   })}
                 </div>
               </CardContent>
-            </Card>
+            </GoldCard>
           </motion.div>
 
           {/* ========== 3. Order Items ========== */}
           <motion.div variants={fadeInUp}>
-            <h2 className="font-heading text-lg font-semibold text-foreground mb-4">
-              {t('tracking.items', locale)}
-            </h2>
-            <Card className="border-border/50">
+            <GoldSectionHeading>{t('tracking.items', locale)}</GoldSectionHeading>
+            <GoldCard>
               <CardContent className="p-5 sm:p-6">
-                <div className="space-y-0 divide-y divide-border/50">
+                <div className="space-y-0 divide-y" style={{ '--gold-divider': 'rgba(212,175,55,0.12)' } as React.CSSProperties}>
                   {order.items.map((item, idx) => (
                     <motion.div
                       key={item.id || idx}
@@ -1003,6 +1119,9 @@ export default function OrderTrackingPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.05 }}
                       className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
+                      style={{
+                        borderBottomColor: idx < order.items.length - 1 ? 'rgba(212,175,55,0.12)' : undefined,
+                      }}
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-foreground truncate">
@@ -1033,7 +1152,10 @@ export default function OrderTrackingPage() {
                   ))}
                 </div>
 
-                <Separator className="my-4" />
+                <Separator
+                  className="my-4"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)' }}
+                />
 
                 {/* Price Summary */}
                 <div className="space-y-2">
@@ -1063,7 +1185,9 @@ export default function OrderTrackingPage() {
                       </span>
                     </div>
                   )}
-                  <Separator />
+                  <Separator
+                    style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.25), transparent)' }}
+                  />
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-foreground">
                       {t('tracking.total', locale)}
@@ -1074,21 +1198,19 @@ export default function OrderTrackingPage() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </GoldCard>
           </motion.div>
 
           {/* ========== 4 & 5. Shipping Address & Payment Method ========== */}
           <div className="grid gap-6 sm:grid-cols-2">
             {/* Shipping Address */}
             <motion.div variants={fadeInUp}>
-              <h2 className="font-heading text-lg font-semibold text-foreground mb-4">
-                {t('tracking.shippingAddress', locale)}
-              </h2>
-              <Card className="border-border/50">
+              <GoldSectionHeading>{t('tracking.shippingAddress', locale)}</GoldSectionHeading>
+              <GoldCard>
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+                      <MapPin className="h-4 w-4 text-[#D4AF37]" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -1102,8 +1224,8 @@ export default function OrderTrackingPage() {
 
                   {order.shippingPhone && (
                     <div className="flex items-start gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+                        <Phone className="h-4 w-4 text-[#D4AF37]" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -1117,8 +1239,8 @@ export default function OrderTrackingPage() {
                   )}
 
                   <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+                      <MapPin className="h-4 w-4 text-[#D4AF37]" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -1138,8 +1260,8 @@ export default function OrderTrackingPage() {
 
                   {order.expedition && (
                     <div className="flex items-start gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                        <Truck className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+                        <Truck className="h-4 w-4 text-[#D4AF37]" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -1152,15 +1274,13 @@ export default function OrderTrackingPage() {
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </GoldCard>
             </motion.div>
 
             {/* Payment Method */}
             <motion.div variants={fadeInUp}>
-              <h2 className="font-heading text-lg font-semibold text-foreground mb-4">
-                {t('tracking.paymentMethod', locale)}
-              </h2>
-              <Card className="border-border/50">
+              <GoldSectionHeading>{t('tracking.paymentMethod', locale)}</GoldSectionHeading>
+              <GoldCard>
                 <CardContent className="p-5">
                   <div className="flex items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/20">
@@ -1179,7 +1299,10 @@ export default function OrderTrackingPage() {
                     </div>
                   </div>
 
-                  <Separator className="my-4" />
+                  <Separator
+                    className="my-4"
+                    style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)' }}
+                  />
 
                   {/* Mini price summary */}
                   <div className="space-y-1.5">
@@ -1209,7 +1332,10 @@ export default function OrderTrackingPage() {
                         </span>
                       </div>
                     )}
-                    <Separator className="!my-2" />
+                    <Separator
+                      className="!my-2"
+                      style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.25), transparent)' }}
+                    />
                     <div className="flex justify-between">
                       <span className="text-sm font-semibold text-foreground">
                         {t('tracking.total', locale)}
@@ -1220,7 +1346,7 @@ export default function OrderTrackingPage() {
                     </div>
                   </div>
                 </CardContent>
-              </Card>
+              </GoldCard>
             </motion.div>
           </div>
 
@@ -1229,7 +1355,7 @@ export default function OrderTrackingPage() {
             <Button
               variant="outline"
               onClick={handleBack}
-              className="w-full sm:w-auto border-border"
+              className="w-full sm:w-auto border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] transition-all"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               {t('tracking.backToOrders', locale)}

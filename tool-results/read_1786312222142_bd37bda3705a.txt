@@ -1,0 +1,1187 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Calendar,
+     7→  ArrowRight,
+     8→  BookOpen,
+     9→  ChevronRight,
+    10→  Clock,
+    11→  Tag,
+    12→  Loader2,
+    13→  SearchX,
+    14→  Sparkles,
+    15→  Eye,
+    16→} from 'lucide-react';
+    17→import { Button } from '@/components/ui/button';
+    18→import { Badge } from '@/components/ui/badge';
+    19→import { Card, CardContent } from '@/components/ui/card';
+    20→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    21→import {
+    22→  Breadcrumb,
+    23→  BreadcrumbItem,
+    24→  BreadcrumbLink,
+    25→  BreadcrumbList,
+    26→  BreadcrumbPage,
+    27→  BreadcrumbSeparator,
+    28→} from '@/components/ui/breadcrumb';
+    29→import { Skeleton } from '@/components/ui/skeleton';
+    30→import { Separator } from '@/components/ui/separator';
+    31→import { useAppStore } from '@/lib/store';
+    32→import { t, type Locale } from '@/lib/i18n';
+    33→
+    34→const GOLD = '#D4AF37';
+    35→const GOLD_DARK = '#B8960C';
+    36→const POSTS_PER_PAGE = 3;
+    37→
+    38→interface BlogPost {
+    39→  id: string;
+    40→  title: string;
+    41→  titleEn: string | null;
+    42→  slug: string;
+    43→  excerpt: string | null;
+    44→  excerptEn: string | null;
+    45→  content: string | null;
+    46→  contentEn: string | null;
+    47→  category: string | null;
+    48→  categoryEn: string | null;
+    49→  image: string | null;
+    50→  author: string | null;
+    51→  createdAt: string;
+    52→  updatedAt: string;
+    53→}
+    54→
+    55→const fadeInUp = {
+    56→  hidden: { opacity: 0, y: 30 },
+    57→  visible: { opacity: 1, y: 0 },
+    58→};
+    59→
+    60→const staggerContainer = {
+    61→  hidden: { opacity: 0 },
+    62→  visible: {
+    63→    opacity: 1,
+    64→    transition: { staggerChildren: 0.1 },
+    65→  },
+    66→};
+    67→
+    68→function estimateReadTime(content: string | null): number {
+    69→  if (!content) return 1;
+    70→  const text = content.replace(/<[^>]*>/g, '');
+    71→  const wordCount = text.split(/\s+/).filter(Boolean).length;
+    72→  return Math.max(1, Math.ceil(wordCount / 200));
+    73→}
+    74→
+    75→function formatDate(dateStr: string, locale: Locale): string {
+    76→  const date = new Date(dateStr);
+    77→  return date.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+    78→    year: 'numeric',
+    79→    month: 'long',
+    80→    day: 'numeric',
+    81→  });
+    82→}
+    83→
+    84→function getLocalizedField<T extends string | null>(
+    85→  idValue: T,
+    86→  enValue: T,
+    87→  locale: Locale
+    88→): T {
+    89→  if (locale === 'en' && enValue) return enValue;
+    90→  return idValue;
+    91→}
+    92→
+    93→function getAuthorInitials(author: string): string {
+    94→  return author
+    95→    .split(' ')
+    96→    .filter(Boolean)
+    97→    .map((w) => w[0])
+    98→    .slice(0, 2)
+    99→    .join('')
+   100→    .toUpperCase();
+   101→}
+   102→
+   103→/* Gradient color palettes for category-based placeholders */
+   104→const CATEGORY_GRADIENTS: string[] = [
+   105→  'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+   106→  'linear-gradient(135deg, #2d1b2e 0%, #44203a 50%, #6b2d5b 100%)',
+   107→  'linear-gradient(135deg, #1b2d1b 0%, #1e3a20 50%, #2d5a3f 100%)',
+   108→  'linear-gradient(135deg, #2e2b1b 0%, #3a3520 50%, #5a5030 100%)',
+   109→  'linear-gradient(135deg, #1b282e 0%, #20353a 50%, #30525a 100%)',
+   110→];
+   111→
+   112→function getCategoryGradient(slug: string): string {
+   113→  let hash = 0;
+   114→  for (let i = 0; i < slug.length; i++) {
+   115→    hash = slug.charCodeAt(i) + ((hash << 5) - hash);
+   116→  }
+   117→  return CATEGORY_GRADIENTS[Math.abs(hash) % CATEGORY_GRADIENTS.length];
+   118→}
+   119→
+   120→function BlogImagePlaceholder({
+   121→  category,
+   122→  className,
+   123→}: {
+   124→  category: string;
+   125→  className?: string;
+   126→}) {
+   127→  const initials = category
+   128→    .split(' ')
+   129→    .filter(Boolean)
+   130→    .slice(0, 2)
+   131→    .map((w) => w[0])
+   132→    .join('')
+   133→    .toUpperCase();
+   134→  return (
+   135→    <div
+   136→      className={`flex items-center justify-center ${className ?? ''}`}
+   137→      style={{ background: getCategoryGradient(category) }}
+   138→    >
+   139→      <span className="text-4xl font-bold tracking-widest" style={{ color: `${GOLD}60` }}>
+   140→        {initials}
+   141→      </span>
+   142→    </div>
+   143→  );
+   144→}
+   145→
+   146→function getBlogImageOrPlaceholder(blog: BlogPost, category: string, className?: string) {
+   147→  if (blog.image) {
+   148→    return (
+   149→      <img
+   150→        src={blog.image}
+   151→        alt={category}
+   152→        className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 ${className ?? ''}`}
+   153→        loading="lazy"
+   154→      />
+   155→    );
+   156→  }
+   157→  return <BlogImagePlaceholder category={category} className={className} />;
+   158→}
+   159→
+   160→/* ─── Skeletons ─── */
+   161→
+   162→function BlogCardSkeleton() {
+   163→  return (
+   164→    <Card className="overflow-hidden border-border/50">
+   165→      <Skeleton className="aspect-[2/1] w-full" />
+   166→      <CardContent className="p-5">
+   167→        <Skeleton className="mb-3 h-5 w-20" />
+   168→        <Skeleton className="mb-2 h-6 w-full" />
+   169→        <Skeleton className="mb-2 h-6 w-4/5" />
+   170→        <Skeleton className="mb-4 h-4 w-full" />
+   171→        <Skeleton className="mb-4 h-4 w-3/4" />
+   172→        <div className="flex items-center justify-between">
+   173→          <div className="flex items-center gap-2">
+   174→            <Skeleton className="h-8 w-8 rounded-full" />
+   175→            <Skeleton className="h-3.5 w-24" />
+   176→          </div>
+   177→          <Skeleton className="h-3.5 w-16" />
+   178→        </div>
+   179→      </CardContent>
+   180→    </Card>
+   181→  );
+   182→}
+   183→
+   184→function BlogDetailSkeleton() {
+   185→  return (
+   186→    <div className="mx-auto max-w-3xl space-y-6">
+   187→      <Skeleton className="h-5 w-24" />
+   188→      <Skeleton className="aspect-[2/1] w-full rounded-2xl" />
+   189→      <Skeleton className="h-10 w-full" />
+   190→      <Skeleton className="h-10 w-3/4" />
+   191→      <div className="flex items-center gap-4">
+   192→        <Skeleton className="h-10 w-10 rounded-full" />
+   193→        <div className="space-y-2">
+   194→          <Skeleton className="h-4 w-32" />
+   195→          <Skeleton className="h-3 w-24" />
+   196→        </div>
+   197→      </div>
+   198→      <div className="space-y-3">
+   199→        {Array.from({ length: 8 }).map((_, i) => (
+   200→          <Skeleton key={i} className="h-4 w-full" />
+   201→        ))}
+   202→      </div>
+   203→    </div>
+   204→  );
+   205→}
+   206→
+   207→/* ─── Blog Card (standard grid card) ─── */
+   208→
+   209→function BlogCard({
+   210→  blog,
+   211→  locale,
+   212→  onView,
+   213→}: {
+   214→  blog: BlogPost;
+   215→  locale: Locale;
+   216→  onView: () => void;
+   217→}) {
+   218→  const title = getLocalizedField(blog.title, blog.titleEn, locale);
+   219→  const excerpt = getLocalizedField(blog.excerpt, blog.excerptEn, locale);
+   220→  const category = getLocalizedField(blog.category, blog.categoryEn, locale);
+   221→  const readTime = estimateReadTime(
+   222→    getLocalizedField(blog.content, blog.contentEn, locale)
+   223→  );
+   224→  const authorName = blog.author || '';
+   225→
+   226→  return (
+   227→    <motion.div
+   228→      variants={fadeInUp}
+   229→      layout
+   230→      initial="hidden"
+   231→      animate="visible"
+   232→      exit="hidden"
+   233→      whileHover={{ y: -6 }}
+   234→      transition={{ duration: 0.3 }}
+   235→    >
+   236→      <Card
+   237→        className="group cursor-pointer overflow-hidden border-border/50 transition-all duration-300 hover:shadow-2xl hover:shadow-[#D4AF37]/8"
+   238→        onClick={onView}
+   239→      >
+   240→        {/* Image / Placeholder */}
+   241→        <div className="relative aspect-[2/1] overflow-hidden">
+   242→          {getBlogImageOrPlaceholder(blog, category || 'Blog')}
+   243→          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+   244→
+   245→          {/* Category Badge */}
+   246→          {category && (
+   247→            <Badge
+   248→              className="absolute left-4 top-4 border-0 px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase"
+   249→              style={{
+   250→                backgroundColor: GOLD,
+   251→                color: '#1a1a1a',
+   252→              }}
+   253→            >
+   254→              <Tag className="mr-1 h-3 w-3" />
+   255→              {category}
+   256→            </Badge>
+   257→          )}
+   258→
+   259→          {/* Read Time Badge */}
+   260→          <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+   261→            <Clock className="h-3 w-3" />
+   262→            {readTime} {t('blog.readTime', locale)}
+   263→          </div>
+   264→        </div>
+   265→
+   266→        <CardContent className="p-5">
+   267→          {/* Title */}
+   268→          <h3 className="font-heading mb-2 line-clamp-2 text-lg font-bold leading-snug tracking-tight transition-colors group-hover:text-[#D4AF37]">
+   269→            {title}
+   270→          </h3>
+   271→
+   272→          {/* Excerpt */}
+   273→          {excerpt && (
+   274→            <p className="mb-4 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+   275→              {excerpt}
+   276→            </p>
+   277→          )}
+   278→
+   279→          <Separator className="mb-4 opacity-50" />
+   280→
+   281→          {/* Footer: Author + Date + Read More */}
+   282→          <div className="flex items-center justify-between gap-3">
+   283→            <div className="flex min-w-0 items-center gap-2.5">
+   284→              <Avatar className="h-7 w-7 flex-shrink-0">
+   285→                <AvatarFallback
+   286→                  className="text-[10px] font-bold"
+   287→                  style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
+   288→                >
+   289→                  {authorName ? getAuthorInitials(authorName) : '?'}
+   290→                </AvatarFallback>
+   291→              </Avatar>
+   292→              <div className="min-w-0">
+   293→                <p className="truncate text-xs font-semibold text-foreground">
+   294→                  {authorName}
+   295→                </p>
+   296→                <p className="truncate text-[11px] text-muted-foreground">
+   297→                  {formatDate(blog.createdAt, locale)}
+   298→                </p>
+   299→              </div>
+   300→            </div>
+   301→
+   302→            <span
+   303→              className="flex flex-shrink-0 items-center gap-1 text-xs font-semibold transition-all group-hover:gap-2"
+   304→              style={{ color: GOLD }}
+   305→            >
+   306→              {t('blog.readMore', locale)}
+   307→              <ArrowRight className="h-3.5 w-3.5" />
+   308→            </span>
+   309→          </div>
+   310→        </CardContent>
+   311→      </Card>
+   312→    </motion.div>
+   313→  );
+   314→}
+   315→
+   316→/* ─── Featured Card (first post, spans 2 cols) ─── */
+   317→
+   318→function FeaturedCard({
+   319→  blog,
+   320→  locale,
+   321→  onView,
+   322→}: {
+   323→  blog: BlogPost;
+   324→  locale: Locale;
+   325→  onView: () => void;
+   326→}) {
+   327→  const title = getLocalizedField(blog.title, blog.titleEn, locale);
+   328→  const excerpt = getLocalizedField(blog.excerpt, blog.excerptEn, locale);
+   329→  const category = getLocalizedField(blog.category, blog.categoryEn, locale);
+   330→  const readTime = estimateReadTime(
+   331→    getLocalizedField(blog.content, blog.contentEn, locale)
+   332→  );
+   333→  const authorName = blog.author || '';
+   334→
+   335→  return (
+   336→    <motion.div
+   337→      variants={fadeInUp}
+   338→      layout
+   339→      initial="hidden"
+   340→      animate="visible"
+   341→      whileHover={{ y: -4 }}
+   342→      transition={{ duration: 0.35 }}
+   343→      className="col-span-1 sm:col-span-2"
+   344→    >
+   345→      <Card
+   346→        className="group cursor-pointer overflow-hidden border-border/50 transition-all duration-300 hover:shadow-2xl hover:shadow-[#D4AF37]/8"
+   347→        onClick={onView}
+   348→      >
+   349→        <div className="grid md:grid-cols-2">
+   350→          {/* Image / Placeholder */}
+   351→          <div className="relative aspect-[2/1] overflow-hidden md:aspect-auto md:min-h-[320px]">
+   352→            {blog.image ? (
+   353→              <img
+   354→                src={blog.image}
+   355→                alt={title}
+   356→                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+   357→                loading="eager"
+   358→              />
+   359→            ) : (
+   360→              <BlogImagePlaceholder
+   361→                category={category || 'Blog'}
+   362→                className="h-full w-full"
+   363→              />
+   364→            )}
+   365→            <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/10 md:bg-gradient-to-l md:from-black/30 md:to-transparent" />
+   366→
+   367→            {/* Featured Badge */}
+   368→            <Badge
+   369→              className="absolute left-4 top-4 border-0 px-2.5 py-1 text-[11px] font-bold tracking-wide uppercase"
+   370→              style={{ backgroundColor: GOLD, color: '#1a1a1a' }}
+   371→            >
+   372→              <Sparkles className="mr-1 h-3 w-3" />
+   373→              {t('blog.featured', locale)}
+   374→            </Badge>
+   375→
+   376→            {/* Category Badge */}
+   377→            {category && (
+   378→              <Badge
+   379→                className="absolute bottom-4 left-4 border-0 px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase"
+   380→                style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: '#ffffff', backdropFilter: 'blur(8px)' }}
+   381→              >
+   382→                <Tag className="mr-1 h-3 w-3" />
+   383→                {category}
+   384→              </Badge>
+   385→            )}
+   386→          </div>
+   387→
+   388→          {/* Content */}
+   389→          <CardContent className="flex flex-col justify-center p-6 md:p-8">
+   390→            {/* Read Time Badge */}
+   391→            <div className="mb-3 flex items-center gap-2">
+   392→              <div className="flex items-center gap-1.5 rounded-full bg-[#D4AF37]/10 px-3 py-1 text-xs font-semibold" style={{ color: GOLD }}>
+   393→                <Clock className="h-3.5 w-3.5" />
+   394→                {readTime} {t('blog.readTime', locale)}
+   395→              </div>
+   396→            </div>
+   397→
+   398→            <h2 className="font-heading mb-3 text-2xl font-bold leading-tight tracking-tight transition-colors group-hover:text-[#D4AF37] md:text-3xl">
+   399→              {title}
+   400→            </h2>
+   401→            {excerpt && (
+   402→              <p className="mb-6 line-clamp-3 text-sm leading-relaxed text-muted-foreground md:text-base">
+   403→                {excerpt}
+   404→              </p>
+   405→            )}
+   406→
+   407→            <div className="flex items-center gap-3">
+   408→              <Avatar className="h-9 w-9 ring-2 ring-[#D4AF37]/20">
+   409→                <AvatarFallback
+   410→                  className="text-xs font-bold"
+   411→                  style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
+   412→                >
+   413→                  {authorName ? getAuthorInitials(authorName) : '?'}
+   414→                </AvatarFallback>
+   415→              </Avatar>
+   416→              <div className="min-w-0 flex-1">
+   417→                <p className="text-sm font-semibold text-foreground">
+   418→                  {authorName}
+   419→                </p>
+   420→                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   421→                  <Calendar className="h-3 w-3" />
+   422→                  <time>{formatDate(blog.createdAt, locale)}</time>
+   423→                </div>
+   424→              </div>
+   425→            </div>
+   426→
+   427→            <Button
+   428→              className="mt-6 w-fit border-0 bg-[#D4AF37] font-semibold text-white shadow-lg shadow-[#D4AF37]/20 transition-all duration-300 hover:bg-[#B8960C] hover:shadow-xl hover:shadow-[#D4AF37]/30"
+   429→              onClick={(e) => {
+   430→                e.stopPropagation();
+   431→                onView();
+   432→              }}
+   433→            >
+   434→              {t('blog.readMore', locale)}
+   435→              <ArrowRight className="ml-2 h-4 w-4" />
+   436→            </Button>
+   437→          </CardContent>
+   438→        </div>
+   439→      </Card>
+   440→    </motion.div>
+   441→  );
+   442→}
+   443→
+   444→/* ─── Empty Filter State ─── */
+   445→
+   446→function EmptyFilterState({
+   447→  locale,
+   448→  selectedCategory,
+   449→  onClearFilter,
+   450→}: {
+   451→  locale: Locale;
+   452→  selectedCategory: string;
+   453→  onClearFilter: () => void;
+   454→}) {
+   455→  return (
+   456→    <motion.div
+   457→      initial={{ opacity: 0, scale: 0.95 }}
+   458→      animate={{ opacity: 1, scale: 1 }}
+   459→      transition={{ duration: 0.4 }}
+   460→      className="flex flex-col items-center justify-center py-24 text-center"
+   461→    >
+   462→      <div className="relative mb-6">
+   463→        <div className="flex h-24 w-24 items-center justify-center rounded-full bg-muted/60">
+   464→          <SearchX className="h-10 w-10 text-muted-foreground/50" />
+   465→        </div>
+   466→        <div className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-[#D4AF37]">
+   467→          <Tag className="h-3.5 w-3.5 text-black" />
+   468→        </div>
+   469→      </div>
+   470→      <p className="text-lg font-semibold text-foreground">
+   471→        {t('blog.noArticlesInCategory', locale)}
+   472→      </p>
+   473→      <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
+   474→        {t('blog.noArticlesInCategoryDesc', locale)}
+   475→      </p>
+   476→      <Button
+   477→        onClick={onClearFilter}
+   478→        variant="outline"
+   479→        className="mt-6 border-[#D4AF37]/30 font-medium text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]"
+   480→      >
+   481→        <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
+   482→        {t('blog.clearFilter', locale)}
+   483→      </Button>
+   484→    </motion.div>
+   485→  );
+   486→}
+   487→
+   488→/* ─── Main Component ─── */
+   489→
+   490→export default function BlogPage() {
+   491→  const { locale, pageParams, setPage } = useAppStore();
+   492→  const [blogs, setBlogs] = useState<BlogPost[]>([]);
+   493→  const [total, setTotal] = useState(0);
+   494→  const [currentBlog, setCurrentBlog] = useState<BlogPost | null>(null);
+   495→  const [loading, setLoading] = useState(true);
+   496→  const [loadingMore, setLoadingMore] = useState(false);
+   497→  const [detailLoading, setDetailLoading] = useState(false);
+   498→  const [visibleCount, setVisibleCount] = useState(POSTS_PER_PAGE);
+   499→  const [selectedCategory, setSelectedCategory] = useState('all');
+   500→
+   501→  const slug = pageParams.slug as string | undefined;
+   502→
+   503→  const fetchBlogs = useCallback(async () => {
+   504→    try {
+   505→      const res = await fetch('/api/blogs');
+   506→      if (res.ok) {
+   507→        const data = await res.json();
+   508→        setBlogs(data.blogs || data);
+   509→        setTotal(data.total ?? data.length ?? 0);
+   510→      }
+   511→    } catch {
+   512→      // silently fail
+   513→    } finally {
+   514→      setLoading(false);
+   515→    }
+   516→  }, []);
+   517→
+   518→  useEffect(() => {
+   519→    fetchBlogs();
+   520→  }, [fetchBlogs]);
+   521→
+   522→  useEffect(() => {
+   523→    if (slug) {
+   524→      setDetailLoading(true);
+   525→      async function fetchBlog() {
+   526→        try {
+   527→          const res = await fetch(`/api/blogs/${slug}`);
+   528→          if (res.ok) {
+   529→            const data = await res.json();
+   530→            setCurrentBlog(data);
+   531→          } else {
+   532→            setCurrentBlog(null);
+   533→          }
+   534→        } catch {
+   535→          setCurrentBlog(null);
+   536→        } finally {
+   537→          setDetailLoading(false);
+   538→        }
+   539→      }
+   540→      fetchBlog();
+   541→    } else {
+   542→      setCurrentBlog(null);
+   543→    }
+   544→  }, [slug]);
+   545→
+   546→  // Collect all unique categories
+   547→  const allCategories = useMemo(() => {
+   548→    const cats = new Set<string>();
+   549→    blogs.forEach((b) => {
+   550→      const cat = getLocalizedField(b.category, b.categoryEn, locale);
+   551→      if (cat) cats.add(cat);
+   552→    });
+   553→    return Array.from(cats);
+   554→  }, [blogs, locale]);
+   555→
+   556→  // Filter blogs by category
+   557→  const filteredBlogs = useMemo(() => {
+   558→    if (selectedCategory === 'all') return blogs;
+   559→    return blogs.filter((b) => {
+   560→      const cat = getLocalizedField(b.category, b.categoryEn, locale);
+   561→      return cat === selectedCategory;
+   562→    });
+   563→  }, [blogs, selectedCategory, locale]);
+   564→
+   565→  const hasMore = visibleCount < filteredBlogs.length;
+   566→
+   567→  const handleLoadMore = () => {
+   568→    setLoadingMore(true);
+   569→    setTimeout(() => {
+   570→      setVisibleCount((prev) => prev + POSTS_PER_PAGE);
+   571→      setLoadingMore(false);
+   572→    }, 400);
+   573→  };
+   574→
+   575→  const visibleBlogs = useMemo(
+   576→    () => filteredBlogs.slice(0, visibleCount),
+   577→    [filteredBlogs, visibleCount]
+   578→  );
+   579→
+   580→  const featuredBlog = visibleBlogs[0];
+   581→  const restBlogs = visibleBlogs.slice(1);
+   582→
+   583→  const isFiltered = selectedCategory !== 'all';
+   584→
+   585→  // ─── Blog Detail View ───
+   586→
+   587→  if (slug) {
+   588→    if (detailLoading) {
+   589→      return (
+   590→        <main className="min-h-screen">
+   591→          <div className="mx-auto max-w-3xl px-4 pt-6">
+   592→            <Breadcrumb>
+   593→              <BreadcrumbList>
+   594→                <BreadcrumbItem>
+   595→                  <BreadcrumbLink
+   596→                    onClick={() => setPage('home')}
+   597→                    className="cursor-pointer hover:text-[#D4AF37]"
+   598→                  >
+   599→                    {t('nav.home', locale)}
+   600→                  </BreadcrumbLink>
+   601→                </BreadcrumbItem>
+   602→                <BreadcrumbSeparator>
+   603→                  <ChevronRight className="h-3.5 w-3.5" />
+   604→                </BreadcrumbSeparator>
+   605→                <BreadcrumbItem>
+   606→                  <BreadcrumbLink
+   607→                    onClick={() => setPage('blog')}
+   608→                    className="cursor-pointer hover:text-[#D4AF37]"
+   609→                  >
+   610→                    {t('nav.blog', locale)}
+   611→                  </BreadcrumbLink>
+   612→                </BreadcrumbItem>
+   613→                <BreadcrumbSeparator>
+   614→                  <ChevronRight className="h-3.5 w-3.5" />
+   615→                </BreadcrumbSeparator>
+   616→                <BreadcrumbItem>
+   617→                  <Skeleton className="h-4 w-40" />
+   618→                </BreadcrumbItem>
+   619→              </BreadcrumbList>
+   620→            </Breadcrumb>
+   621→          </div>
+   622→          <div className="mx-auto max-w-3xl px-4 py-8">
+   623→            <BlogDetailSkeleton />
+   624→          </div>
+   625→        </main>
+   626→      );
+   627→    }
+   628→
+   629→    if (!currentBlog) {
+   630→      return (
+   631→        <main className="min-h-screen">
+   632→          <div className="mx-auto max-w-3xl px-4 pt-6">
+   633→            <Breadcrumb>
+   634→              <BreadcrumbList>
+   635→                <BreadcrumbItem>
+   636→                  <BreadcrumbLink
+   637→                    onClick={() => setPage('home')}
+   638→                    className="cursor-pointer hover:text-[#D4AF37]"
+   639→                  >
+   640→                    {t('nav.home', locale)}
+   641→                  </BreadcrumbLink>
+   642→                </BreadcrumbItem>
+   643→                <BreadcrumbSeparator>
+   644→                  <ChevronRight className="h-3.5 w-3.5" />
+   645→                </BreadcrumbSeparator>
+   646→                <BreadcrumbItem>
+   647→                  <BreadcrumbLink
+   648→                    onClick={() => setPage('blog')}
+   649→                    className="cursor-pointer hover:text-[#D4AF37]"
+   650→                  >
+   651→                    {t('nav.blog', locale)}
+   652→                  </BreadcrumbLink>
+   653→                </BreadcrumbItem>
+   654→              </BreadcrumbList>
+   655→            </Breadcrumb>
+   656→          </div>
+   657→          <div className="mx-auto max-w-3xl px-4 py-24 text-center">
+   658→            <BookOpen className="mx-auto mb-4 h-16 w-16 text-muted-foreground/40" />
+   659→            <h2 className="font-heading text-2xl font-bold">
+   660→              {t('blog.articleNotFound', locale)}
+   661→            </h2>
+   662→            <p className="mt-2 text-muted-foreground">
+   663→              {t('blog.articleNotAvailable', locale)}
+   664→            </p>
+   665→            <Button
+   666→              onClick={() => setPage('blog')}
+   667→              className="mt-6 bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+   668→            >
+   669→              {t('general.back', locale)}
+   670→            </Button>
+   671→          </div>
+   672→        </main>
+   673→      );
+   674→    }
+   675→
+   676→    const detailTitle = getLocalizedField(
+   677→      currentBlog.title,
+   678→      currentBlog.titleEn,
+   679→      locale
+   680→    );
+   681→    const detailContent = getLocalizedField(
+   682→      currentBlog.content,
+   683→      currentBlog.contentEn,
+   684→      locale
+   685→    );
+   686→    const detailCategory = getLocalizedField(
+   687→      currentBlog.category,
+   688→      currentBlog.categoryEn,
+   689→      locale
+   690→    );
+   691→    const detailReadTime = estimateReadTime(detailContent);
+   692→    const detailAuthorName = currentBlog.author || '';
+   693→
+   694→    return (
+   695→      <main className="min-h-screen">
+   696→        {/* Breadcrumb */}
+   697→        <div className="mx-auto max-w-3xl px-4 pt-6">
+   698→          <motion.div
+   699→            initial={{ opacity: 0, y: -10 }}
+   700→            animate={{ opacity: 1, y: 0 }}
+   701→          >
+   702→            <Breadcrumb>
+   703→              <BreadcrumbList>
+   704→                <BreadcrumbItem>
+   705→                  <BreadcrumbLink
+   706→                    onClick={() => setPage('home')}
+   707→                    className="cursor-pointer hover:text-[#D4AF37]"
+   708→                  >
+   709→                    {t('nav.home', locale)}
+   710→                  </BreadcrumbLink>
+   711→                </BreadcrumbItem>
+   712→                <BreadcrumbSeparator>
+   713→                  <ChevronRight className="h-3.5 w-3.5" />
+   714→                </BreadcrumbSeparator>
+   715→                <BreadcrumbItem>
+   716→                  <BreadcrumbLink
+   717→                    onClick={() => setPage('blog')}
+   718→                    className="cursor-pointer hover:text-[#D4AF37]"
+   719→                  >
+   720→                    {t('nav.blog', locale)}
+   721→                  </BreadcrumbLink>
+   722→                </BreadcrumbItem>
+   723→                <BreadcrumbSeparator>
+   724→                  <ChevronRight className="h-3.5 w-3.5" />
+   725→                </BreadcrumbSeparator>
+   726→                <BreadcrumbItem>
+   727→                  <BreadcrumbPage className="max-w-[200px] truncate">
+   728→                    {detailTitle}
+   729→                  </BreadcrumbPage>
+   730→                </BreadcrumbItem>
+   731→              </BreadcrumbList>
+   732→            </Breadcrumb>
+   733→          </motion.div>
+   734→        </div>
+   735→
+   736→        {/* Blog Detail Content */}
+   737→        <article className="mx-auto max-w-3xl px-4 py-8">
+   738→          <motion.div
+   739→            initial={{ opacity: 0, y: 30 }}
+   740→            animate={{ opacity: 1, y: 0 }}
+   741→            transition={{ duration: 0.5 }}
+   742→          >
+   743→            {/* Category Badge */}
+   744→            {detailCategory && (
+   745→              <Badge
+   746→                className="mb-4 border-0 px-3 py-1 text-xs font-semibold tracking-wide uppercase"
+   747→                style={{ backgroundColor: GOLD, color: '#1a1a1a' }}
+   748→              >
+   749→                <Tag className="mr-1 h-3 w-3" />
+   750→                {detailCategory}
+   751→              </Badge>
+   752→            )}
+   753→
+   754→            {/* Title */}
+   755→            <h1 className="font-heading text-3xl font-bold leading-tight tracking-tight md:text-4xl lg:text-[2.75rem]">
+   756→              {detailTitle}
+   757→            </h1>
+   758→
+   759→            {/* Meta: Author + Date + Read Time */}
+   760→            <div className="mt-6 flex flex-wrap items-center gap-4 rounded-xl border border-border/40 bg-muted/30 p-4">
+   761→              {detailAuthorName && (
+   762→                <div className="flex items-center gap-3">
+   763→                  <Avatar className="h-11 w-11 ring-2 ring-[#D4AF37]/20">
+   764→                    <AvatarFallback
+   765→                      className="text-sm font-bold"
+   766→                      style={{
+   767→                        backgroundColor: `${GOLD}20`,
+   768→                        color: GOLD,
+   769→                      }}
+   770→                    >
+   771→                      {getAuthorInitials(detailAuthorName)}
+   772→                    </AvatarFallback>
+   773→                  </Avatar>
+   774→                  <div>
+   775→                    <p className="text-sm font-semibold leading-none text-foreground">
+   776→                      {detailAuthorName}
+   777→                    </p>
+   778→                    <p className="mt-1 text-xs text-muted-foreground">
+   779→                      {t('blog.publishedOn', locale)} {formatDate(currentBlog.createdAt, locale)}
+   780→                    </p>
+   781→                  </div>
+   782→                </div>
+   783→              )}
+   784→              <div className="ml-auto flex items-center gap-2">
+   785→                <div className="flex items-center gap-1.5 rounded-full bg-[#D4AF37]/10 px-3 py-1.5 text-xs font-semibold" style={{ color: GOLD }}>
+   786→                  <Clock className="h-3.5 w-3.5" />
+   787→                  {detailReadTime} {t('blog.readTime', locale)}
+   788→                </div>
+   789→                <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
+   790→                  <Eye className="h-3.5 w-3.5" />
+   791→                  {Math.floor(Math.random() * 500 + 100)} {locale === 'id' ? 'kunjungan' : 'views'}
+   792→                </div>
+   793→              </div>
+   794→            </div>
+   795→
+   796→            {/* Featured Image */}
+   797→            <motion.div
+   798→              initial={{ opacity: 0, scale: 0.98 }}
+   799→              animate={{ opacity: 1, scale: 1 }}
+   800→              transition={{ delay: 0.2, duration: 0.5 }}
+   801→              className="mt-8 overflow-hidden rounded-2xl"
+   802→            >
+   803→              {currentBlog.image ? (
+   804→                <img
+   805→                  src={currentBlog.image}
+   806→                  alt={detailTitle}
+   807→                  className="h-auto w-full object-cover"
+   808→                />
+   809→              ) : (
+   810→                <BlogImagePlaceholder
+   811→                  category={detailCategory || 'Blog'}
+   812→                  className="aspect-[2/1] w-full"
+   813→                />
+   814→              )}
+   815→            </motion.div>
+   816→
+   817→            {/* Content */}
+   818→            <motion.div
+   819→              initial={{ opacity: 0, y: 20 }}
+   820→              animate={{ opacity: 1, y: 0 }}
+   821→              transition={{ delay: 0.3, duration: 0.5 }}
+   822→              className="prose prose-lg mt-8 max-w-none dark:prose-invert
+   823→                prose-headings:font-heading prose-headings:tracking-tight
+   824→                prose-h2:text-2xl prose-h2:font-bold prose-h2:mt-10 prose-h2:mb-4
+   825→                prose-h3:text-xl prose-h3:font-semibold prose-h3:mt-8 prose-h3:mb-3
+   826→                prose-p:leading-relaxed prose-p:text-muted-foreground
+   827→                prose-a:text-[#D4AF37] prose-a:no-underline hover:prose-a:underline
+   828→                prose-strong:text-foreground
+   829→                prose-ul:my-4 prose-ol:my-4
+   830→                prose-li:text-muted-foreground
+   831→                prose-blockquote:border-l-[#D4AF37] prose-blockquote:italic
+   832→                prose-img:rounded-xl
+   833→                prose-hr:border-[#D4AF37]/20"
+   834→            >
+   835→              {detailContent ? (
+   836→                <div dangerouslySetInnerHTML={{ __html: detailContent }} />
+   837→              ) : (
+   838→                <p className="text-muted-foreground">
+   839→                  {t('blog.contentNotAvailable', locale)}
+   840→                </p>
+   841→              )}
+   842→            </motion.div>
+   843→          </motion.div>
+   844→
+   845→          {/* Related Articles */}
+   846→          {blogs.filter((b) => b.id !== currentBlog.id).length > 0 && (
+   847→            <motion.section
+   848→              initial={{ opacity: 0, y: 20 }}
+   849→              animate={{ opacity: 1, y: 0 }}
+   850→              transition={{ delay: 0.6, duration: 0.5 }}
+   851→              className="mt-12 border-t border-border/50 pt-10"
+   852→            >
+   853→              <h2 className="mb-6 font-heading text-2xl font-bold">
+   854→                {t('blog.relatedArticles', locale)}
+   855→              </h2>
+   856→              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   857→                {blogs
+   858→                  .filter((b) => b.id !== currentBlog.id)
+   859→                  .slice(0, 3)
+   860→                  .map((related, idx) => {
+   861→                    const relCategory = getLocalizedField(
+   862→                      related.category,
+   863→                      related.categoryEn,
+   864→                      locale
+   865→                    );
+   866→                    return (
+   867→                      <motion.div
+   868→                        key={related.id}
+   869→                        initial={{ opacity: 0, y: 20 }}
+   870→                        animate={{ opacity: 1, y: 0 }}
+   871→                        transition={{ delay: 0.7 + idx * 0.1 }}
+   872→                        whileHover={{ y: -4 }}
+   873→                        className="group cursor-pointer"
+   874→                        onClick={() =>
+   875→                          setPage('blog-detail', { slug: related.slug })
+   876→                        }
+   877→                      >
+   878→                        <Card className="overflow-hidden border-border/50 transition-all duration-300 group-hover:shadow-xl group-hover:shadow-[#D4AF37]/5">
+   879→                          <div className="relative aspect-[2/1] overflow-hidden">
+   880→                            {related.image ? (
+   881→                              <img
+   882→                                src={related.image}
+   883→                                alt={getLocalizedField(
+   884→                                  related.title,
+   885→                                  related.titleEn,
+   886→                                  locale
+   887→                                )}
+   888→                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+   889→                                loading="lazy"
+   890→                              />
+   891→                            ) : (
+   892→                              <BlogImagePlaceholder
+   893→                                category={relCategory || 'Blog'}
+   894→                                className="h-full w-full"
+   895→                              />
+   896→                            )}
+   897→                            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+   898→                            {relCategory && (
+   899→                              <Badge
+   900→                                className="absolute left-3 top-3 border-0 px-2 py-0.5 text-[10px] font-semibold uppercase"
+   901→                                style={{
+   902→                                  backgroundColor: GOLD,
+   903→                                  color: '#1a1a1a',
+   904→                                }}
+   905→                              >
+   906→                                {relCategory}
+   907→                              </Badge>
+   908→                            )}
+   909→                            {/* Read time on card */}
+   910→                            <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+   911→                              <Clock className="h-2.5 w-2.5" />
+   912→                              {estimateReadTime(
+   913→                                getLocalizedField(
+   914→                                  related.content,
+   915→                                  related.contentEn,
+   916→                                  locale
+   917→                                )
+   918→                              )}{" "}
+   919→                              {t('blog.readTime', locale)}
+   920→                            </div>
+   921→                          </div>
+   922→                          <CardContent className="p-4">
+   923→                            <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+   924→                              <Calendar className="h-3 w-3" />
+   925→                              <time>
+   926→                                {formatDate(related.createdAt, locale)}
+   927→                              </time>
+   928→                            </div>
+   929→                            <h3 className="line-clamp-2 font-heading text-sm font-bold leading-snug transition-colors group-hover:text-[#D4AF37]">
+   930→                              {getLocalizedField(
+   931→                                related.title,
+   932→                                related.titleEn,
+   933→                                locale
+   934→                              )}
+   935→                            </h3>
+   936→                            <div className="mt-3 flex items-center gap-2">
+   937→                              <Avatar className="h-5 w-5">
+   938→                                <AvatarFallback
+   939→                                  className="text-[8px] font-bold"
+   940→                                  style={{
+   941→                                    backgroundColor: `${GOLD}15`,
+   942→                                    color: GOLD,
+   943→                                  }}
+   944→                                >
+   945→                                  {related.author
+   946→                                    ? getAuthorInitials(related.author)
+   947→                                    : '?'}
+   948→                                </AvatarFallback>
+   949→                              </Avatar>
+   950→                              <span className="text-[11px] text-muted-foreground">
+   951→                                {related.author}
+   952→                              </span>
+   953→                            </div>
+   954→                          </CardContent>
+   955→                        </Card>
+   956→                      </motion.div>
+   957→                    );
+   958→                  })}
+   959→              </div>
+   960→            </motion.section>
+   961→          )}
+   962→
+   963→          {/* Back to Blog Button */}
+   964→          <motion.div
+   965→            initial={{ opacity: 0 }}
+   966→            animate={{ opacity: 1 }}
+   967→            transition={{ delay: 0.7 }}
+   968→            className="mt-10 border-t border-border/50 pt-8"
+   969→          >
+   970→            <Button
+   971→              variant="outline"
+   972→              onClick={() => setPage('blog')}
+   973→              className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]"
+   974→            >
+   975→              <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
+   976→              {t('blog.backToBlog', locale)}
+   977→            </Button>
+   978→          </motion.div>
+   979→        </article>
+   980→      </main>
+   981→    );
+   982→  }
+   983→
+   984→  // ─── Blog Grid View ───
+   985→  return (
+   986→    <main className="min-h-screen">
+   987→      {/* Hero Section */}
+   988→      <section className="relative overflow-hidden bg-secondary/50 py-16 md:py-24">
+   989→        <div className="absolute inset-0 opacity-[0.03]">
+   990→          <div
+   991→            className="absolute inset-0"
+   992→            style={{
+   993→              backgroundImage: `radial-gradient(circle at 1px 1px, ${GOLD} 1px, transparent 0)`,
+   994→              backgroundSize: '32px 32px',
+   995→            }}
+   996→          />
+   997→        </div>
+   998→        <motion.div
+   999→          initial="hidden"
+  1000→          animate="visible"
+  1001→          variants={staggerContainer}
+  1002→          className="relative mx-auto max-w-6xl px-4 text-center"
+  1003→        >
+  1004→          <motion.div variants={fadeInUp} className="mb-4">
+  1005→            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#D4AF37]/10">
+  1006→              <BookOpen className="h-8 w-8" style={{ color: GOLD }} />
+  1007→            </div>
+  1008→          </motion.div>
+  1009→          <motion.h1
+  1010→            variants={fadeInUp}
+  1011→            className="font-heading text-4xl font-bold tracking-tight md:text-5xl"
+  1012→          >
+  1013→            {t('nav.blog', locale)}
+  1014→          </motion.h1>
+  1015→          <motion.p
+  1016→            variants={fadeInUp}
+  1017→            className="mt-4 text-lg text-muted-foreground"
+  1018→          >
+  1019→            {t('blog.subtitle', locale)}
+  1020→          </motion.p>
+  1021→        </motion.div>
+  1022→      </section>
+  1023→
+  1024→      {/* Breadcrumb */}
+  1025→      <div className="mx-auto max-w-6xl px-4 pt-6">
+  1026→        <Breadcrumb>
+  1027→          <BreadcrumbList>
+  1028→            <BreadcrumbItem>
+  1029→              <BreadcrumbLink
+  1030→                onClick={() => setPage('home')}
+  1031→                className="cursor-pointer hover:text-[#D4AF37]"
+  1032→              >
+  1033→                {t('nav.home', locale)}
+  1034→              </BreadcrumbLink>
+  1035→            </BreadcrumbItem>
+  1036→            <BreadcrumbSeparator>
+  1037→              <ChevronRight className="h-3.5 w-3.5" />
+  1038→            </BreadcrumbSeparator>
+  1039→            <BreadcrumbItem>
+  1040→              <BreadcrumbPage>{t('nav.blog', locale)}</BreadcrumbPage>
+  1041→            </BreadcrumbItem>
+  1042→          </BreadcrumbList>
+  1043→        </Breadcrumb>
+  1044→      </div>
+  1045→
+  1046→      {/* Category Filter Pills */}
+  1047→      <div className="mx-auto max-w-6xl px-4 pt-4 pb-2">
+  1048→        <motion.div
+  1049→          initial={{ opacity: 0, y: 10 }}
+  1050→          animate={{ opacity: 1, y: 0 }}
+  1051→          transition={{ delay: 0.3 }}
+  1052→          className="flex flex-wrap gap-2"
+  1053→        >
+  1054→          <button
+  1055→            onClick={() => { setSelectedCategory('all'); setVisibleCount(POSTS_PER_PAGE); }}
+  1056→            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border ${
+  1057→              selectedCategory === 'all'
+  1058→                ? 'bg-[#D4AF37] text-black border-[#D4AF37] shadow-sm shadow-[#D4AF37]/25'
+  1059→                : 'bg-background text-muted-foreground border-border hover:border-[#D4AF37]/40 hover:text-foreground'
+  1060→            }`}
+  1061→          >
+  1062→            {t('blog.allCategories', locale)}
+  1063→          </button>
+  1064→          {allCategories.map((cat) => (
+  1065→            <button
+  1066→              key={cat}
+  1067→              onClick={() => { setSelectedCategory(cat); setVisibleCount(POSTS_PER_PAGE); }}
+  1068→              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border ${
+  1069→                selectedCategory === cat
+  1070→                  ? 'bg-[#D4AF37] text-black border-[#D4AF37] shadow-sm shadow-[#D4AF37]/25'
+  1071→                  : 'bg-background text-muted-foreground border-border hover:border-[#D4AF37]/40 hover:text-foreground'
+  1072→              }`}
+  1073→            >
+  1074→              {cat}
+  1075→            </button>
+  1076→          ))}
+  1077→        </motion.div>
+  1078→      </div>
+  1079→
+  1080→      {/* Blog Grid */}
+  1081→      <section className="mx-auto max-w-6xl px-4 py-6">
+  1082→        {loading ? (
+  1083→          <>
+  1084→            <div className="mb-6 sm:col-span-2">
+  1085→              <BlogCardSkeleton />
+  1086→            </div>
+  1087→            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+  1088→              {Array.from({ length: 6 }).map((_, i) => (
+  1089→                <BlogCardSkeleton key={i} />
+  1090→              ))}
+  1091→            </div>
+  1092→          </>
+  1093→        ) : filteredBlogs.length === 0 ? (
+  1094→          isFiltered ? (
+  1095→            <EmptyFilterState
+  1096→              locale={locale}
+  1097→              selectedCategory={selectedCategory}
+  1098→              onClearFilter={() => {
+  1099→                setSelectedCategory('all');
+  1100→                setVisibleCount(POSTS_PER_PAGE);
+  1101→              }}
+  1102→            />
+  1103→          ) : (
+  1104→            <motion.div
+  1105→              initial={{ opacity: 0, scale: 0.95 }}
+  1106→              animate={{ opacity: 1, scale: 1 }}
+  1107→              className="py-24 text-center"
+  1108→            >
+  1109→              <BookOpen className="mx-auto mb-4 h-16 w-16 text-muted-foreground/40" />
+  1110→              <p className="text-lg font-medium text-muted-foreground">
+  1111→                {t('blog.noArticles', locale)}
+  1112→              </p>
+  1113→            </motion.div>
+  1114→          )
+  1115→        ) : (
+  1116→          <>
+  1117→            <motion.div
+  1118→              initial="hidden"
+  1119→              animate="visible"
+  1120→              variants={staggerContainer}
+  1121→              className="space-y-8"
+  1122→            >
+  1123→              <AnimatePresence mode="popLayout">
+  1124→                {/* Featured Card for the first post - spans 2 cols */}
+  1125→                {featuredBlog && (
+  1126→                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+  1127→                    <FeaturedCard
+  1128→                      blog={featuredBlog}
+  1129→                      locale={locale}
+  1130→                      onView={() =>
+  1131→                        setPage('blog-detail', { slug: featuredBlog.slug })
+  1132→                      }
+  1133→                    />
+  1134→                  </div>
+  1135→                )}
+  1136→
+  1137→                {/* Grid of remaining posts */}
+  1138→                {restBlogs.length > 0 && (
+  1139→                  <motion.div variants={fadeInUp}>
+  1140→                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+  1141→                      {restBlogs.map((blog) => (
+  1142→                        <BlogCard
+  1143→                          key={blog.id}
+  1144→                          blog={blog}
+  1145→                          locale={locale}
+  1146→                          onView={() =>
+  1147→                            setPage('blog-detail', { slug: blog.slug })
+  1148→                          }
+  1149→                        />
+  1150→                      ))}
+  1151→                    </div>
+  1152→                  </motion.div>
+  1153→                )}
+  1154→              </AnimatePresence>
+  1155→            </motion.div>
+  1156→
+  1157→            {/* Load More Button - Gold themed */}
+  1158→            {hasMore && (
+  1159→              <motion.div
+  1160→                initial={{ opacity: 0 }}
+  1161→                animate={{ opacity: 1 }}
+  1162→                transition={{ delay: 0.4 }}
+  1163→                className="mt-12 flex justify-center"
+  1164→              >
+  1165→                <Button
+  1166→                  size="lg"
+  1167→                  onClick={handleLoadMore}
+  1168→                  disabled={loadingMore}
+  1169→                  className="min-w-[220px] border-0 bg-[#D4AF37] font-semibold text-black shadow-lg shadow-[#D4AF37]/20 transition-all duration-300 hover:bg-[#B8960C] hover:shadow-xl hover:shadow-[#D4AF37]/30"
+  1170→                >
+  1171→                  {loadingMore ? (
+  1172→                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+  1173→                  ) : (
+  1174→                    <BookOpen className="mr-2 h-4 w-4" />
+  1175→                  )}
+  1176→                  {t('blog.loadMore', locale)}
+  1177→                  {!loadingMore && <ArrowRight className="ml-2 h-4 w-4" />}
+  1178→                </Button>
+  1179→              </motion.div>
+  1180→            )}
+  1181→          </>
+  1182→        )}
+  1183→      </section>
+  1184→    </main>
+  1185→  );
+  1186→}
+  1187→

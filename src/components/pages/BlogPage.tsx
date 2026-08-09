@@ -13,6 +13,9 @@ import {
   SearchX,
   Sparkles,
   Eye,
+  Link as LinkIcon,
+  Twitter,
+  Facebook,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useAppStore } from '@/lib/store';
 import { t, type Locale } from '@/lib/i18n';
+import { toast } from 'sonner';
 
 const GOLD = '#D4AF37';
 const GOLD_DARK = '#B8960C';
@@ -234,7 +238,7 @@ function BlogCard({
       transition={{ duration: 0.3 }}
     >
       <Card
-        className="group cursor-pointer overflow-hidden border-border/50 transition-all duration-300 hover:shadow-2xl hover:shadow-[#D4AF37]/8"
+        className="group cursor-pointer overflow-hidden border-border/50 transition-all duration-300 hover:shadow-2xl hover:shadow-[#D4AF37]/8 hover:-translate-y-1"
         onClick={onView}
       >
         {/* Image / Placeholder */}
@@ -247,7 +251,7 @@ function BlogCard({
             <Badge
               className="absolute left-4 top-4 border-0 px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase"
               style={{
-                backgroundColor: GOLD,
+                background: `linear-gradient(135deg, ${GOLD}, ${GOLD_DARK})`,
                 color: '#1a1a1a',
               }}
             >
@@ -363,15 +367,22 @@ function FeaturedCard({
               />
             )}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/10 md:bg-gradient-to-l md:from-black/30 md:to-transparent" />
+            {/* Gold gradient overlay on image */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#D4AF37]/20 via-[#D4AF37]/5 to-transparent pointer-events-none" />
 
-            {/* Featured Badge */}
-            <Badge
-              className="absolute left-4 top-4 border-0 px-2.5 py-1 text-[11px] font-bold tracking-wide uppercase"
-              style={{ backgroundColor: GOLD, color: '#1a1a1a' }}
-            >
-              <Sparkles className="mr-1 h-3 w-3" />
-              {t('blog.featured', locale)}
-            </Badge>
+            {/* Featured Badge - Larger with Sparkles */}
+            <div className="absolute left-4 top-4">
+              <div
+                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold tracking-widest uppercase shadow-lg shadow-[#D4AF37]/30"
+                style={{
+                  background: `linear-gradient(135deg, ${GOLD}, ${GOLD_DARK}, ${GOLD})`,
+                  color: '#1a1a1a',
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+                {t('blog.featured', locale)}
+              </div>
+            </div>
 
             {/* Category Badge */}
             {category && (
@@ -735,6 +746,9 @@ export default function BlogPage() {
 
         {/* Blog Detail Content */}
         <article className="mx-auto max-w-3xl px-4 py-8">
+          {/* Gold top decorative bar */}
+          <div className="h-[3px] w-full rounded-full mb-8" style={{ background: 'linear-gradient(90deg, transparent, #D4AF37, #F5E6A3, #D4AF37, transparent)' }} />
+
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -756,39 +770,45 @@ export default function BlogPage() {
               {detailTitle}
             </h1>
 
-            {/* Meta: Author + Date + Read Time */}
-            <div className="mt-6 flex flex-wrap items-center gap-4 rounded-xl border border-border/40 bg-muted/30 p-4">
-              {detailAuthorName && (
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-11 w-11 ring-2 ring-[#D4AF37]/20">
-                    <AvatarFallback
-                      className="text-sm font-bold"
-                      style={{
-                        backgroundColor: `${GOLD}20`,
-                        color: GOLD,
-                      }}
-                    >
-                      {getAuthorInitials(detailAuthorName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-semibold leading-none text-foreground">
-                      {detailAuthorName}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t('blog.publishedOn', locale)} {formatDate(currentBlog.createdAt, locale)}
-                    </p>
+            {/* Meta: Author + Date + Read Time — gold-bordered card */}
+            <div className="mt-6 rounded-xl border border-[#D4AF37]/20 bg-gradient-to-r from-[#D4AF37]/[0.03] to-transparent p-5">
+              <div className="flex flex-wrap items-center gap-4">
+                {detailAuthorName && (
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className="absolute -inset-0.5 rounded-full bg-gradient-to-br from-[#D4AF37] via-[#F5E6A3] to-[#B8960C] opacity-60 blur-[1px]" />
+                      <Avatar className="relative h-12 w-12 ring-2 ring-[#D4AF37]/30">
+                        <AvatarFallback
+                          className="text-sm font-bold"
+                          style={{
+                            backgroundColor: `linear-gradient(135deg, ${GOLD}, ${GOLD_DARK})`,
+                            color: '#1a1a1a',
+                          }}
+                        >
+                          {getAuthorInitials(detailAuthorName)}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold leading-none text-foreground">
+                        {detailAuthorName}
+                      </p>
+                      <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        <time>{formatDate(currentBlog.createdAt, locale)}</time>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
-              <div className="ml-auto flex items-center gap-2">
-                <div className="flex items-center gap-1.5 rounded-full bg-[#D4AF37]/10 px-3 py-1.5 text-xs font-semibold" style={{ color: GOLD }}>
-                  <Clock className="h-3.5 w-3.5" />
-                  {detailReadTime} {t('blog.readTime', locale)}
-                </div>
-                <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                  <Eye className="h-3.5 w-3.5" />
-                  {Math.floor(Math.random() * 500 + 100)} {locale === 'id' ? 'kunjungan' : 'views'}
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-full bg-[#D4AF37]/10 px-3 py-1.5 text-xs font-semibold" style={{ color: GOLD }}>
+                    <Clock className="h-3.5 w-3.5" />
+                    {detailReadTime} {t('blog.readTime', locale)}
+                  </div>
+                  <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                    <Eye className="h-3.5 w-3.5" />
+                    {Math.floor(Math.random() * 500 + 100)} {locale === 'id' ? 'kunjungan' : 'views'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -814,7 +834,7 @@ export default function BlogPage() {
               )}
             </motion.div>
 
-            {/* Content */}
+            {/* Content - Premium typography */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -823,11 +843,11 @@ export default function BlogPage() {
                 prose-headings:font-heading prose-headings:tracking-tight
                 prose-h2:text-2xl prose-h2:font-bold prose-h2:mt-10 prose-h2:mb-4
                 prose-h3:text-xl prose-h3:font-semibold prose-h3:mt-8 prose-h3:mb-3
-                prose-p:leading-relaxed prose-p:text-muted-foreground
+                prose-p:leading-[1.85] prose-p:text-muted-foreground prose-p:tracking-wide
                 prose-a:text-[#D4AF37] prose-a:no-underline hover:prose-a:underline
                 prose-strong:text-foreground
                 prose-ul:my-4 prose-ol:my-4
-                prose-li:text-muted-foreground
+                prose-li:text-muted-foreground prose-li:leading-relaxed
                 prose-blockquote:border-l-[#D4AF37] prose-blockquote:italic
                 prose-img:rounded-xl
                 prose-hr:border-[#D4AF37]/20"
@@ -839,6 +859,48 @@ export default function BlogPage() {
                   {t('blog.contentNotAvailable', locale)}
                 </p>
               )}
+            </motion.div>
+
+            {/* Share Buttons Row */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.4 }}
+              className="mt-10 flex items-center gap-3"
+            >
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {locale === 'id' ? 'Bagikan' : 'Share'}
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success(locale === 'id' ? 'Tautan disalin!' : 'Link copied!');
+                }}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 bg-background transition-all duration-200 hover:border-[#D4AF37]/40 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] hover:shadow-md hover:shadow-[#D4AF37]/10"
+                aria-label="Copy link"
+              >
+                <LinkIcon className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  const url = window.location.href;
+                  window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(detailTitle)}`, '_blank');
+                }}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 bg-background transition-all duration-200 hover:border-[#D4AF37]/40 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] hover:shadow-md hover:shadow-[#D4AF37]/10"
+                aria-label="Share on Twitter"
+              >
+                <Twitter className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  const url = window.location.href;
+                  window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+                }}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 bg-background transition-all duration-200 hover:border-[#D4AF37]/40 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] hover:shadow-md hover:shadow-[#D4AF37]/10"
+                aria-label="Share on Facebook"
+              >
+                <Facebook className="h-4 w-4" />
+              </button>
             </motion.div>
           </motion.div>
 
@@ -965,12 +1027,12 @@ export default function BlogPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.7 }}
-            className="mt-10 border-t border-border/50 pt-8"
+            className="mt-10 border-t border-[#D4AF37]/10 pt-8"
           >
             <Button
               variant="outline"
               onClick={() => setPage('blog')}
-              className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]"
+              className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] hover:border-[#D4AF37]/50 transition-all duration-200"
             >
               <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
               {t('blog.backToBlog', locale)}

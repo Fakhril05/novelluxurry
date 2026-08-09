@@ -21,7 +21,9 @@ export type Page =
   | 'order-success'
   | 'order-tracking'
   | 'compare'
-  | 'reading-lists';
+  | 'reading-lists'
+  | 'loyalty'
+  | 'vouchers';
 
 export interface CartItem {
   id: string;

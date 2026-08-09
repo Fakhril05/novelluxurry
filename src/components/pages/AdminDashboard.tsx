@@ -12,8 +12,8 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Eye,
   Package,
+  Search,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -196,6 +196,14 @@ function formatDate(dateStr: string, locale: string) {
   });
 }
 
+// Helper to extract error message from API response
+function getErrorMessage(data: { error?: string; details?: string[] }): string {
+  if (data.details && data.details.length > 0) {
+    return data.details.join('; ');
+  }
+  return data.error || 'An error occurred';
+}
+
 // ============================================================================
 // Dashboard/Stats Tab
 // ============================================================================
@@ -216,28 +224,28 @@ function StatsTab({
 
   const statCards = [
     {
-      label: locale === 'id' ? 'Total Penjualan' : 'Total Sales',
+      label: t('admin.totalSales', locale as 'id' | 'en'),
       value: totalSold.toLocaleString(),
       icon: TrendingUp,
       color: 'text-emerald-600',
       bg: 'bg-emerald-50 dark:bg-emerald-900/20',
     },
     {
-      label: locale === 'id' ? 'Total Pelanggan' : 'Total Customers',
+      label: t('admin.totalCustomers', locale as 'id' | 'en'),
       value: users.length.toLocaleString(),
       icon: Users,
       color: 'text-blue-600',
       bg: 'bg-blue-50 dark:bg-blue-900/20',
     },
     {
-      label: locale === 'id' ? 'Pendapatan' : 'Revenue',
+      label: t('admin.revenue', locale as 'id' | 'en'),
       value: formatPrice(totalRevenue, locale as 'id' | 'en'),
       icon: DollarSign,
       color: 'text-[#D4AF37]',
       bg: 'bg-[#D4AF37]/10',
     },
     {
-      label: locale === 'id' ? 'Pesanan Baru' : 'New Orders',
+      label: t('admin.newOrders', locale as 'id' | 'en'),
       value: newOrders.toLocaleString(),
       icon: ShoppingBag,
       color: 'text-orange-600',
@@ -283,7 +291,7 @@ function StatsTab({
       <Card>
         <CardHeader>
           <CardTitle className="font-heading text-lg">
-            {locale === 'id' ? 'Grafik Penjualan' : 'Sales Chart'}
+            {t('admin.salesChart', locale as 'id' | 'en')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -338,7 +346,7 @@ function StatsTab({
       <Card>
         <CardHeader>
           <CardTitle className="font-heading text-lg">
-            {locale === 'id' ? 'Pesanan Terbaru' : 'Recent Orders'}
+            {t('admin.recentOrders', locale as 'id' | 'en')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -346,18 +354,18 @@ function StatsTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{locale === 'id' ? 'No. Pesanan' : 'Order No.'}</TableHead>
-                  <TableHead className="hidden sm:table-cell">{locale === 'id' ? 'Pelanggan' : 'Customer'}</TableHead>
-                  <TableHead>{locale === 'id' ? 'Total' : 'Total'}</TableHead>
-                  <TableHead>{locale === 'id' ? 'Status' : 'Status'}</TableHead>
-                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Tanggal' : 'Date'}</TableHead>
+                  <TableHead>{t('admin.orderNumber', locale as 'id' | 'en')}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('admin.customer', locale as 'id' | 'en')}</TableHead>
+                  <TableHead>{t('admin.total', locale as 'id' | 'en')}</TableHead>
+                  <TableHead>{t('admin.status', locale as 'id' | 'en')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('admin.date', locale as 'id' | 'en')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recentOrders.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      {locale === 'id' ? 'Belum ada pesanan' : 'No orders yet'}
+                      {t('admin.noOrders', locale as 'id' | 'en')}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -392,7 +400,7 @@ function StatsTab({
 }
 
 // ============================================================================
-// Books Tab (CRUD)
+// Books Tab (CRUD) with Search/Filter
 // ============================================================================
 function BooksTab({
   locale,
@@ -410,6 +418,56 @@ function BooksTab({
   const [form, setForm] = useState<BookFormData>(EMPTY_BOOK_FORM);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteErrorMsg, setDeleteErrorMsg] = useState<string | null>(null);
+
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterFormat, setFilterFormat] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Apply filters
+  const filteredBooks = books.filter((book) => {
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      if (
+        !book.title.toLowerCase().includes(q) &&
+        !book.author.toLowerCase().includes(q) &&
+        !(book.isbn && book.isbn.toLowerCase().includes(q))
+      ) return false;
+    }
+    if (filterCategory !== 'all' && book.categoryId !== filterCategory) return false;
+    if (filterFormat !== 'all' && book.format !== filterFormat) return false;
+    if (filterStatus === 'bestseller' && !book.isBestSeller) return false;
+    if (filterStatus === 'newArrival' && !book.isNewArrival) return false;
+    if (filterStatus === 'featured' && !book.isFeatured) return false;
+    if (filterStatus === 'outOfStock' && book.stock !== 0) return false;
+    return true;
+  });
+
+  // Sort
+  const sortedBooks = [...filteredBooks].sort((a, b) => {
+    switch (sortBy) {
+      case 'titleAsc': return a.title.localeCompare(b.title);
+      case 'titleDesc': return b.title.localeCompare(a.title);
+      case 'priceAsc': return a.price - b.price;
+      case 'priceDesc': return b.price - a.price;
+      case 'stockAsc': return a.stock - b.stock;
+      case 'stockDesc': return b.stock - a.stock;
+      case 'soldDesc': return b.soldCount - a.soldCount;
+      default: return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  });
+
+  const L = locale as 'id' | 'en';
 
   const openAddDialog = useCallback(() => {
     setEditingBook(null);
@@ -444,7 +502,7 @@ function BooksTab({
 
   const handleSave = useCallback(async () => {
     if (!form.title || !form.author || !form.price) {
-      toast.error(locale === 'id' ? 'Judul, penulis, dan harga wajib diisi' : 'Title, author, and price are required');
+      toast.error(t('admin.titleAuthorPriceRequired', L));
       return;
     }
     setSaving(true);
@@ -458,56 +516,55 @@ function BooksTab({
         publishedYear: form.publishedYear ? Number(form.publishedYear) : null,
       };
 
+      let res: Response;
       if (editingBook) {
-        const res = await fetch(`/api/books?id=${editingBook.id}`, {
+        res = await fetch(`/api/admin/books/${editingBook.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        if (res.ok) {
-          toast.success(locale === 'id' ? 'Buku berhasil diperbarui' : 'Book updated successfully');
-          setDialogOpen(false);
-          onRefresh();
-        } else {
-          toast.error(locale === 'id' ? 'Gagal memperbarui buku' : 'Failed to update book');
-        }
       } else {
-        const res = await fetch('/api/books', {
+        res = await fetch('/api/admin/books', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        if (res.ok) {
-          toast.success(locale === 'id' ? 'Buku berhasil ditambahkan' : 'Book added successfully');
-          setDialogOpen(false);
-          onRefresh();
-        } else {
-          toast.error(locale === 'id' ? 'Gagal menambahkan buku' : 'Failed to add book');
-        }
+      }
+
+      if (res.ok) {
+        toast.success(editingBook ? t('admin.bookUpdated', L) : t('admin.bookAdded', L));
+        setDialogOpen(false);
+        onRefresh();
+      } else {
+        const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+        toast.error(getErrorMessage(data));
       }
     } catch {
-      toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+      toast.error(t('general.error', L));
     } finally {
       setSaving(false);
     }
-  }, [form, editingBook, locale, onRefresh]);
+  }, [form, editingBook, L, onRefresh]);
 
   const handleDelete = useCallback(async () => {
     if (!deletingId) return;
+    setDeleteErrorMsg(null);
     try {
-      const res = await fetch(`/api/books?id=${deletingId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/books/${deletingId}`, { method: 'DELETE' });
       if (res.ok) {
-        toast.success(locale === 'id' ? 'Buku berhasil dihapus' : 'Book deleted successfully');
+        toast.success(t('admin.bookDeleted', L));
         onRefresh();
       } else {
-        toast.error(locale === 'id' ? 'Gagal menghapus buku' : 'Failed to delete book');
+        const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+        setDeleteErrorMsg(getErrorMessage(data));
+        toast.error(t('admin.deleteBookFailed', L));
       }
     } catch {
-      toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+      toast.error(t('general.error', L));
     } finally {
       setDeletingId(null);
     }
-  }, [deletingId, locale, onRefresh]);
+  }, [deletingId, L, onRefresh]);
 
   const getCategoryName = (catId: string | null) => {
     if (!catId) return '-';
@@ -516,228 +573,293 @@ function BooksTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h2 className="font-heading text-xl font-bold">
-          {locale === 'id' ? 'Kelola Buku' : 'Manage Books'}
+          {t('admin.manageBooks', L)}
+          <span className="ml-2 text-sm font-normal text-muted-foreground">({sortedBooks.length})</span>
         </h2>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openAddDialog} className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              {locale === 'id' ? 'Tambah Buku' : 'Add Book'}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[85vh] overflow-y-auto max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="font-heading">
-                {editingBook
-                  ? (locale === 'id' ? 'Edit Buku' : 'Edit Book')
-                  : (locale === 'id' ? 'Tambah Buku Baru' : 'Add New Book')}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Judul' : 'Title'} *</Label>
-                  <Input
-                    value={form.title}
-                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                    placeholder={locale === 'id' ? 'Judul buku' : 'Book title'}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Penulis' : 'Author'} *</Label>
-                  <Input
-                    value={form.author}
-                    onChange={(e) => setForm((f) => ({ ...f, author: e.target.value }))}
-                    placeholder={locale === 'id' ? 'Nama penulis' : 'Author name'}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>ISBN</Label>
-                  <Input
-                    value={form.isbn}
-                    onChange={(e) => setForm((f) => ({ ...f, isbn: e.target.value }))}
-                    placeholder="978-xxx-xxx-xxx"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Kategori' : 'Category'}</Label>
-                  <Select
-                    value={form.categoryId}
-                    onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder={locale === 'id' ? 'Pilih kategori' : 'Select category'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Harga' : 'Price'} (IDR) *</Label>
-                  <Input
-                    type="number"
-                    value={form.price}
-                    onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                    placeholder="89000"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Harga Diskon' : 'Discount Price'}</Label>
-                  <Input
-                    type="number"
-                    value={form.discountPrice}
-                    onChange={(e) => setForm((f) => ({ ...f, discountPrice: e.target.value }))}
-                    placeholder={locale === 'id' ? 'Opsional' : 'Optional'}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Stok' : 'Stock'}</Label>
-                  <Input
-                    type="number"
-                    value={form.stock}
-                    onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
-                    placeholder="100"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Format' : 'Format'}</Label>
-                  <Select
-                    value={form.format}
-                    onValueChange={(v) => setForm((f) => ({ ...f, format: v }))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Paperback">Paperback</SelectItem>
-                      <SelectItem value="Hardcover">Hardcover</SelectItem>
-                      <SelectItem value="Ebook">Ebook</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Halaman' : 'Pages'}</Label>
-                  <Input
-                    type="number"
-                    value={form.pages}
-                    onChange={(e) => setForm((f) => ({ ...f, pages: e.target.value }))}
-                    placeholder="320"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Bahasa' : 'Language'}</Label>
-                  <Input
-                    value={form.language}
-                    onChange={(e) => setForm((f) => ({ ...f, language: e.target.value }))}
-                    placeholder="Indonesia"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Penerbit' : 'Publisher'}</Label>
-                  <Input
-                    value={form.publisher}
-                    onChange={(e) => setForm((f) => ({ ...f, publisher: e.target.value }))}
-                    placeholder={locale === 'id' ? 'Nama penerbit' : 'Publisher name'}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === 'id' ? 'Tahun Terbit' : 'Published Year'}</Label>
-                  <Input
-                    type="number"
-                    value={form.publishedYear}
-                    onChange={(e) => setForm((f) => ({ ...f, publishedYear: e.target.value }))}
-                    placeholder="2025"
-                  />
-                </div>
-              </div>
+        <Button onClick={openAddDialog} className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white">
+          <Plus className="h-4 w-4 mr-2" />
+          {t('admin.addBook', L)}
+        </Button>
+      </div>
+
+      {/* Search & Filter Bar */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('admin.searchBooks', L)}
+                className="pl-9"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('admin.filterCategory', L)}</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterFormat} onValueChange={setFilterFormat}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('admin.filterFormat', L)}</SelectItem>
+                  <SelectItem value="Paperback">Paperback</SelectItem>
+                  <SelectItem value="Hardcover">Hardcover</SelectItem>
+                  <SelectItem value="Ebook">Ebook</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('admin.filterStatus', L)}</SelectItem>
+                  <SelectItem value="bestseller">{t('admin.statusBestseller', L)}</SelectItem>
+                  <SelectItem value="newArrival">{t('admin.statusNewArrival', L)}</SelectItem>
+                  <SelectItem value="featured">{t('admin.statusFeatured', L)}</SelectItem>
+                  <SelectItem value="outOfStock">{t('admin.statusOutOfStock', L)}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">{t('admin.sortNewest', L)}</SelectItem>
+                  <SelectItem value="titleAsc">{t('admin.sortTitleAsc', L)}</SelectItem>
+                  <SelectItem value="titleDesc">{t('admin.sortTitleDesc', L)}</SelectItem>
+                  <SelectItem value="priceAsc">{t('admin.sortPriceAsc', L)}</SelectItem>
+                  <SelectItem value="priceDesc">{t('admin.sortPriceDesc', L)}</SelectItem>
+                  <SelectItem value="stockAsc">{t('admin.sortStockAsc', L)}</SelectItem>
+                  <SelectItem value="stockDesc">{t('admin.sortStockDesc', L)}</SelectItem>
+                  <SelectItem value="soldDesc">{t('admin.sortBestseller', L)}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Book Form Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              {editingBook ? t('admin.editBook', L) : t('admin.addNewBook', L)}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{locale === 'id' ? 'URL Cover Image' : 'Cover Image URL'}</Label>
+                <Label>{t('admin.title', L)} *</Label>
                 <Input
-                  value={form.coverImage}
-                  onChange={(e) => setForm((f) => ({ ...f, coverImage: e.target.value }))}
-                  placeholder="https://..."
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder={t('admin.title', L)}
                 />
               </div>
               <div className="space-y-2">
-                <Label>{locale === 'id' ? 'Bio Penulis' : 'Author Bio'}</Label>
-                <Textarea
-                  value={form.authorBio}
-                  onChange={(e) => setForm((f) => ({ ...f, authorBio: e.target.value }))}
-                  placeholder={locale === 'id' ? 'Tentang penulis...' : 'About the author...'}
-                  rows={2}
+                <Label>{t('admin.author', L)} *</Label>
+                <Input
+                  value={form.author}
+                  onChange={(e) => setForm((f) => ({ ...f, author: e.target.value }))}
+                  placeholder={t('admin.author', L)}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label>{locale === 'id' ? 'Sinopsis' : 'Synopsis'}</Label>
-                <Textarea
-                  value={form.synopsis}
-                  onChange={(e) => setForm((f) => ({ ...f, synopsis: e.target.value }))}
-                  placeholder={locale === 'id' ? 'Sinopsis buku...' : 'Book synopsis...'}
-                  rows={4}
-                />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.isBestSeller}
-                    onChange={(e) => setForm((f) => ({ ...f, isBestSeller: e.target.checked }))}
-                    className="rounded border-input accent-[#D4AF37]"
-                  />
-                  {locale === 'id' ? 'Terlaris' : 'Bestseller'}
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.isNewArrival}
-                    onChange={(e) => setForm((f) => ({ ...f, isNewArrival: e.target.checked }))}
-                    className="rounded border-input accent-[#D4AF37]"
-                  />
-                  {locale === 'id' ? 'Baru' : 'New Arrival'}
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.isFeatured}
-                    onChange={(e) => setForm((f) => ({ ...f, isFeatured: e.target.checked }))}
-                    className="rounded border-input accent-[#D4AF37]"
-                  />
-                  {locale === 'id' ? 'Unggulan' : 'Featured'}
-                </label>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  {t('general.cancel', locale as 'id' | 'en')}
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white"
-                >
-                  {saving
-                    ? t('general.loading', locale as 'id' | 'en')
-                    : t('general.save', locale as 'id' | 'en')}
-                </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>ISBN</Label>
+                <Input
+                  value={form.isbn}
+                  onChange={(e) => setForm((f) => ({ ...f, isbn: e.target.value }))}
+                  placeholder="978-xxx-xxx-xxx"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('admin.category', L)}</Label>
+                <Select
+                  value={form.categoryId}
+                  onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t('admin.filterCategory', L)} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>{t('admin.price', L)} (IDR) *</Label>
+                <Input
+                  type="number"
+                  value={form.price}
+                  onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                  placeholder="89000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('admin.discountPrice', L)}</Label>
+                <Input
+                  type="number"
+                  value={form.discountPrice}
+                  onChange={(e) => setForm((f) => ({ ...f, discountPrice: e.target.value }))}
+                  placeholder={L === 'id' ? 'Opsional' : 'Optional'}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('admin.stock', L)}</Label>
+                <Input
+                  type="number"
+                  value={form.stock}
+                  onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
+                  placeholder="100"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>{t('book.format', L)}</Label>
+                <Select
+                  value={form.format}
+                  onValueChange={(v) => setForm((f) => ({ ...f, format: v }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Paperback">Paperback</SelectItem>
+                    <SelectItem value="Hardcover">Hardcover</SelectItem>
+                    <SelectItem value="Ebook">Ebook</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('book.pages', L)}</Label>
+                <Input
+                  type="number"
+                  value={form.pages}
+                  onChange={(e) => setForm((f) => ({ ...f, pages: e.target.value }))}
+                  placeholder="320"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('book.language', L)}</Label>
+                <Input
+                  value={form.language}
+                  onChange={(e) => setForm((f) => ({ ...f, language: e.target.value }))}
+                  placeholder="Indonesia"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('book.publisher', L)}</Label>
+                <Input
+                  value={form.publisher}
+                  onChange={(e) => setForm((f) => ({ ...f, publisher: e.target.value }))}
+                  placeholder={t('book.publisher', L)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('book.year', L)}</Label>
+                <Input
+                  type="number"
+                  value={form.publishedYear}
+                  onChange={(e) => setForm((f) => ({ ...f, publishedYear: e.target.value }))}
+                  placeholder="2025"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{L === 'id' ? 'URL Cover Image' : 'Cover Image URL'}</Label>
+              <Input
+                value={form.coverImage}
+                onChange={(e) => setForm((f) => ({ ...f, coverImage: e.target.value }))}
+                placeholder="https://..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{L === 'id' ? 'Bio Penulis' : 'Author Bio'}</Label>
+              <Textarea
+                value={form.authorBio}
+                onChange={(e) => setForm((f) => ({ ...f, authorBio: e.target.value }))}
+                placeholder={L === 'id' ? 'Tentang penulis...' : 'About the author...'}
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('book.synopsis', L)}</Label>
+              <Textarea
+                value={form.synopsis}
+                onChange={(e) => setForm((f) => ({ ...f, synopsis: e.target.value }))}
+                placeholder={L === 'id' ? 'Sinopsis buku...' : 'Book synopsis...'}
+                rows={4}
+              />
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isBestSeller}
+                  onChange={(e) => setForm((f) => ({ ...f, isBestSeller: e.target.checked }))}
+                  className="rounded border-input accent-[#D4AF37]"
+                />
+                {t('admin.bestseller', L)}
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isNewArrival}
+                  onChange={(e) => setForm((f) => ({ ...f, isNewArrival: e.target.checked }))}
+                  className="rounded border-input accent-[#D4AF37]"
+                />
+                {t('admin.newArrival', L)}
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isFeatured}
+                  onChange={(e) => setForm((f) => ({ ...f, isFeatured: e.target.checked }))}
+                  className="rounded border-input accent-[#D4AF37]"
+                />
+                {t('admin.featured', L)}
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                {t('general.cancel', L)}
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white"
+              >
+                {saving ? t('general.loading', L) : t('general.save', L)}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Books Table */}
       <Card>
@@ -746,25 +868,28 @@ function BooksTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{locale === 'id' ? 'Cover' : 'Cover'}</TableHead>
-                  <TableHead>{locale === 'id' ? 'Judul' : 'Title'}</TableHead>
-                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Penulis' : 'Author'}</TableHead>
-                  <TableHead className="hidden lg:table-cell">{locale === 'id' ? 'Kategori' : 'Category'}</TableHead>
-                  <TableHead>{locale === 'id' ? 'Harga' : 'Price'}</TableHead>
-                  <TableHead className="hidden sm:table-cell">{locale === 'id' ? 'Stok' : 'Stock'}</TableHead>
-                  <TableHead>{locale === 'id' ? 'Status' : 'Status'}</TableHead>
-                  <TableHead className="text-right">{locale === 'id' ? 'Aksi' : 'Actions'}</TableHead>
+                  <TableHead>{t('admin.cover', L)}</TableHead>
+                  <TableHead>{t('admin.title', L)}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('admin.author', L)}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t('admin.category', L)}</TableHead>
+                  <TableHead>{t('admin.price', L)}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('admin.stock', L)}</TableHead>
+                  <TableHead>{t('admin.status', L)}</TableHead>
+                  <TableHead className="text-right">{t('admin.actions', L)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {books.length === 0 ? (
+                {sortedBooks.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      {locale === 'id' ? 'Belum ada buku' : 'No books yet'}
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <div className="text-muted-foreground">
+                        <p>{t('admin.noBooks', L)}</p>
+                        <p className="text-sm mt-1">{t('admin.noBooksDesc', L)}</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  books.map((book) => (
+                  sortedBooks.map((book) => (
                     <TableRow key={book.id}>
                       <TableCell>
                         <div className="w-10 h-14 rounded overflow-hidden bg-muted flex-shrink-0">
@@ -784,11 +909,11 @@ function BooksTab({
                       <TableCell className="hidden lg:table-cell">{getCategoryName(book.categoryId)}</TableCell>
                       <TableCell>
                         <div className="text-[#D4AF37] font-semibold">
-                          {formatPrice(book.discountPrice || book.price, locale as 'id' | 'en')}
+                          {formatPrice(book.discountPrice || book.price, L)}
                         </div>
                         {book.discountPrice && (
                           <div className="text-xs text-muted-foreground line-through">
-                            {formatPrice(book.price, locale as 'id' | 'en')}
+                            {formatPrice(book.price, L)}
                           </div>
                         )}
                       </TableCell>
@@ -801,15 +926,25 @@ function BooksTab({
                         <div className="flex flex-wrap gap-1">
                           {book.isBestSeller && (
                             <Badge variant="outline" className="text-xs border-[#D4AF37] text-[#D4AF37]">
-                              {t('badge.bestseller', locale as 'id' | 'en')}
+                              {t('badge.bestseller', L)}
                             </Badge>
                           )}
                           {book.isNewArrival && (
                             <Badge variant="outline" className="text-xs border-green-500 text-green-600">
-                              {t('badge.new', locale as 'id' | 'en')}
+                              {t('badge.new', L)}
                             </Badge>
                           )}
-                          {!book.isBestSeller && !book.isNewArrival && (
+                          {book.isFeatured && (
+                            <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">
+                              {t('admin.featured', L)}
+                            </Badge>
+                          )}
+                          {!book.isBestSeller && !book.isNewArrival && !book.isFeatured && book.stock === 0 && (
+                            <Badge variant="outline" className="text-xs border-red-300 text-red-500">
+                              {t('admin.statusOutOfStock', L)}
+                            </Badge>
+                          )}
+                          {!book.isBestSeller && !book.isNewArrival && !book.isFeatured && book.stock > 0 && (
                             <span className="text-xs text-muted-foreground">-</span>
                           )}
                         </div>
@@ -824,13 +959,13 @@ function BooksTab({
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <AlertDialog open={deletingId === book.id} onOpenChange={(open) => { if (!open) setDeletingId(null); }}>
+                          <AlertDialog open={deletingId === book.id} onOpenChange={(open) => { if (!open) { setDeletingId(null); setDeleteErrorMsg(null); } }}>
                             <AlertDialogTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                onClick={() => setDeletingId(book.id)}
+                                onClick={() => { setDeletingId(book.id); setDeleteErrorMsg(null); }}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -838,21 +973,23 @@ function BooksTab({
                             <AlertDialogContent>
                               <AlertDialogHeader>
                                 <AlertDialogTitle>
-                                  {locale === 'id' ? 'Hapus Buku?' : 'Delete Book?'}
+                                  {t('admin.deleteBook', L)}
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  {locale === 'id'
-                                    ? `Apakah Anda yakin ingin menghapus "${book.title}"? Tindakan ini tidak dapat dibatalkan.`
-                                    : `Are you sure you want to delete "${book.title}"? This action cannot be undone.`}
+                                  {deleteErrorMsg || (
+                                    L === 'id'
+                                      ? `Apakah Anda yakin ingin menghapus "${book.title}"? Tindakan ini tidak dapat dibatalkan.`
+                                      : `Are you sure you want to delete "${book.title}"? This action cannot be undone.`
+                                  )}
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>{t('general.cancel', locale as 'id' | 'en')}</AlertDialogCancel>
+                                <AlertDialogCancel>{t('general.cancel', L)}</AlertDialogCancel>
                                 <AlertDialogAction
                                   onClick={handleDelete}
                                   className="bg-red-600 hover:bg-red-700"
                                 >
-                                  {locale === 'id' ? 'Hapus' : 'Delete'}
+                                  {t('admin.delete', L)}
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -888,6 +1025,9 @@ function CategoriesTab({
   const [form, setForm] = useState<CategoryFormData>(EMPTY_CATEGORY_FORM);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteErrorMsg, setDeleteErrorMsg] = useState<string | null>(null);
+
+  const L = locale as 'id' | 'en';
 
   const openAddDialog = useCallback(() => {
     setEditingCat(null);
@@ -908,7 +1048,7 @@ function CategoriesTab({
 
   const handleSave = useCallback(async () => {
     if (!form.name || !form.slug) {
-      toast.error(locale === 'id' ? 'Nama dan slug wajib diisi' : 'Name and slug are required');
+      toast.error(t('admin.nameAndSlugRequired', L));
       return;
     }
     setSaving(true);
@@ -921,149 +1061,145 @@ function CategoriesTab({
         image: form.image || null,
       };
 
+      let res: Response;
       if (editingCat) {
-        const res = await fetch(`/api/categories?id=${editingCat.id}`, {
+        res = await fetch(`/api/admin/categories/${editingCat.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        if (res.ok) {
-          toast.success(locale === 'id' ? 'Kategori berhasil diperbarui' : 'Category updated');
-          setDialogOpen(false);
-          onRefresh();
-        } else {
-          toast.error(locale === 'id' ? 'Gagal memperbarui kategori' : 'Failed to update category');
-        }
       } else {
-        const res = await fetch('/api/categories', {
+        res = await fetch('/api/admin/categories', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        if (res.ok) {
-          toast.success(locale === 'id' ? 'Kategori berhasil ditambahkan' : 'Category added');
-          setDialogOpen(false);
-          onRefresh();
-        } else {
-          toast.error(locale === 'id' ? 'Gagal menambahkan kategori' : 'Failed to add category');
-        }
+      }
+
+      if (res.ok) {
+        toast.success(editingCat ? t('admin.categoryUpdated', L) : t('admin.categoryAdded', L));
+        setDialogOpen(false);
+        onRefresh();
+      } else {
+        const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+        toast.error(getErrorMessage(data));
       }
     } catch {
-      toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+      toast.error(t('general.error', L));
     } finally {
       setSaving(false);
     }
-  }, [form, editingCat, locale, onRefresh]);
+  }, [form, editingCat, L, onRefresh]);
 
   const handleDelete = useCallback(async () => {
     if (!deletingId) return;
+    setDeleteErrorMsg(null);
     try {
-      const res = await fetch(`/api/categories?id=${deletingId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/categories/${deletingId}`, { method: 'DELETE' });
       if (res.ok) {
-        toast.success(locale === 'id' ? 'Kategori berhasil dihapus' : 'Category deleted');
+        toast.success(t('admin.categoryDeleted', L));
         onRefresh();
       } else {
-        toast.error(locale === 'id' ? 'Gagal menghapus kategori' : 'Failed to delete category');
+        const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+        setDeleteErrorMsg(getErrorMessage(data));
+        toast.error(t('admin.deleteCategoryFailed', L));
       }
     } catch {
-      toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+      toast.error(t('general.error', L));
     } finally {
       setDeletingId(null);
     }
-  }, [deletingId, locale, onRefresh]);
+  }, [deletingId, L, onRefresh]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-heading text-xl font-bold">
-          {locale === 'id' ? 'Kelola Kategori' : 'Manage Categories'}
+          {t('admin.manageCategories', L)}
         </h2>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openAddDialog} className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              {locale === 'id' ? 'Tambah Kategori' : 'Add Category'}
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-heading">
-                {editingCat
-                  ? (locale === 'id' ? 'Edit Kategori' : 'Edit Category')
-                  : (locale === 'id' ? 'Tambah Kategori Baru' : 'Add New Category')}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label>{locale === 'id' ? 'Nama Kategori' : 'Category Name'} *</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder={locale === 'id' ? 'Contoh: Romansa' : 'e.g., Romance'}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Slug *</Label>
-                <Input
-                  value={form.slug}
-                  onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
-                  placeholder={locale === 'id' ? 'contoh: romansa' : 'e.g., romance'}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{locale === 'id' ? 'Deskripsi' : 'Description'}</Label>
-                <Textarea
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  placeholder={locale === 'id' ? 'Deskripsi kategori...' : 'Category description...'}
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{locale === 'id' ? 'URL Gambar' : 'Image URL'}</Label>
-                <Input
-                  value={form.image}
-                  onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
-                  placeholder="https://..."
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  {t('general.cancel', locale as 'id' | 'en')}
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white"
-                >
-                  {saving
-                    ? t('general.loading', locale as 'id' | 'en')
-                    : t('general.save', locale as 'id' | 'en')}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openAddDialog} className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white">
+          <Plus className="h-4 w-4 mr-2" />
+          {t('admin.addCategory', L)}
+        </Button>
       </div>
 
+      {/* Category Form Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              {editingCat ? t('admin.editCategory', L) : t('admin.addNewCategory', L)}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>{t('admin.name', L)} *</Label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder={L === 'id' ? 'Contoh: Romansa' : 'e.g., Romance'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Slug *</Label>
+              <Input
+                value={form.slug}
+                onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
+                placeholder={L === 'id' ? 'contoh: romansa' : 'e.g., romance'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('admin.description', L)}</Label>
+              <Textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder={L === 'id' ? 'Deskripsi kategori...' : 'Category description...'}
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{L === 'id' ? 'URL Gambar' : 'Image URL'}</Label>
+              <Input
+                value={form.image}
+                onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
+                placeholder="https://..."
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                {t('general.cancel', L)}
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white"
+              >
+                {saving ? t('general.loading', L) : t('general.save', L)}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Categories Table */}
       <Card>
         <CardContent className="p-0">
           <div className="max-h-[500px] overflow-y-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{locale === 'id' ? 'Nama' : 'Name'}</TableHead>
+                  <TableHead>{t('admin.name', L)}</TableHead>
                   <TableHead>Slug</TableHead>
-                  <TableHead className="hidden sm:table-cell">{locale === 'id' ? 'Deskripsi' : 'Description'}</TableHead>
-                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Buku' : 'Books'}</TableHead>
-                  <TableHead className="text-right">{locale === 'id' ? 'Aksi' : 'Actions'}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('admin.description', L)}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('admin.books', L)}</TableHead>
+                  <TableHead className="text-right">{t('admin.actions', L)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {categories.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      {locale === 'id' ? 'Belum ada kategori' : 'No categories yet'}
+                      {t('admin.noCategories', L)}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1087,13 +1223,13 @@ function CategoriesTab({
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <AlertDialog open={deletingId === cat.id} onOpenChange={(open) => { if (!open) setDeletingId(null); }}>
+                          <AlertDialog open={deletingId === cat.id} onOpenChange={(open) => { if (!open) { setDeletingId(null); setDeleteErrorMsg(null); } }}>
                             <AlertDialogTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                onClick={() => setDeletingId(cat.id)}
+                                onClick={() => { setDeletingId(cat.id); setDeleteErrorMsg(null); }}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -1101,21 +1237,23 @@ function CategoriesTab({
                             <AlertDialogContent>
                               <AlertDialogHeader>
                                 <AlertDialogTitle>
-                                  {locale === 'id' ? 'Hapus Kategori?' : 'Delete Category?'}
+                                  {t('admin.deleteCategory', L)}
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  {locale === 'id'
-                                    ? `Apakah Anda yakin ingin menghapus kategori "${cat.name}"?`
-                                    : `Are you sure you want to delete "${cat.name}" category?`}
+                                  {deleteErrorMsg || (
+                                    L === 'id'
+                                      ? `Apakah Anda yakin ingin menghapus kategori "${cat.name}"?`
+                                      : `Are you sure you want to delete "${cat.name}" category?`
+                                  )}
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>{t('general.cancel', locale as 'id' | 'en')}</AlertDialogCancel>
+                                <AlertDialogCancel>{t('general.cancel', L)}</AlertDialogCancel>
                                 <AlertDialogAction
                                   onClick={handleDelete}
                                   className="bg-red-600 hover:bg-red-700"
                                 >
-                                  {locale === 'id' ? 'Hapus' : 'Delete'}
+                                  {t('admin.delete', L)}
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -1147,6 +1285,7 @@ function OrdersTab({
   onRefresh: () => void;
 }) {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const L = locale as 'id' | 'en';
 
   const handleStatusChange = useCallback(
     async (orderId: string, newStatus: string) => {
@@ -1158,24 +1297,24 @@ function OrdersTab({
           body: JSON.stringify({ status: newStatus }),
         });
         if (res.ok) {
-          toast.success(locale === 'id' ? 'Status pesanan diperbarui' : 'Order status updated');
+          toast.success(t('admin.orderStatusUpdated', L));
           onRefresh();
         } else {
-          toast.error(locale === 'id' ? 'Gagal memperbarui status' : 'Failed to update status');
+          toast.error(t('admin.statusUpdateFailed', L));
         }
       } catch {
-        toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+        toast.error(t('general.error', L));
       } finally {
         setUpdatingId(null);
       }
     },
-    [locale, onRefresh],
+    [L, onRefresh],
   );
 
   return (
     <div className="space-y-4">
       <h2 className="font-heading text-xl font-bold">
-        {locale === 'id' ? 'Semua Pesanan' : 'All Orders'}
+        {t('admin.allOrders', L)}
       </h2>
 
       <Card>
@@ -1184,19 +1323,19 @@ function OrdersTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{locale === 'id' ? 'No. Pesanan' : 'Order No.'}</TableHead>
-                  <TableHead className="hidden sm:table-cell">{locale === 'id' ? 'Pelanggan' : 'Customer'}</TableHead>
-                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Item' : 'Items'}</TableHead>
-                  <TableHead>{locale === 'id' ? 'Total' : 'Total'}</TableHead>
-                  <TableHead>{locale === 'id' ? 'Status' : 'Status'}</TableHead>
-                  <TableHead className="hidden lg:table-cell">{locale === 'id' ? 'Tanggal' : 'Date'}</TableHead>
+                  <TableHead>{t('admin.orderNumber', L)}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('admin.customer', L)}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('admin.items', L)}</TableHead>
+                  <TableHead>{t('admin.total', L)}</TableHead>
+                  <TableHead>{t('admin.status', L)}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t('admin.date', L)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {orders.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      {locale === 'id' ? 'Belum ada pesanan' : 'No orders yet'}
+                      {t('admin.noOrders', L)}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1218,7 +1357,7 @@ function OrdersTab({
                           </div>
                         </TableCell>
                         <TableCell className="font-semibold text-[#D4AF37]">
-                          {formatPrice(order.total, locale as 'id' | 'en')}
+                          {formatPrice(order.total, L)}
                         </TableCell>
                         <TableCell>
                           <Select
@@ -1227,27 +1366,16 @@ function OrdersTab({
                             disabled={updatingId === order.id}
                           >
                             <SelectTrigger className="w-[130px] h-8 text-xs">
-                              <Badge variant="outline" className={`${cfg.color} text-[10px] px-1.5 py-0`}
-                              >
+                              <Badge variant="outline" className={`${cfg.color} text-[10px] px-1.5 py-0`}>
                                 <SelectValue />
                               </Badge>
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="pending">
-                                {t('dashboard.pending', locale as 'id' | 'en')}
-                              </SelectItem>
-                              <SelectItem value="processing">
-                                {t('dashboard.processing', locale as 'id' | 'en')}
-                              </SelectItem>
-                              <SelectItem value="shipped">
-                                {t('dashboard.shipped', locale as 'id' | 'en')}
-                              </SelectItem>
-                              <SelectItem value="delivered">
-                                {t('dashboard.delivered', locale as 'id' | 'en')}
-                              </SelectItem>
-                              <SelectItem value="cancelled">
-                                {t('dashboard.cancelled', locale as 'id' | 'en')}
-                              </SelectItem>
+                              <SelectItem value="pending">{t('dashboard.pending', L)}</SelectItem>
+                              <SelectItem value="processing">{t('dashboard.processing', L)}</SelectItem>
+                              <SelectItem value="shipped">{t('dashboard.shipped', L)}</SelectItem>
+                              <SelectItem value="delivered">{t('dashboard.delivered', L)}</SelectItem>
+                              <SelectItem value="cancelled">{t('dashboard.cancelled', L)}</SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>
@@ -1277,10 +1405,12 @@ function UsersTab({
   locale: string;
   users: AdminUser[];
 }) {
+  const L = locale as 'id' | 'en';
+
   return (
     <div className="space-y-4">
       <h2 className="font-heading text-xl font-bold">
-        {locale === 'id' ? 'Pelanggan' : 'Customers'}
+        {t('admin.customers', L)}
       </h2>
 
       <Card>
@@ -1289,18 +1419,18 @@ function UsersTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{locale === 'id' ? 'Nama' : 'Name'}</TableHead>
+                  <TableHead>{t('admin.name', L)}</TableHead>
                   <TableHead className="hidden sm:table-cell">Email</TableHead>
-                  <TableHead className="hidden md:table-cell">{locale === 'id' ? 'Poin' : 'Points'}</TableHead>
-                  <TableHead>{locale === 'id' ? 'Pesanan' : 'Orders'}</TableHead>
-                  <TableHead className="hidden lg:table-cell">{locale === 'id' ? 'Bergabung' : 'Joined'}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('admin.points', L)}</TableHead>
+                  <TableHead>{t('admin.orders', L)}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t('admin.joined', L)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      {locale === 'id' ? 'Belum ada pelanggan' : 'No customers yet'}
+                      {t('admin.noCustomers', L)}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1324,7 +1454,7 @@ function UsersTab({
                       <TableCell className="hidden sm:table-cell text-muted-foreground">{u.email}</TableCell>
                       <TableCell className="hidden md:table-cell">
                         <span className="text-[#D4AF37] font-semibold">{u.points.toLocaleString()}</span>
-                        <span className="text-xs text-muted-foreground ml-1">{t('points.label', locale as 'id' | 'en')}</span>
+                        <span className="text-xs text-muted-foreground ml-1">{t('points.label', L)}</span>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{u._count?.orders || 0}</Badge>
@@ -1369,10 +1499,10 @@ export default function AdminDashboard() {
   // --- Fetch Functions ---
   const fetchBooks = useCallback(async () => {
     try {
-      const res = await fetch('/api/books?limit=100');
+      const res = await fetch('/api/admin/books?limit=100');
       if (res.ok) {
         const data = await res.json();
-        setBooks(data.books || data || []);
+        setBooks(data.books || []);
       }
     } catch {
       // silently fail
@@ -1381,10 +1511,10 @@ export default function AdminDashboard() {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const res = await fetch('/api/categories');
+      const res = await fetch('/api/admin/categories');
       if (res.ok) {
         const data = await res.json();
-        setCategories(data.categories || data || []);
+        setCategories(Array.isArray(data) ? data : []);
       }
     } catch {
       // silently fail
@@ -1429,16 +1559,18 @@ export default function AdminDashboard() {
   }
 
   const handleTabChange = (value: string) => {
- setPage('admin', { tab: value });
+    setPage('admin', { tab: value });
   };
+
+  const L = locale as 'id' | 'en';
 
   // --- Sidebar Tab Items ---
   const tabItems = [
-    { value: 'stats', label: locale === 'id' ? 'Dashboard' : 'Dashboard', icon: LayoutDashboard },
-    { value: 'books', label: locale === 'id' ? 'Buku' : 'Books', icon: BookOpen },
-    { value: 'categories', label: locale === 'id' ? 'Kategori' : 'Categories', icon: Package },
-    { value: 'orders', label: locale === 'id' ? 'Pesanan' : 'Orders', icon: ShoppingBag },
-    { value: 'users', label: locale === 'id' ? 'Pengguna' : 'Users', icon: Users },
+    { value: 'stats', label: t('dashboard.title', L), icon: LayoutDashboard },
+    { value: 'books', label: L === 'id' ? 'Buku' : 'Books', icon: BookOpen },
+    { value: 'categories', label: t('nav.categories', L), icon: Package },
+    { value: 'orders', label: t('admin.orders', L), icon: ShoppingBag },
+    { value: 'users', label: t('nav.loyalty', L).replace('Program ', '').replace('Loyalty ', '').replace('Loyalitas ', '') || t('admin.customers', L), icon: Users },
   ];
 
   return (
@@ -1452,12 +1584,10 @@ export default function AdminDashboard() {
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="font-heading text-3xl font-bold text-foreground">
-            {t('nav.admin', locale)}
+            {t('nav.admin', L)}
           </h1>
           <p className="mt-1 text-muted-foreground">
-            {locale === 'id'
-              ? 'Kelola toko, pesanan, dan pelanggan'
-              : 'Manage store, orders, and customers'}
+            {t('admin.manageStore', L)}
           </p>
         </div>
 

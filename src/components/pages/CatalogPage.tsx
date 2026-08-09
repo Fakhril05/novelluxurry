@@ -12,6 +12,9 @@ import {
   Star,
   Sparkles,
   TrendingUp,
+  SearchX,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,6 +67,8 @@ interface FilterState {
   minRating?: number;
   sort: string;
 }
+
+type ViewMode = 'grid' | 'list';
 
 function StarSelector({
   value,
@@ -143,7 +148,7 @@ function FilterSidebar({
     <div className="space-y-6 border-t-2 border-[#D4AF37]/20 pt-6">
       {/* Sort */}
       <div>
-        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground border-l-2 border-[#D4AF37] pl-3">
           {t('catalog.sort', locale)}
         </h3>
         <div className="space-y-2">
@@ -154,8 +159,8 @@ function FilterSidebar({
               onClick={() => onFilterChange({ sort: opt.value })}
               className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-all duration-200 ${
                 filters.sort === opt.value
-                  ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium border border-[#D4AF37]/30 shadow-sm shadow-[#D4AF37]/10'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
+                  ? 'bg-gradient-to-r from-[#D4AF37]/15 to-[#D4AF37]/5 text-[#D4AF37] font-medium border border-[#D4AF37]/30 shadow-sm shadow-[#D4AF37]/10'
+                  : 'text-muted-foreground hover:bg-gradient-to-r hover:from-[#D4AF37]/5 hover:to-transparent hover:text-foreground border border-transparent'
               }`}
             >
               {t(opt.labelKey, locale)}
@@ -165,11 +170,11 @@ function FilterSidebar({
       </div>
 
       {/* Divider */}
-      <div className="border-t border-border" />
+      <div className="border-t border-[#D4AF37]/10" />
 
       {/* Genre */}
       <div>
-        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground border-l-2 border-[#D4AF37] pl-3">
           {t('catalog.filter.genre', locale)}
         </h3>
         <ScrollArea className="max-h-56 overflow-y-auto">
@@ -182,9 +187,13 @@ function FilterSidebar({
                 <Checkbox
                   checked={selectedGenres.includes(cat.slug)}
                   onCheckedChange={() => toggleGenre(cat.slug)}
-                  className="data-[state=checked]:bg-[#D4AF37] data-[state=checked]:border-[#D4AF37]"
+                  className="data-[state=checked]:bg-[#D4AF37] data-[state=checked]:border-[#D4AF37] data-[state=checked]:text-white border-2 border-muted-foreground/30 data-[state=checked]:shadow-sm data-[state=checked]:shadow-[#D4AF37]/30"
                 />
-                <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors flex-1">
+                <span className={`text-sm transition-colors flex-1 ${
+                  selectedGenres.includes(cat.slug)
+                    ? 'text-[#D4AF37] font-medium'
+                    : 'text-muted-foreground group-hover:text-foreground'
+                }`}>
                   {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
                 </span>
                 <span className="text-xs text-muted-foreground/60">
@@ -197,11 +206,11 @@ function FilterSidebar({
       </div>
 
       {/* Divider */}
-      <div className="border-t border-border" />
+      <div className="border-t border-[#D4AF37]/10" />
 
       {/* Price Range */}
       <div>
-        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground border-l-2 border-[#D4AF37] pl-3">
           {t('catalog.filter.price', locale)}
         </h3>
         <div className="flex items-center gap-2">
@@ -210,7 +219,7 @@ function FilterSidebar({
             placeholder="Min"
             value={localPriceMin}
             onChange={(e) => setLocalPriceMin(e.target.value)}
-            className="h-9 text-sm"
+            className="h-9 text-sm focus:border-[#D4AF37]/50 focus:ring-[#D4AF37]/20"
             onKeyDown={(e) => e.key === 'Enter' && handlePriceSubmit()}
           />
           <span className="text-muted-foreground text-sm">—</span>
@@ -219,7 +228,7 @@ function FilterSidebar({
             placeholder="Max"
             value={localPriceMax}
             onChange={(e) => setLocalPriceMax(e.target.value)}
-            className="h-9 text-sm"
+            className="h-9 text-sm focus:border-[#D4AF37]/50 focus:ring-[#D4AF37]/20"
             onKeyDown={(e) => e.key === 'Enter' && handlePriceSubmit()}
           />
         </div>
@@ -234,11 +243,11 @@ function FilterSidebar({
       </div>
 
       {/* Divider */}
-      <div className="border-t border-border" />
+      <div className="border-t border-[#D4AF37]/10" />
 
       {/* Rating */}
       <div>
-        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground border-l-2 border-[#D4AF37] pl-3">
           {t('catalog.filter.rating', locale)}
         </h3>
         <StarSelector
@@ -253,12 +262,118 @@ function FilterSidebar({
           variant="ghost"
           size="sm"
           onClick={onReset}
-          className="w-full text-muted-foreground hover:text-foreground"
+          className="w-full text-muted-foreground hover:text-[#D4AF37] hover:bg-[#D4AF37]/5"
         >
           {t('catalog.filter.reset', locale)}
         </Button>
       </div>
     </div>
+  );
+}
+
+/* ─── List View Card ─── */
+function BookListItem({ book, index }: { book: Book; index: number }) {
+  const { locale, setPage, wishlist, toggleWishlist } = useAppStore();
+  const hasDiscount = book.discountPrice && book.discountPrice < book.price;
+  const isWished = wishlist.includes(book.id);
+
+  const handleCardClick = () => {
+    setPage('book', { slug: book.slug });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -12 }}
+      transition={{ duration: 0.35, delay: index * 0.05 }}
+      whileHover={{ x: 4 }}
+      onClick={handleCardClick}
+      className="group flex gap-4 p-3 rounded-xl border border-border/60 bg-background hover:border-[#D4AF37]/30 hover:shadow-lg hover:shadow-[#D4AF37]/5 cursor-pointer transition-all duration-300"
+    >
+      {/* Cover */}
+      <div className="relative w-20 h-28 sm:w-24 sm:h-36 shrink-0 rounded-lg overflow-hidden shadow-md">
+        <img
+          src={book.coverImage}
+          alt={book.title}
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        {book.isNewArrival && (
+          <Badge className="absolute top-1.5 left-1.5 text-[10px] px-1.5 py-0 bg-[#D4AF37] text-white border-0 shadow-sm">
+            NEW
+          </Badge>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+        <div>
+          <p className="text-[11px] text-[#D4AF37]/70 font-medium uppercase tracking-wider mb-0.5">
+            {book.category?.name || book.author}
+          </p>
+          <h3 className="font-heading text-sm sm:text-base font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-[#D4AF37] transition-colors">
+            {book.title}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {book.author}
+          </p>
+          {book.synopsis && (
+            <p className="text-xs text-muted-foreground/70 mt-1 line-clamp-2 hidden sm:block">
+              {book.synopsis}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-end justify-between mt-2 gap-3">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-0.5">
+                <Star className="h-3.5 w-3.5 fill-[#D4AF37] text-[#D4AF37]" />
+                <span className="text-xs font-medium text-foreground">{book.rating.toFixed(1)}</span>
+              </div>
+              <span className="text-[11px] text-muted-foreground">
+                ({book.reviewCount})
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {hasDiscount ? (
+                <>
+                  <span className="text-sm font-bold text-[#D4AF37]">
+                    {formatPrice(book.discountPrice!, locale)}
+                  </span>
+                  <span className="text-xs text-muted-foreground line-through">
+                    {formatPrice(book.price, locale)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm font-bold text-foreground">
+                  {formatPrice(book.price, locale)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleWishlist(book.id);
+              }}
+              className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:border-[#D4AF37]/40 hover:bg-[#D4AF37]/5 transition-all"
+              aria-label="Toggle wishlist"
+            >
+              <Star
+                className={`h-3.5 w-3.5 transition-colors ${
+                  isWished
+                    ? 'fill-[#D4AF37] text-[#D4AF37]'
+                    : 'text-muted-foreground'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -283,65 +398,104 @@ function BookGridSkeleton() {
   );
 }
 
+function BookListSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex gap-4 p-3 rounded-xl border border-border/60">
+          <Skeleton className="w-20 h-28 sm:w-24 sm:h-36 rounded-lg shrink-0" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-full max-w-sm hidden sm:block" />
+            <div className="flex items-center justify-between mt-2">
+              <div className="space-y-1">
+                <Skeleton className="h-3 w-12" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+              <Skeleton className="h-8 w-8 rounded-full" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Enhanced Empty State ─── */
 function EmptyState({ locale, onReset }: { locale: 'id' | 'en'; onReset: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center py-20 px-4"
+      className="flex flex-col items-center justify-center py-24 px-4"
     >
-      {/* SVG Illustration */}
+      {/* Pulsing gold circle with SearchX icon */}
       <motion.div
-        initial={{ scale: 0.9 }}
-        animate={{ scale: 1 }}
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
         className="relative mb-8"
       >
-        <svg width="180" height="140" viewBox="0 0 180 140" fill="none" className="drop-shadow-sm">
-          {/* Book stack */}
-          <rect x="50" y="50" width="80" height="90" rx="4" fill="rgba(212,175,55,0.1)" stroke="rgba(212,175,55,0.25)" strokeWidth="1.5" />
-          <rect x="58" y="42" width="80" height="90" rx="4" fill="rgba(212,175,55,0.15)" stroke="rgba(212,175,55,0.3)" strokeWidth="1.5" />
-          <rect x="66" y="34" width="80" height="90" rx="4" fill="rgba(212,175,55,0.2)" stroke="rgba(212,175,55,0.4)" strokeWidth="1.5" />
-          {/* Open book */}
-          <path d="M72 38 Q106 28 140 38 L140 100 Q106 90 72 100 Z" fill="rgba(212,175,55,0.08)" stroke="#D4AF37" strokeWidth="1.5" strokeLinejoin="round" />
-          <path d="M72 38 Q106 48 140 38" fill="none" stroke="#D4AF37" strokeWidth="1" />
-          {/* Lines on page */}
-          <line x1="82" y1="50" x2="128" y2="50" stroke="rgba(212,175,55,0.25)" strokeWidth="1" />
-          <line x1="82" y1="58" x2="120" y2="58" stroke="rgba(212,175,55,0.2)" strokeWidth="1" />
-          <line x1="82" y1="66" x2="124" y2="66" stroke="rgba(212,175,55,0.15)" strokeWidth="1" />
-          <line x1="82" y1="74" x2="116" y2="74" stroke="rgba(212,175,55,0.12)" strokeWidth="1" />
-          {/* Magnifying glass */}
-          <circle cx="134" cy="28" r="14" fill="rgba(212,175,55,0.06)" stroke="#D4AF37" strokeWidth="1.5" />
-          <line x1="144" y1="38" x2="152" y2="46" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round" />
-          {/* Sparkle dots */}
-          <circle cx="42" cy="36" r="2" fill="#D4AF37" opacity="0.5" />
-          <circle cx="36" cy="68" r="1.5" fill="#E8D48B" opacity="0.6" />
-          <circle cx="152" cy="60" r="2" fill="#D4AF37" opacity="0.4" />
-          <circle cx="48" cy="110" r="1.5" fill="#E8D48B" opacity="0.5" />
-        </svg>
+        {/* Outer pulsing ring */}
         <motion.div
-          animate={{ y: [0, -4, 0] }}
+          animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.15, 0.4] }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute inset-0 rounded-full bg-[#D4AF37]/10"
+        />
+        {/* Middle pulsing ring */}
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.25, 0.1, 0.25] }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
+          className="absolute -inset-2 rounded-full bg-[#D4AF37]/8"
+        />
+        {/* Icon circle */}
+        <motion.div
+          animate={{ y: [0, -6, 0] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute -top-3 -right-3 h-7 w-7 rounded-full bg-[#D4AF37]/15 flex items-center justify-center"
+          className="relative h-20 w-20 rounded-full bg-gradient-to-br from-[#D4AF37]/20 to-[#D4AF37]/5 border-2 border-[#D4AF37]/30 flex items-center justify-center shadow-lg shadow-[#D4AF37]/10"
         >
-          <Sparkles className="h-3.5 w-3.5 text-[#D4AF37]" />
+          <SearchX className="h-9 w-9 text-[#D4AF37]" strokeWidth={1.5} />
+        </motion.div>
+        {/* Floating sparkles */}
+        <motion.div
+          animate={{ y: [0, -8, 0], rotate: [0, 15, 0] }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[#D4AF37]/15 flex items-center justify-center"
+        >
+          <Sparkles className="h-3 w-3 text-[#D4AF37]" />
+        </motion.div>
+        <motion.div
+          animate={{ y: [0, 6, 0], rotate: [0, -10, 0] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          className="absolute -bottom-1 -left-2 h-5 w-5 rounded-full bg-[#D4AF37]/10 flex items-center justify-center"
+        >
+          <Star className="h-2.5 w-2.5 text-[#D4AF37]" />
         </motion.div>
       </motion.div>
-      <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
+
+      {/* Title */}
+      <h3 className="font-heading text-xl font-bold text-foreground mb-2">
         {t('catalog.noResults', locale)}
       </h3>
-      <p className="text-sm text-muted-foreground text-center max-w-sm mb-6">
+
+      {/* Descriptive text */}
+      <p className="text-sm text-muted-foreground text-center max-w-md mb-8 leading-relaxed">
         {locale === 'id'
-          ? 'Coba ubah filter atau kata kunci pencarian kamu'
-          : 'Try adjusting your filters or search keywords'}
+          ? 'Sepertinya tidak ada novel yang cocok dengan filter kamu. Coba ubah kata kunci atau sesuaikan filter untuk menemukan buku yang kamu cari.'
+          : 'It seems no novels match your current filters. Try adjusting your search keywords or refining the filters to discover the books you\'re looking for.'}
       </p>
-      <Button
-        variant="outline"
-        onClick={onReset}
-        className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10"
-      >
-        {locale === 'id' ? 'Reset Semua Filter' : 'Reset All Filters'}
-      </Button>
+
+      {/* Gold CTA */}
+      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+        <Button
+          onClick={onReset}
+          className="bg-gradient-to-r from-[#D4AF37] to-[#C49B2E] text-white hover:from-[#C49B2E] hover:to-[#B8960C] shadow-lg shadow-[#D4AF37]/25 px-8 py-2.5 rounded-full font-medium"
+        >
+          {locale === 'id' ? 'Reset Semua Filter' : 'Reset All Filters'}
+        </Button>
+      </motion.div>
     </motion.div>
   );
 }
@@ -358,6 +512,8 @@ export default function CatalogPage() {
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [searchInput, setSearchInput] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [pageJumpInput, setPageJumpInput] = useState('');
 
   // Sync genre from pageParams on mount
   useEffect(() => {
@@ -457,6 +613,18 @@ export default function CatalogPage() {
       setCurrentPage(1);
     },
     [searchInput, pageParams, setPage]
+  );
+
+  const handlePageJump = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      const val = parseInt(pageJumpInput, 10);
+      if (!isNaN(val) && val >= 1 && val <= totalPages) {
+        setCurrentPage(val);
+        setPageJumpInput('');
+      }
+    },
+    [pageJumpInput, totalPages]
   );
 
   // Active filter badges
@@ -560,6 +728,14 @@ export default function CatalogPage() {
     return pages;
   }, [currentPage, totalPages]);
 
+  // Wave delay for grid items
+  const getWaveDelay = (index: number) => {
+    const cols = viewMode === 'grid' ? 4 : 1;
+    const row = Math.floor(index / cols);
+    const col = index % cols;
+    return (row * 0.06) + (col * 0.04);
+  };
+
   return (
     <section className="relative min-h-screen bg-background">
       {/* Subtle gold gradient overlay at top */}
@@ -635,13 +811,19 @@ export default function CatalogPage() {
                 : genreCategory.name
               : t('catalog.title', locale)}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <div className="flex items-center gap-3 mt-1">
             {!loading && (
               <>
-                {total} {t('catalog.results', locale)}
+                <p className="text-sm text-muted-foreground">
+                  {total} {t('catalog.results', locale)}
+                </p>
+                {/* Gold results count badge */}
+                <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20 text-xs font-medium px-2 py-0.5 shadow-sm shadow-[#D4AF37]/5">
+                  {total}
+                </Badge>
               </>
             )}
-          </p>
+          </div>
         </motion.div>
 
         {/* Search & Filter Bar */}
@@ -659,73 +841,165 @@ export default function CatalogPage() {
               placeholder={t('nav.search', locale)}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-10 h-10 bg-background border-border"
+              className="pl-10 h-10 bg-background border-border focus:border-[#D4AF37]/50 focus:ring-[#D4AF37]/20"
             />
           </form>
 
-          {/* Sort Select (Desktop) */}
-          <div className="hidden sm:flex items-center gap-2">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {/* Sort Bar with gold underline indicator (Desktop) */}
+          <div className="hidden sm:flex items-center gap-1">
+            <span className="text-sm text-muted-foreground whitespace-nowrap mr-1">
               {t('catalog.sort', locale)}:
             </span>
-            <div className="relative">
-              <select
-                value={filters.sort}
-                onChange={(e) => handleFilterChange({ sort: e.target.value })}
-                className="appearance-none h-10 pl-3 pr-8 text-sm rounded-lg border border-[#D4AF37]/20 bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37]/50 shadow-sm shadow-[#D4AF37]/5 hover:border-[#D4AF37]/40 transition-colors"
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
+            <div className="relative flex items-center gap-0.5 bg-muted/50 rounded-lg p-0.5">
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleFilterChange({ sort: opt.value })}
+                  className="relative px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 rounded-md whitespace-nowrap"
+                >
+                  {filters.sort === opt.value && (
+                    <motion.div
+                      layoutId="sort-indicator"
+                      className="absolute inset-0 bg-[#D4AF37] text-white rounded-md shadow-sm shadow-[#D4AF37]/25"
+                      style={{ zIndex: 0 }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                    />
+                  )}
+                  <span
+                    className={`relative z-10 transition-colors ${
+                      filters.sort === opt.value
+                        ? 'text-white'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
                     {t(opt.labelKey, locale)}
-                  </option>
-                ))}
-              </select>
-              <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground rotate-90 pointer-events-none" />
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Mobile Filter Button */}
-          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="outline"
-                className="lg:hidden h-10 border-border gap-2"
+          {/* View Mode Toggle (Desktop) */}
+          <div className="hidden lg:flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`relative p-1.5 rounded-md transition-colors duration-200 ${
+                viewMode === 'grid' ? 'text-[#D4AF37]' : 'text-muted-foreground hover:text-foreground'
+              }`}
+              aria-label="Grid view"
+            >
+              {viewMode === 'grid' && (
+                <motion.div
+                  layoutId="view-mode-indicator"
+                  className="absolute inset-0 bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-md"
+                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                />
+              )}
+              <LayoutGrid className="relative z-10 h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`relative p-1.5 rounded-md transition-colors duration-200 ${
+                viewMode === 'list' ? 'text-[#D4AF37]' : 'text-muted-foreground hover:text-foreground'
+              }`}
+              aria-label="List view"
+            >
+              {viewMode === 'list' && (
+                <motion.div
+                  layoutId="view-mode-indicator"
+                  className="absolute inset-0 bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-md"
+                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                />
+              )}
+              <List className="relative z-10 h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Mobile Filter Button + View Toggle */}
+          <div className="flex items-center gap-2 lg:hidden">
+            {/* Mobile View Toggle */}
+            <div className="flex items-center gap-0.5 bg-muted/50 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`relative p-1.5 rounded-md transition-colors duration-200 ${
+                  viewMode === 'grid' ? 'text-[#D4AF37]' : 'text-muted-foreground'
+                }`}
+                aria-label="Grid view"
               >
-                <SlidersHorizontal className="h-4 w-4" />
-                <span>{t('catalog.filter', locale)}</span>
-                {hasActiveFilters && (
-                  <Badge className="h-5 w-5 p-0 flex items-center justify-center bg-[#D4AF37] text-white border-0 text-[10px] rounded-full shadow-sm shadow-[#D4AF37]/30">
-                    {activeFilters.length}
-                  </Badge>
-                )}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl glass backdrop-blur-xl bg-background/80 border-t border-[#D4AF37]/20 transition-all duration-300 ease-in-out">
-              <SheetHeader className="pb-2">
-                <SheetTitle className="font-heading text-lg">
-                  {t('catalog.filter', locale)}
-                </SheetTitle>
-                <SheetDescription>
-                  {locale === 'id'
-                    ? 'Sesuaikan pencarian kamu'
-                    : 'Refine your search'}
-                </SheetDescription>
-              </SheetHeader>
-              <ScrollArea className="flex-1 px-4 pb-4">
-                {filterSidebar}
-              </ScrollArea>
-              <div className="p-4 border-t border-border">
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`relative p-1.5 rounded-md transition-colors duration-200 ${
+                  viewMode === 'list' ? 'text-[#D4AF37]' : 'text-muted-foreground'
+                }`}
+                aria-label="List view"
+              >
+                <List className="h-4 w-4" />
+              </button>
+            </div>
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+              <SheetTrigger asChild>
                 <Button
-                  className="w-full bg-[#D4AF37] text-white hover:bg-[#B8960C]"
-                  onClick={() => setSheetOpen(false)}
+                  variant="outline"
+                  className="h-10 border-border gap-2"
                 >
-                  {locale === 'id'
-                    ? 'Tampilkan Hasil'
-                    : 'Show Results'}
+                  <SlidersHorizontal className="h-4 w-4" />
+                  <span>{t('catalog.filter', locale)}</span>
+                  {hasActiveFilters && (
+                    <Badge className="h-5 w-5 p-0 flex items-center justify-center bg-[#D4AF37] text-white border-0 text-[10px] rounded-full shadow-sm shadow-[#D4AF37]/30">
+                      {activeFilters.length}
+                    </Badge>
+                  )}
                 </Button>
-              </div>
-            </SheetContent>
-          </Sheet>
+              </SheetTrigger>
+              {/* Enhanced Mobile Filter Sheet */}
+              <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl glass backdrop-blur-xl bg-background/95 border-t-2 border-[#D4AF37]/30 transition-all duration-300 ease-in-out">
+                <SheetHeader className="pb-3 border-b border-[#D4AF37]/10">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#D4AF37]/20 to-[#D4AF37]/5 border border-[#D4AF37]/20 flex items-center justify-center">
+                      <SlidersHorizontal className="h-4 w-4 text-[#D4AF37]" />
+                    </div>
+                    <div>
+                      <SheetTitle className="font-heading text-lg text-foreground">
+                        {t('catalog.filter', locale)}
+                      </SheetTitle>
+                      <SheetDescription className="text-xs text-muted-foreground">
+                        {locale === 'id'
+                          ? 'Sesuaikan pencarian kamu'
+                          : 'Refine your search'}
+                      </SheetDescription>
+                    </div>
+                  </div>
+                </SheetHeader>
+                <ScrollArea className="flex-1 px-4 py-4">
+                  {filterSidebar}
+                </ScrollArea>
+                <div className="p-4 pt-2 border-t border-[#D4AF37]/10">
+                  <Button
+                    className="w-full bg-gradient-to-r from-[#D4AF37] to-[#C49B2E] text-white hover:from-[#C49B2E] hover:to-[#B8960C] shadow-lg shadow-[#D4AF37]/20 font-medium rounded-xl h-11"
+                    onClick={() => setSheetOpen(false)}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    {locale === 'id' ? 'Terapkan Filter' : 'Apply Filters'}
+                  </Button>
+                  {hasActiveFilters && (
+                    <button
+                      onClick={() => { handleReset(); }}
+                      className="w-full mt-2 text-sm text-muted-foreground hover:text-[#D4AF37] transition-colors py-1"
+                    >
+                      {t('catalog.filter.reset', locale)}
+                    </button>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </motion.div>
 
         {/* Animated Filter Tags (quick genre filters) */}
@@ -854,100 +1128,142 @@ export default function CatalogPage() {
             </div>
           </motion.aside>
 
-          {/* Book Grid + Pagination */}
+          {/* Book Grid/List + Pagination */}
           <div className="flex-1 min-w-0">
             {loading ? (
-              <BookGridSkeleton />
+              viewMode === 'list' ? <BookListSkeleton /> : <BookGridSkeleton />
             ) : books.length === 0 ? (
               <EmptyState locale={locale} onReset={handleReset} />
             ) : (
               <>
-                {/* Books Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
-                  <AnimatePresence mode="popLayout">
-                    {books.map((book, index) => (
-                      <motion.div
-                        key={book.id}
-                        layout
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.3, delay: index * 0.03 }}
-                        whileHover={{ y: -4 }}
-                        className="rounded-xl book-card-glow transition-shadow duration-300"
-                      >
-                        <BookCard book={book} index={index} />
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
+                {/* Books: Grid or List */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={viewMode}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {viewMode === 'grid' ? (
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+                        {books.map((book, index) => (
+                          <motion.div
+                            key={book.id}
+                            layout
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.4, delay: getWaveDelay(index), ease: [0.22, 1, 0.36, 1] }}
+                            whileHover={{ y: -6, transition: { duration: 0.25 } }}
+                            className="rounded-xl book-card-glow transition-shadow duration-300"
+                          >
+                            <BookCard book={book} index={index} />
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {books.map((book, index) => (
+                          <BookListItem key={book.id} book={book} index={index} />
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
 
-                {/* Pagination */}
+                {/* Enhanced Pagination */}
                 {totalPages > 1 && (
                   <motion.nav
+                    key={`pagination-${currentPage}`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.2 }}
-                    className="mt-10 flex items-center justify-center gap-1.5"
+                    transition={{ duration: 0.3 }}
+                    className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4"
                     aria-label="Pagination"
                   >
-                    {/* Prev */}
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-9 w-9 border-border disabled:opacity-40"
-                      disabled={currentPage <= 1}
-                      onClick={() =>
-                        setCurrentPage((p) => Math.max(1, p - 1))
-                      }
-                      aria-label={t('general.previous', locale)}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
+                    {/* Page numbers */}
+                    <div className="flex items-center gap-1.5">
+                      {/* Prev */}
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 border-border hover:border-[#D4AF37]/30 hover:bg-[#D4AF37]/5 disabled:opacity-40 transition-all duration-200"
+                        disabled={currentPage <= 1}
+                        onClick={() =>
+                          setCurrentPage((p) => Math.max(1, p - 1))
+                        }
+                        aria-label={t('general.previous', locale)}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
 
-                    {/* Page Numbers */}
-                    {paginationRange.map((item, idx) =>
-                      item === '...' ? (
-                        <span
-                          key={`ellipsis-${idx}`}
-                          className="flex h-9 w-9 items-center justify-center text-sm text-muted-foreground"
-                        >
-                          ...
+                      {/* Page Numbers */}
+                      {paginationRange.map((item, idx) =>
+                        item === '...' ? (
+                          <span
+                            key={`ellipsis-${idx}`}
+                            className="flex h-9 w-9 items-center justify-center text-sm text-muted-foreground"
+                          >
+                            ...
+                          </span>
+                        ) : (
+                          <Button
+                            key={item}
+                            variant={currentPage === item ? 'default' : 'outline'}
+                            size="icon"
+                            className={`h-9 w-9 transition-all duration-300 ${
+                              currentPage === item
+                                ? 'bg-gradient-to-b from-[#D4AF37] to-[#B8960C] text-white hover:from-[#C49B2E] hover:to-[#A6850A] border-[#D4AF37] shadow-md shadow-[#D4AF37]/30 scale-105'
+                                : 'border-border text-foreground hover:bg-[#D4AF37]/5 hover:border-[#D4AF37]/30 hover:text-[#D4AF37]'
+                            }`}
+                            onClick={() => setCurrentPage(item as number)}
+                            aria-label={`Page ${item}`}
+                            aria-current={
+                              currentPage === item ? 'page' : undefined
+                            }
+                          >
+                            {item}
+                          </Button>
+                        )
+                      )}
+
+                      {/* Next */}
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 border-border hover:border-[#D4AF37]/30 hover:bg-[#D4AF37]/5 disabled:opacity-40 transition-all duration-200"
+                        disabled={currentPage >= totalPages}
+                        onClick={() =>
+                          setCurrentPage((p) => Math.min(totalPages, p + 1))
+                        }
+                        aria-label={t('general.next', locale)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Page Jump Input */}
+                    {totalPages > 5 && (
+                      <form
+                        onSubmit={handlePageJump}
+                        className="flex items-center gap-2 text-sm text-muted-foreground"
+                      >
+                        <span>{locale === 'id' ? 'Ke halaman' : 'Go to page'}</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={totalPages}
+                          value={pageJumpInput}
+                          onChange={(e) => setPageJumpInput(e.target.value)}
+                          placeholder={String(currentPage)}
+                          className="h-8 w-14 text-center text-sm border-border focus:border-[#D4AF37]/50 focus:ring-[#D4AF37]/20"
+                        />
+                        <span className="text-muted-foreground/60">
+                          {locale === 'id' ? `dari ${totalPages}` : `of ${totalPages}`}
                         </span>
-                      ) : (
-                        <Button
-                          key={item}
-                          variant={currentPage === item ? 'default' : 'outline'}
-                          size="icon"
-                          className={`h-9 w-9 transition-all duration-200 ${
-                            currentPage === item
-                              ? 'bg-[#D4AF37] text-white hover:bg-[#B8960C] border-[#D4AF37] shadow-md shadow-[#D4AF37]/30'
-                              : 'border-border text-foreground hover:bg-muted hover:text-foreground hover:border-[#D4AF37]/30'
-                          }`}
-                          onClick={() => setCurrentPage(item as number)}
-                          aria-label={`Page ${item}`}
-                          aria-current={
-                            currentPage === item ? 'page' : undefined
-                          }
-                        >
-                          {item}
-                        </Button>
-                      )
+                      </form>
                     )}
-
-                    {/* Next */}
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-9 w-9 border-border disabled:opacity-40"
-                      disabled={currentPage >= totalPages}
-                      onClick={() =>
-                        setCurrentPage((p) => Math.min(totalPages, p + 1))
-                      }
-                      aria-label={t('general.next', locale)}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
                   </motion.nav>
                 )}
               </>
