@@ -315,7 +315,7 @@ export default function Header() {
             )}
 
             {/* Wishlist */}
-            <Button variant="ghost" size="icon" onClick={() => handleNavClick('dashboard', { tab: 'wishlist' })} className="relative h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Wishlist">
+            <Button variant="ghost" size="icon" onClick={() => handleNavClick('wishlist')} className="relative h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Wishlist">
               <Heart className="h-4 w-4" />
               {wishlist.length > 0 && <span className="absolute -right-0.5 -top-0.5 h-4 min-w-4 flex items-center justify-center rounded-full bg-[#D4AF37] px-1 text-[9px] font-bold text-white">{wishlist.length}</span>}
             </Button>

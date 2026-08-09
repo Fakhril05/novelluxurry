@@ -15,7 +15,8 @@ export type Page =
   | 'faq'
   | 'blog'
   | 'blog-detail'
-  | 'categories';
+  | 'categories'
+  | 'wishlist';
 
 export interface CartItem {
   id: string;

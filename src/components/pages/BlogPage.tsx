@@ -10,6 +10,9 @@ import {
   Clock,
   Tag,
   Loader2,
+  SearchX,
+  Sparkles,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -97,21 +100,61 @@ function getAuthorInitials(author: string): string {
     .toUpperCase();
 }
 
-const FALLBACK_IMAGES: Record<string, string> = {
-  'novel-indonesia-terbaik-2024': 'https://picsum.photos/seed/blog-indonesia-novels/800/400',
-  'panduan-memilih-genre-novel': 'https://picsum.photos/seed/blog-genre-guide/800/400',
-  'tips-kebiasaan-membaca': 'https://picsum.photos/seed/blog-reading-habit/800/400',
-  'sejarah-novel-indonesia': 'https://picsum.photos/seed/blog-history-novel/800/400',
-  'review-5-novel-viral': 'https://picsum.photos/seed/blog-viral-novels/800/400',
-  'novel-dan-empati': 'https://picsum.photos/seed/blog-empathy-reading/800/400',
-};
+/* Gradient color palettes for category-based placeholders */
+const CATEGORY_GRADIENTS: string[] = [
+  'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+  'linear-gradient(135deg, #2d1b2e 0%, #44203a 50%, #6b2d5b 100%)',
+  'linear-gradient(135deg, #1b2d1b 0%, #1e3a20 50%, #2d5a3f 100%)',
+  'linear-gradient(135deg, #2e2b1b 0%, #3a3520 50%, #5a5030 100%)',
+  'linear-gradient(135deg, #1b282e 0%, #20353a 50%, #30525a 100%)',
+];
 
-function getBlogImage(blog: BlogPost): string {
-  if (blog.image) return blog.image;
+function getCategoryGradient(slug: string): string {
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = slug.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return CATEGORY_GRADIENTS[Math.abs(hash) % CATEGORY_GRADIENTS.length];
+}
+
+function BlogImagePlaceholder({
+  category,
+  className,
+}: {
+  category: string;
+  className?: string;
+}) {
+  const initials = category
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
   return (
-    FALLBACK_IMAGES[blog.slug] ||
-    `https://picsum.photos/seed/${blog.slug}/800/400`
+    <div
+      className={`flex items-center justify-center ${className ?? ''}`}
+      style={{ background: getCategoryGradient(category) }}
+    >
+      <span className="text-4xl font-bold tracking-widest" style={{ color: `${GOLD}60` }}>
+        {initials}
+      </span>
+    </div>
   );
+}
+
+function getBlogImageOrPlaceholder(blog: BlogPost, category: string, className?: string) {
+  if (blog.image) {
+    return (
+      <img
+        src={blog.image}
+        alt={category}
+        className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 ${className ?? ''}`}
+        loading="lazy"
+      />
+    );
+  }
+  return <BlogImagePlaceholder category={category} className={className} />;
 }
 
 /* ─── Skeletons ─── */
@@ -161,7 +204,7 @@ function BlogDetailSkeleton() {
   );
 }
 
-/* ─── Blog Card ─── */
+/* ─── Blog Card (standard grid card) ─── */
 
 function BlogCard({
   blog,
@@ -175,7 +218,6 @@ function BlogCard({
   const title = getLocalizedField(blog.title, blog.titleEn, locale);
   const excerpt = getLocalizedField(blog.excerpt, blog.excerptEn, locale);
   const category = getLocalizedField(blog.category, blog.categoryEn, locale);
-  const image = getBlogImage(blog);
   const readTime = estimateReadTime(
     getLocalizedField(blog.content, blog.contentEn, locale)
   );
@@ -188,19 +230,16 @@ function BlogCard({
       initial="hidden"
       animate="visible"
       exit="hidden"
+      whileHover={{ y: -6 }}
+      transition={{ duration: 0.3 }}
     >
       <Card
-        className="group cursor-pointer overflow-hidden border-border/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[#D4AF37]/5"
+        className="group cursor-pointer overflow-hidden border-border/50 transition-all duration-300 hover:shadow-2xl hover:shadow-[#D4AF37]/8"
         onClick={onView}
       >
-        {/* Image */}
+        {/* Image / Placeholder */}
         <div className="relative aspect-[2/1] overflow-hidden">
-          <img
-            src={image}
-            alt={title}
-            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-            loading="lazy"
-          />
+          {getBlogImageOrPlaceholder(blog, category || 'Blog')}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
           {/* Category Badge */}
@@ -217,7 +256,7 @@ function BlogCard({
             </Badge>
           )}
 
-          {/* Read Time Overlay */}
+          {/* Read Time Badge */}
           <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
             <Clock className="h-3 w-3" />
             {readTime} {t('blog.readTime', locale)}
@@ -274,7 +313,7 @@ function BlogCard({
   );
 }
 
-/* ─── Featured Card (first post) ─── */
+/* ─── Featured Card (first post, spans 2 cols) ─── */
 
 function FeaturedCard({
   blog,
@@ -288,32 +327,57 @@ function FeaturedCard({
   const title = getLocalizedField(blog.title, blog.titleEn, locale);
   const excerpt = getLocalizedField(blog.excerpt, blog.excerptEn, locale);
   const category = getLocalizedField(blog.category, blog.categoryEn, locale);
-  const image = getBlogImage(blog);
   const readTime = estimateReadTime(
     getLocalizedField(blog.content, blog.contentEn, locale)
   );
   const authorName = blog.author || '';
 
   return (
-    <motion.div variants={fadeInUp} layout initial="hidden" animate="visible">
+    <motion.div
+      variants={fadeInUp}
+      layout
+      initial="hidden"
+      animate="visible"
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.35 }}
+      className="col-span-1 sm:col-span-2"
+    >
       <Card
-        className="group cursor-pointer overflow-hidden border-border/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[#D4AF37]/5"
+        className="group cursor-pointer overflow-hidden border-border/50 transition-all duration-300 hover:shadow-2xl hover:shadow-[#D4AF37]/8"
         onClick={onView}
       >
         <div className="grid md:grid-cols-2">
-          {/* Image */}
+          {/* Image / Placeholder */}
           <div className="relative aspect-[2/1] overflow-hidden md:aspect-auto md:min-h-[320px]">
-            <img
-              src={image}
-              alt={title}
-              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-              loading="eager"
-            />
+            {blog.image ? (
+              <img
+                src={blog.image}
+                alt={title}
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                loading="eager"
+              />
+            ) : (
+              <BlogImagePlaceholder
+                category={category || 'Blog'}
+                className="h-full w-full"
+              />
+            )}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/10 md:bg-gradient-to-l md:from-black/30 md:to-transparent" />
+
+            {/* Featured Badge */}
+            <Badge
+              className="absolute left-4 top-4 border-0 px-2.5 py-1 text-[11px] font-bold tracking-wide uppercase"
+              style={{ backgroundColor: GOLD, color: '#1a1a1a' }}
+            >
+              <Sparkles className="mr-1 h-3 w-3" />
+              {t('blog.featured', locale)}
+            </Badge>
+
+            {/* Category Badge */}
             {category && (
               <Badge
-                className="absolute left-4 top-4 border-0 px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase"
-                style={{ backgroundColor: GOLD, color: '#1a1a1a' }}
+                className="absolute bottom-4 left-4 border-0 px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase"
+                style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: '#ffffff', backdropFilter: 'blur(8px)' }}
               >
                 <Tag className="mr-1 h-3 w-3" />
                 {category}
@@ -323,6 +387,14 @@ function FeaturedCard({
 
           {/* Content */}
           <CardContent className="flex flex-col justify-center p-6 md:p-8">
+            {/* Read Time Badge */}
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex items-center gap-1.5 rounded-full bg-[#D4AF37]/10 px-3 py-1 text-xs font-semibold" style={{ color: GOLD }}>
+                <Clock className="h-3.5 w-3.5" />
+                {readTime} {t('blog.readTime', locale)}
+              </div>
+            </div>
+
             <h2 className="font-heading mb-3 text-2xl font-bold leading-tight tracking-tight transition-colors group-hover:text-[#D4AF37] md:text-3xl">
               {title}
             </h2>
@@ -332,8 +404,8 @@ function FeaturedCard({
               </p>
             )}
 
-            <div className="flex items-center gap-4">
-              <Avatar className="h-9 w-9">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-9 w-9 ring-2 ring-[#D4AF37]/20">
                 <AvatarFallback
                   className="text-xs font-bold"
                   style={{ backgroundColor: `${GOLD}20`, color: GOLD }}
@@ -341,22 +413,19 @@ function FeaturedCard({
                   {authorName ? getAuthorInitials(authorName) : '?'}
                 </AvatarFallback>
               </Avatar>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-foreground">
                   {authorName}
                 </p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Calendar className="h-3 w-3" />
-                  {formatDate(blog.createdAt, locale)}
-                  <span>·</span>
-                  <Clock className="h-3 w-3" />
-                  {readTime} {t('blog.readTime', locale)}
+                  <time>{formatDate(blog.createdAt, locale)}</time>
                 </div>
               </div>
             </div>
 
             <Button
-              className="mt-6 w-fit border-0 bg-[#D4AF37] font-semibold text-white hover:bg-[#B8960C]"
+              className="mt-6 w-fit border-0 bg-[#D4AF37] font-semibold text-white shadow-lg shadow-[#D4AF37]/20 transition-all duration-300 hover:bg-[#B8960C] hover:shadow-xl hover:shadow-[#D4AF37]/30"
               onClick={(e) => {
                 e.stopPropagation();
                 onView();
@@ -368,6 +437,50 @@ function FeaturedCard({
           </CardContent>
         </div>
       </Card>
+    </motion.div>
+  );
+}
+
+/* ─── Empty Filter State ─── */
+
+function EmptyFilterState({
+  locale,
+  selectedCategory,
+  onClearFilter,
+}: {
+  locale: Locale;
+  selectedCategory: string;
+  onClearFilter: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.4 }}
+      className="flex flex-col items-center justify-center py-24 text-center"
+    >
+      <div className="relative mb-6">
+        <div className="flex h-24 w-24 items-center justify-center rounded-full bg-muted/60">
+          <SearchX className="h-10 w-10 text-muted-foreground/50" />
+        </div>
+        <div className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-[#D4AF37]">
+          <Tag className="h-3.5 w-3.5 text-black" />
+        </div>
+      </div>
+      <p className="text-lg font-semibold text-foreground">
+        {t('blog.noArticlesInCategory', locale)}
+      </p>
+      <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
+        {t('blog.noArticlesInCategoryDesc', locale)}
+      </p>
+      <Button
+        onClick={onClearFilter}
+        variant="outline"
+        className="mt-6 border-[#D4AF37]/30 font-medium text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]"
+      >
+        <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
+        {t('blog.clearFilter', locale)}
+      </Button>
     </motion.div>
   );
 }
@@ -452,7 +565,7 @@ export default function BlogPage() {
   const hasMore = visibleCount < filteredBlogs.length;
 
   const handleLoadMore = () => {
- setLoadingMore(true);
+    setLoadingMore(true);
     setTimeout(() => {
       setVisibleCount((prev) => prev + POSTS_PER_PAGE);
       setLoadingMore(false);
@@ -466,6 +579,8 @@ export default function BlogPage() {
 
   const featuredBlog = visibleBlogs[0];
   const restBlogs = visibleBlogs.slice(1);
+
+  const isFiltered = selectedCategory !== 'all';
 
   // ─── Blog Detail View ───
 
@@ -573,7 +688,6 @@ export default function BlogPage() {
       currentBlog.categoryEn,
       locale
     );
-    const detailImage = getBlogImage(currentBlog);
     const detailReadTime = estimateReadTime(detailContent);
     const detailAuthorName = currentBlog.author || '';
 
@@ -643,12 +757,12 @@ export default function BlogPage() {
             </h1>
 
             {/* Meta: Author + Date + Read Time */}
-            <div className="mt-5 flex flex-wrap items-center gap-4">
+            <div className="mt-6 flex flex-wrap items-center gap-4 rounded-xl border border-border/40 bg-muted/30 p-4">
               {detailAuthorName && (
-                <div className="flex items-center gap-2.5">
-                  <Avatar className="h-10 w-10">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-11 w-11 ring-2 ring-[#D4AF37]/20">
                     <AvatarFallback
-                      className="text-xs font-bold"
+                      className="text-sm font-bold"
                       style={{
                         backgroundColor: `${GOLD}20`,
                         color: GOLD,
@@ -661,15 +775,21 @@ export default function BlogPage() {
                     <p className="text-sm font-semibold leading-none text-foreground">
                       {detailAuthorName}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {formatDate(currentBlog.createdAt, locale)}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('blog.publishedOn', locale)} {formatDate(currentBlog.createdAt, locale)}
                     </p>
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" />
-                {detailReadTime} {t('blog.readTime', locale)}
+              <div className="ml-auto flex items-center gap-2">
+                <div className="flex items-center gap-1.5 rounded-full bg-[#D4AF37]/10 px-3 py-1.5 text-xs font-semibold" style={{ color: GOLD }}>
+                  <Clock className="h-3.5 w-3.5" />
+                  {detailReadTime} {t('blog.readTime', locale)}
+                </div>
+                <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                  <Eye className="h-3.5 w-3.5" />
+                  {Math.floor(Math.random() * 500 + 100)} {locale === 'id' ? 'kunjungan' : 'views'}
+                </div>
               </div>
             </div>
 
@@ -680,11 +800,18 @@ export default function BlogPage() {
               transition={{ delay: 0.2, duration: 0.5 }}
               className="mt-8 overflow-hidden rounded-2xl"
             >
-              <img
-                src={detailImage}
-                alt={detailTitle}
-                className="h-auto w-full object-cover"
-              />
+              {currentBlog.image ? (
+                <img
+                  src={currentBlog.image}
+                  alt={detailTitle}
+                  className="h-auto w-full object-cover"
+                />
+              ) : (
+                <BlogImagePlaceholder
+                  category={detailCategory || 'Blog'}
+                  className="aspect-[2/1] w-full"
+                />
+              )}
             </motion.div>
 
             {/* Content */}
@@ -730,80 +857,105 @@ export default function BlogPage() {
                 {blogs
                   .filter((b) => b.id !== currentBlog.id)
                   .slice(0, 3)
-                  .map((related) => (
-                    <motion.div
-                      key={related.id}
-                      whileHover={{ y: -4 }}
-                      className="group cursor-pointer"
-                      onClick={() =>
-                        setPage('blog-detail', { slug: related.slug })
-                      }
-                    >
-                      <Card className="overflow-hidden border-border/50 transition-shadow duration-300 group-hover:shadow-lg">
-                        <div className="relative aspect-[2/1] overflow-hidden">
-                          <img
-                            src={getBlogImage(related)}
-                            alt={
-                              getLocalizedField(
-                                related.title,
-                                related.titleEn,
-                                locale
-                              )
-                            }
-                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            loading="lazy"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                          {getLocalizedField(
-                            related.category,
-                            related.categoryEn,
-                            locale
-                          ) && (
-                            <Badge
-                              className="absolute left-3 top-3 border-0 px-2 py-0.5 text-[10px] font-semibold uppercase"
-                              style={{
-                                backgroundColor: GOLD,
-                                color: '#1a1a1a',
-                              }}
-                            >
-                              {getLocalizedField(
-                                related.category,
-                                related.categoryEn,
-                                locale
-                              )}
-                            </Badge>
-                          )}
-                        </div>
-                        <CardContent className="p-4">
-                          <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Calendar className="h-3 w-3" />
-                            <time>
-                              {formatDate(related.createdAt, locale)}
-                            </time>
-                            <span className="mx-0.5">·</span>
-                            <Clock className="h-3 w-3" />
-                            <span>
+                  .map((related, idx) => {
+                    const relCategory = getLocalizedField(
+                      related.category,
+                      related.categoryEn,
+                      locale
+                    );
+                    return (
+                      <motion.div
+                        key={related.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.7 + idx * 0.1 }}
+                        whileHover={{ y: -4 }}
+                        className="group cursor-pointer"
+                        onClick={() =>
+                          setPage('blog-detail', { slug: related.slug })
+                        }
+                      >
+                        <Card className="overflow-hidden border-border/50 transition-all duration-300 group-hover:shadow-xl group-hover:shadow-[#D4AF37]/5">
+                          <div className="relative aspect-[2/1] overflow-hidden">
+                            {related.image ? (
+                              <img
+                                src={related.image}
+                                alt={getLocalizedField(
+                                  related.title,
+                                  related.titleEn,
+                                  locale
+                                )}
+                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <BlogImagePlaceholder
+                                category={relCategory || 'Blog'}
+                                className="h-full w-full"
+                              />
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                            {relCategory && (
+                              <Badge
+                                className="absolute left-3 top-3 border-0 px-2 py-0.5 text-[10px] font-semibold uppercase"
+                                style={{
+                                  backgroundColor: GOLD,
+                                  color: '#1a1a1a',
+                                }}
+                              >
+                                {relCategory}
+                              </Badge>
+                            )}
+                            {/* Read time on card */}
+                            <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+                              <Clock className="h-2.5 w-2.5" />
                               {estimateReadTime(
                                 getLocalizedField(
                                   related.content,
                                   related.contentEn,
                                   locale
                                 )
-                              )}{' '}
+                              )}{" "}
                               {t('blog.readTime', locale)}
-                            </span>
+                            </div>
                           </div>
-                          <h3 className="line-clamp-2 font-heading text-sm font-bold transition-colors group-hover:text-[#D4AF37]">
-                            {getLocalizedField(
-                              related.title,
-                              related.titleEn,
-                              locale
-                            )}
-                          </h3>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
+                          <CardContent className="p-4">
+                            <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Calendar className="h-3 w-3" />
+                              <time>
+                                {formatDate(related.createdAt, locale)}
+                              </time>
+                            </div>
+                            <h3 className="line-clamp-2 font-heading text-sm font-bold leading-snug transition-colors group-hover:text-[#D4AF37]">
+                              {getLocalizedField(
+                                related.title,
+                                related.titleEn,
+                                locale
+                              )}
+                            </h3>
+                            <div className="mt-3 flex items-center gap-2">
+                              <Avatar className="h-5 w-5">
+                                <AvatarFallback
+                                  className="text-[8px] font-bold"
+                                  style={{
+                                    backgroundColor: `${GOLD}15`,
+                                    color: GOLD,
+                                  }}
+                                >
+                                  {related.author
+                                    ? getAuthorInitials(related.author)
+                                    : '?'}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-[11px] text-muted-foreground">
+                                {related.author}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
               </div>
             </motion.section>
           )}
@@ -850,7 +1002,9 @@ export default function BlogPage() {
           className="relative mx-auto max-w-6xl px-4 text-center"
         >
           <motion.div variants={fadeInUp} className="mb-4">
-            <BookOpen className="mx-auto h-12 w-12" style={{ color: GOLD }} />
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#D4AF37]/10">
+              <BookOpen className="h-8 w-8" style={{ color: GOLD }} />
+            </div>
           </motion.div>
           <motion.h1
             variants={fadeInUp}
@@ -927,7 +1081,7 @@ export default function BlogPage() {
       <section className="mx-auto max-w-6xl px-4 py-6">
         {loading ? (
           <>
-            <div className="mb-6">
+            <div className="mb-6 sm:col-span-2">
               <BlogCardSkeleton />
             </div>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -937,16 +1091,27 @@ export default function BlogPage() {
             </div>
           </>
         ) : filteredBlogs.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="py-24 text-center"
-          >
-            <BookOpen className="mx-auto mb-4 h-16 w-16 text-muted-foreground/40" />
-            <p className="text-lg font-medium text-muted-foreground">
-              {t('blog.noArticles', locale)}
-            </p>
-          </motion.div>
+          isFiltered ? (
+            <EmptyFilterState
+              locale={locale}
+              selectedCategory={selectedCategory}
+              onClearFilter={() => {
+                setSelectedCategory('all');
+                setVisibleCount(POSTS_PER_PAGE);
+              }}
+            />
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="py-24 text-center"
+            >
+              <BookOpen className="mx-auto mb-4 h-16 w-16 text-muted-foreground/40" />
+              <p className="text-lg font-medium text-muted-foreground">
+                {t('blog.noArticles', locale)}
+              </p>
+            </motion.div>
+          )
         ) : (
           <>
             <motion.div
@@ -956,15 +1121,17 @@ export default function BlogPage() {
               className="space-y-8"
             >
               <AnimatePresence mode="popLayout">
-                {/* Featured Card for the first post */}
+                {/* Featured Card for the first post - spans 2 cols */}
                 {featuredBlog && (
-                  <FeaturedCard
-                    blog={featuredBlog}
-                    locale={locale}
-                    onView={() =>
-                      setPage('blog-detail', { slug: featuredBlog.slug })
-                    }
-                  />
+                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    <FeaturedCard
+                      blog={featuredBlog}
+                      locale={locale}
+                      onView={() =>
+                        setPage('blog-detail', { slug: featuredBlog.slug })
+                      }
+                    />
+                  </div>
                 )}
 
                 {/* Grid of remaining posts */}
@@ -987,7 +1154,7 @@ export default function BlogPage() {
               </AnimatePresence>
             </motion.div>
 
-            {/* Load More Button */}
+            {/* Load More Button - Gold themed */}
             {hasMore && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -996,16 +1163,18 @@ export default function BlogPage() {
                 className="mt-12 flex justify-center"
               >
                 <Button
-                  variant="outline"
                   size="lg"
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="min-w-[200px] border-[#D4AF37]/30 font-semibold text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]"
+                  className="min-w-[220px] border-0 bg-[#D4AF37] font-semibold text-black shadow-lg shadow-[#D4AF37]/20 transition-all duration-300 hover:bg-[#B8960C] hover:shadow-xl hover:shadow-[#D4AF37]/30"
                 >
                   {loadingMore ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
+                  ) : (
+                    <BookOpen className="mr-2 h-4 w-4" />
+                  )}
                   {t('blog.loadMore', locale)}
+                  {!loadingMore && <ArrowRight className="ml-2 h-4 w-4" />}
                 </Button>
               </motion.div>
             )}

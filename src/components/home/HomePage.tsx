@@ -17,6 +17,8 @@ import {
   Quote,
   Clock,
   Eye,
+  Crown,
+  BookMarked,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -172,6 +174,7 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [recentlyViewed, setRecentlyViewed] = useState<Book[]>([]);
+  const [editorPicks, setEditorPicks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
 
   // ── Testimonial carousel auto-play index ──
@@ -208,20 +211,23 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [booksRes, catsRes, testRes] = await Promise.all([
+        const [booksRes, catsRes, testRes, picksRes] = await Promise.all([
           fetch('/api/books?limit=16'),
           fetch('/api/categories'),
           fetch('/api/testimonials'),
+          fetch('/api/books?minRating=4.8&sort=rating&limit=4'),
         ]);
         if (!booksRes.ok || !catsRes.ok || !testRes.ok) throw new Error('Fetch failed');
-        const [booksData, catsData, testData] = await Promise.all([
+        const [booksData, catsData, testData, picksData] = await Promise.all([
           booksRes.json(),
           catsRes.json(),
           testRes.json(),
+          picksRes.ok ? picksRes.json() : { books: [] },
         ]);
         setBooks(booksData.books || []);
         setCategories(catsData);
         setTestimonials(testData);
+        setEditorPicks(picksData.books || []);
       } catch (err) {
         console.error('Error loading homepage data:', err);
       } finally {
@@ -359,61 +365,44 @@ export default function HomePage() {
                 </Button>
               </motion.div>
 
-              {/* Stat badges */}
+              {/* Animated Stats */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.55 }}
-                className="mt-6 flex items-center gap-3"
+                className="mt-8 flex items-center gap-8 sm:gap-10"
               >
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-xs font-medium text-[#E8D48B]">
-                  <BookOpen className="h-3 w-3" />
-                  18+ {locale === 'id' ? 'Judul' : 'Titles'}
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-xs font-medium text-[#E8D48B]">
-                  <Users className="h-3 w-3" />
-                  5000+ {locale === 'id' ? 'Pembeli' : 'Buyers'}
-                </span>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/20">
+                    <Users className="h-5 w-5 text-[#D4AF37]" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-white">10K+</p>
+                    <p className="text-[11px] text-white/50 uppercase tracking-wider">{locale === 'id' ? 'Pembaca' : 'Readers'}</p>
+                  </div>
+                </div>
+                <div className="h-10 w-px bg-white/15" />
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/20">
+                    <BookOpen className="h-5 w-5 text-[#D4AF37]" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-white">500+</p>
+                    <p className="text-[11px] text-white/50 uppercase tracking-wider">{locale === 'id' ? 'Judul' : 'Titles'}</p>
+                  </div>
+                </div>
+                <div className="h-10 w-px bg-white/15" />
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/20">
+                    <Star className="h-5 w-5 text-[#D4AF37] fill-[#D4AF37]" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-white">4.9</p>
+                    <p className="text-[11px] text-white/50 uppercase tracking-wider">{locale === 'id' ? 'Rating' : 'Rating'}</p>
+                  </div>
+                </div>
               </motion.div>
             </div>
-
-            {/* Stats */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-              className="mt-10 flex items-center gap-8 sm:gap-10 flex-wrap px-2"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
-                  <Users className="h-5 w-5 text-[#D4AF37]" />
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-white">10K+</p>
-                  <p className="text-xs text-white/50">{locale === 'id' ? 'Pembaca' : 'Readers'}</p>
-                </div>
-              </div>
-              <div className="h-10 w-px bg-white/15" />
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
-                  <BookOpen className="h-5 w-5 text-[#D4AF37]" />
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-white">500+</p>
-                  <p className="text-xs text-white/50">{locale === 'id' ? 'Judul' : 'Titles'}</p>
-                </div>
-              </div>
-              <div className="h-10 w-px bg-white/15" />
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
-                  <Star className="h-5 w-5 text-[#D4AF37] fill-[#D4AF37]" />
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-white">4.9</p>
-                  <p className="text-xs text-white/50">{locale === 'id' ? 'Rating' : 'Rating'}</p>
-                </div>
-              </div>
-            </motion.div>
           </motion.div>
         </div>
       </section>
@@ -422,6 +411,13 @@ export default function HomePage() {
           2. CATEGORIES SECTION
           ──────────────────────────────────────────────────── */}
       <CategoriesSection categories={categories} locale={locale} />
+
+      {/* ────────────────────────────────────────────────────
+          2.5 EDITOR'S PICK SECTION
+          ──────────────────────────────────────────────────── */}
+      {editorPicks.length > 0 && (
+        <EditorsPickSection books={editorPicks} locale={locale} />
+      )}
 
       {/* ────────────────────────────────────────────────────
           3. BESTSELLERS SECTION
@@ -536,6 +532,268 @@ function CategoriesSection({
               <div className="absolute top-0 left-0 w-full h-0.5 bg-[#D4AF37] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
             </motion.button>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EDITOR'S PICK SECTION COMPONENT
+   ═══════════════════════════════════════════════════════════ */
+const EDITOR_QUOTES = [
+  'editorsPick.quote1',
+  'editorsPick.quote2',
+  'editorsPick.quote3',
+  'editorsPick.quote4',
+];
+
+function EditorsPickSection({
+  books,
+  locale,
+}: {
+  books: Book[];
+  locale: 'id' | 'en';
+}) {
+  const { setPage } = useAppStore();
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+
+  const mainPick = books[0];
+  const sidePicks = books.slice(1, 4);
+
+  if (!mainPick) return null;
+
+  return (
+    <section ref={ref} className="py-16 sm:py-20 relative overflow-hidden">
+      {/* Subtle gold background glow */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse at 50% 50%, rgba(212,175,55,0.04) 0%, transparent 70%)',
+        }}
+      />
+
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
+        {/* Section header */}
+        <motion.div
+          initial="hidden"
+          animate={inView ? 'visible' : 'hidden'}
+          variants={fadeUp}
+          custom={0}
+          className="text-center mb-12"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5 text-sm text-[#D4AF37] mb-4">
+            <Crown className="h-3.5 w-3.5" />
+            {t('editorsPick.mainPick', locale)}
+          </div>
+          <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
+            {t('editorsPick.title', locale)}
+          </h2>
+          <p className="mt-2 text-muted-foreground text-sm sm:text-base">
+            {t('editorsPick.subtitle', locale)}
+          </p>
+        </motion.div>
+
+        {/* Layout: main pick (left) + side picks (right column) */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Main Pick Card */}
+          <motion.div
+            initial="hidden"
+            animate={inView ? 'visible' : 'hidden'}
+            variants={fadeUp}
+            custom={1}
+            className="lg:col-span-3"
+          >
+            <div
+              className="group relative overflow-hidden rounded-2xl border-2 border-[#D4AF37]/20 bg-card cursor-pointer transition-all duration-500 hover:border-[#D4AF37]/50 hover:shadow-2xl hover:shadow-[#D4AF37]/10 hover:-translate-y-1"
+              onClick={() => setPage('book-detail', { slug: mainPick.slug })}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setPage('book-detail', { slug: mainPick.slug });
+                }
+              }}
+              aria-label={`View details for ${mainPick.title}`}
+            >
+              {/* Gold shimmer overlay on hover */}
+              <div className="absolute inset-0 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"
+                style={{
+                  background:
+                    'linear-gradient(105deg, transparent 40%, rgba(212,175,55,0.06) 45%, rgba(212,175,55,0.12) 50%, rgba(212,175,55,0.06) 55%, transparent 60%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.5s ease-in-out',
+                }}
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2">
+                {/* Cover image */}
+                <div className="relative aspect-[2/3] sm:aspect-auto overflow-hidden">
+                  <img
+                    src={mainPick.coverImage}
+                    alt={mainPick.title}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/20 hidden sm:block" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent sm:hidden" />
+
+                  {/* Award badge */}
+                  <div className="absolute top-4 left-4 z-10">
+                    <div className="flex items-center gap-1.5 rounded-full bg-[#D4AF37] px-3 py-1.5 shadow-lg shadow-[#D4AF37]/30">
+                      <Award className="h-4 w-4 text-white" />
+                      <span className="text-[11px] font-bold text-white uppercase tracking-wider">
+                        #1 {t('editorsPick.mainPick', locale)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info area */}
+                <div className="p-6 sm:p-8 flex flex-col justify-between">
+                  {mainPick.category && (
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#D4AF37] mb-2">
+                      {mainPick.category.name}
+                    </p>
+                  )}
+                  <h3 className="font-heading text-xl sm:text-2xl font-bold leading-snug text-foreground group-hover:text-[#D4AF37] transition-colors duration-300">
+                    {mainPick.title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">{mainPick.author}</p>
+
+                  {/* Stars */}
+                  <div className="flex items-center gap-1.5 mt-3">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star
+                        key={i}
+                        className={`h-4 w-4 ${
+                          i < Math.floor(mainPick.rating)
+                            ? 'fill-[#D4AF37] text-[#D4AF37]'
+                            : 'text-muted-foreground/25'
+                        }`}
+                      />
+                    ))}
+                    <span className="text-sm font-medium text-foreground">
+                      {mainPick.rating}
+                    </span>
+                  </div>
+
+                  {/* Editor's quote */}
+                  <div className="mt-4 sm:mt-6">
+                    <div className="relative">
+                      <Quote className="absolute -top-1 -left-1 h-5 w-5 text-[#D4AF37]/20" />
+                      <p className="pl-5 text-sm text-muted-foreground leading-relaxed italic">
+                        &ldquo;{t(EDITOR_QUOTES[0], locale)}&rdquo;
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Price & CTA */}
+                  <div className="mt-6 flex items-center gap-3">
+                    <span className="text-xl font-bold text-foreground">
+                      {formatPrice(mainPick.discountPrice || mainPick.price, locale)}
+                    </span>
+                    {mainPick.discountPrice && (
+                      <span className="text-sm text-muted-foreground/60 line-through">
+                        {formatPrice(mainPick.price, locale)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#D4AF37] group-hover:gap-2.5 transition-all duration-300">
+                      {t('editorsPick.viewDetail', locale)}
+                      <ArrowRight className="h-4 w-4" />
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Side Picks Column */}
+          <div className="lg:col-span-2 flex flex-col gap-4">
+            {sidePicks.map((book, i) => (
+              <motion.div
+                key={book.id}
+                initial="hidden"
+                animate={inView ? 'visible' : 'hidden'}
+                variants={fadeUp}
+                custom={i + 2}
+              >
+                <div
+                  className="group relative flex gap-4 p-4 rounded-xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-[#D4AF37]/40 hover:shadow-lg hover:shadow-[#D4AF37]/5"
+                  onClick={() => setPage('book-detail', { slug: book.slug })}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setPage('book-detail', { slug: book.slug });
+                    }
+                  }}
+                  aria-label={`View details for ${book.title}`}
+                >
+                  {/* Rank badge */}
+                  <div className="absolute -top-2 -left-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#D4AF37] text-white text-xs font-bold shadow-md shadow-[#D4AF37]/30">
+                    #{i + 2}
+                  </div>
+
+                  {/* Cover */}
+                  <div className="relative w-16 h-24 sm:w-20 sm:h-28 rounded-lg overflow-hidden shrink-0">
+                    <img
+                      src={book.coverImage}
+                      alt={book.title}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                    <div>
+                      <h4 className="font-heading text-sm sm:text-base font-bold leading-snug line-clamp-2 text-foreground group-hover:text-[#D4AF37] transition-colors duration-300">
+                        {book.title}
+                      </h4>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {book.author}
+                      </p>
+                    </div>
+
+                    {/* Editor quote (truncated) */}
+                    <p className="text-[11px] text-muted-foreground/70 line-clamp-2 mt-1 italic">
+                      &ldquo;{t(EDITOR_QUOTES[i + 1], locale)}&rdquo;
+                    </p>
+
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <div className="flex items-center">
+                        {Array.from({ length: 5 }).map((_, j) => (
+                          <Star
+                            key={j}
+                            className={`h-3 w-3 ${
+                              j < Math.floor(book.rating)
+                                ? 'fill-[#D4AF37] text-[#D4AF37]'
+                                : 'text-muted-foreground/25'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {book.rating}
+                      </span>
+                      <span className="text-xs font-bold text-foreground ml-auto">
+                        {formatPrice(book.discountPrice || book.price, locale)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

@@ -20,6 +20,7 @@ import AdminDashboard from '@/components/pages/AdminDashboard';
 import FAQPage from '@/components/pages/FAQPage';
 import BlogPage from '@/components/pages/BlogPage';
 import OrderTrackingPage from '@/components/pages/OrderTrackingPage';
+import WishlistPage from '@/components/pages/WishlistPage';
 
 const pageVariants = {
   initial: { opacity: 0, y: 16, scale: 0.995 },
@@ -75,6 +76,7 @@ export default function MainApp() {
       case 'blog-detail': return <BlogPage />;
       case 'categories': return <CatalogPage />;
       case 'order-tracking': return <OrderTrackingPage />;
+      case 'wishlist': return <WishlistPage />;
       default: return <HomePage />;
     }
   };

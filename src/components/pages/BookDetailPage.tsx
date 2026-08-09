@@ -19,6 +19,10 @@ import {
   Facebook,
   Link as LinkIcon,
   MessageCircle,
+  BookmarkCheck,
+  Play,
+  RotateCcw,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +44,7 @@ import { t } from '@/lib/i18n';
 import BookCard from '@/components/BookCard';
 import type { Book } from '@/types';
 import { toast } from 'sonner';
+import { Slider } from '@/components/ui/slider';
 
 interface Review {
   id: string;
@@ -111,6 +116,100 @@ export default function BookDetailPage() {
 
   const reviewsRef = useRef<HTMLDivElement>(null);
 
+  // ── Reading Progress ──
+  const [readingProgress, setReadingProgress] = useState<number>(0);
+  const [readingPage, setReadingPage] = useState<number>(1);
+  const [readingLastRead, setReadingLastRead] = useState<string>('');
+  const [readingTotalPages, setReadingTotalPages] = useState<number>(400);
+
+  // Load reading progress from localStorage
+  useEffect(() => {
+    if (!book?.id || !isAuthenticated) return;
+    try {
+      const stored = localStorage.getItem('noveluxe-reading-progress');
+      if (stored) {
+        const data: Record<string, { progress: number; lastRead: string; page: number; totalPages: number }> = JSON.parse(stored);
+        const entry = data[book.id];
+        if (entry) {
+          setReadingProgress(entry.progress);
+          setReadingPage(entry.page);
+          setReadingLastRead(entry.lastRead);
+          setReadingTotalPages(entry.totalPages || book.pages || 400);
+        } else {
+          setReadingTotalPages(book.pages || 400);
+        }
+      } else {
+        setReadingTotalPages(book.pages || 400);
+      }
+    } catch { /* ignore */ }
+  }, [book?.id, isAuthenticated, book?.pages]);
+
+  const saveReadingProgress = useCallback(
+    (progress: number, page: number) => {
+      if (!book?.id || !isAuthenticated) return;
+      try {
+        const stored = localStorage.getItem('noveluxe-reading-progress');
+        const data: Record<string, { progress: number; lastRead: string; page: number; totalPages: number }> = stored
+          ? JSON.parse(stored)
+          : {};
+        data[book.id] = {
+          progress,
+          page,
+          lastRead: new Date().toISOString(),
+          totalPages: readingTotalPages,
+        };
+        localStorage.setItem('noveluxe-reading-progress', JSON.stringify(data));
+        setReadingProgress(progress);
+        setReadingPage(page);
+        setReadingLastRead(new Date().toISOString());
+      } catch { /* ignore */ }
+    },
+    [book?.id, isAuthenticated, readingTotalPages]
+  );
+
+  const handleStartReading = () => {
+    saveReadingProgress(0, 1);
+    toast.success(
+      locale === 'id' ? 'Selamat membaca!' : 'Happy reading!',
+      { description: book?.title }
+    );
+  };
+
+  const handleContinueReading = () => {
+    // Simulate adding a few pages
+    const nextPage = Math.min(readingPage + 5, readingTotalPages);
+    const newProgress = Math.round((nextPage / readingTotalPages) * 100);
+    saveReadingProgress(newProgress, nextPage);
+  };
+
+  const handleMarkFinished = () => {
+    saveReadingProgress(100, readingTotalPages);
+    toast.success(
+      locale === 'id' ? 'Buku selesai dibaca!' : 'Book finished!',
+      { description: book?.title }
+    );
+  };
+
+  const handlePageSliderChange = (value: number[]) => {
+    const page = value[0];
+    const progress = Math.round((page / readingTotalPages) * 100);
+    saveReadingProgress(progress, page);
+  };
+
+  const formatLastRead = (isoStr: string) => {
+    if (!isoStr) return '';
+    const diffMs = Date.now() - new Date(isoStr).getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    if (diffHours < 1) return t('reading.justNow', locale);
+    if (diffDays < 1) {
+      const h = Math.floor(diffHours);
+      return `${h} ${t('reading.hoursAgo', locale)}`;
+    }
+    const d = Math.floor(diffDays);
+    return `${d} ${t('reading.daysAgo', locale)}`;
+  };
+
   // Parse gallery images from JSON string
   const galleryImages: string[] = (() => {
     if (!book?.galleryImages) return [];
@@ -159,7 +258,7 @@ export default function BookDetailPage() {
       const data = await res.json();
       const bookData = data.book || data;
       setBook(bookData);
-      setReviews(data.reviews || []);
+      setReviews(bookData.reviews || []);
 
       // Track recently viewed
       if (bookData?.id) {
@@ -1114,6 +1213,128 @@ export default function BookDetailPage() {
             </div>
           </div>
         </motion.div>
+
+        {/* ---- Reading Progress Section ---- */}
+        {isAuthenticated && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.35 }}
+            className="rounded-2xl border border-[#D4AF37]/15 bg-card overflow-hidden"
+          >
+            {/* Header with gold accent */}
+            <div className="px-6 py-4 border-b border-border bg-gradient-to-r from-[#D4AF37]/5 to-transparent">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D4AF37]/15">
+                  <BookmarkCheck className="h-5 w-5 text-[#D4AF37]" />
+                </div>
+                <div>
+                  <h3 className="font-heading text-lg font-bold text-foreground">
+                    {t('reading.title', locale)}
+                  </h3>
+                  {readingLastRead && readingProgress > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {t('reading.lastRead', locale)}: {formatLastRead(readingLastRead)}
+                    </p>
+                  )}
+                </div>
+                {readingProgress === 100 && (
+                  <div className="ml-auto flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      {t('reading.finished', locale)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Progress bar */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {t('reading.progress', locale)}
+                  </span>
+                  <span className="text-sm font-bold text-[#D4AF37]">
+                    {readingProgress}%
+                  </span>
+                </div>
+                <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{
+                      background: readingProgress === 100
+                        ? 'linear-gradient(to right, #10B981, #059669)'
+                        : 'linear-gradient(to right, #D4AF37, #E8D48B, #B8960C)',
+                    }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${readingProgress}%` }}
+                    transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  />
+                </div>
+              </div>
+
+              {/* Page slider */}
+              {readingProgress > 0 && readingProgress < 100 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {t('reading.currentPage', locale)}
+                    </span>
+                    <span className="text-xs font-semibold text-foreground">
+                      {readingPage} / {readingTotalPages} {t('reading.totalPages', locale)}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[readingPage]}
+                    min={1}
+                    max={readingTotalPages}
+                    step={1}
+                    onValueChange={handlePageSliderChange}
+                    className="w-full [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:border-[#D4AF37] [&_[role=slider]]:bg-background [&_[role=slider]]:shadow-md [&_[role=slider]]:shadow-[#D4AF37]/20 [&>span:first-child]:bg-[#D4AF37]/20 [&>span:first-child>span]:bg-[#D4AF37]"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60 text-center">
+                    {t('reading.pageSlider', locale)}
+                  </p>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                {readingProgress === 0 ? (
+                  <Button
+                    onClick={handleStartReading}
+                    className="flex-1 bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold h-11 rounded-xl shadow-lg shadow-[0_0_20px_rgba(212,175,55,0.3)] transition-all"
+                  >
+                    <Play className="mr-2 h-4 w-4" />
+                    {t('reading.startReading', locale)}
+                  </Button>
+                ) : (
+                  readingProgress < 100 && (
+                    <Button
+                      onClick={handleContinueReading}
+                      className="flex-1 bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold h-11 rounded-xl shadow-lg shadow-[0_0_20px_rgba(212,175,55,0.3)] transition-all"
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      {t('reading.continueReading', locale)}
+                    </Button>
+                  )
+                )}
+                {readingProgress > 0 && readingProgress < 100 && (
+                  <Button
+                    onClick={handleMarkFinished}
+                    variant="outline"
+                    className="flex-1 border-[#D4AF37]/40 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:border-[#D4AF37] font-semibold h-11 rounded-xl transition-all"
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    {t('reading.markFinished', locale)}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </motion.section>
+        )}
 
         {/* ---- Recommendations Section ---- */}
         {recommendations.length > 0 && (
