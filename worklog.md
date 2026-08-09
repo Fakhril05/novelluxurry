@@ -332,3 +332,264 @@
 6. Add reading list collections (custom lists beyond wishlist)
 7. Add book recommendation engine based on purchase/view history
 8. Implement email notification system for order status changes
+
+---
+
+## Completed Modifications (Round 8 - Enhanced UserDashboard Order History)
+
+### Enhancement: Real API Order History in Dashboard
+1. **OrdersTab Enhancement** (`/src/components/pages/UserDashboard.tsx`):
+   - **Order Statistics Cards**: Added 4 stat cards at the top of the orders tab:
+     - Total Orders count (Package icon, gold accent)
+     - Total Spent sum of all order totals (TrendingUp icon, gold text)
+     - Active Orders — pending/processing/shipped count (Truck icon, purple)
+     - Completed Orders — delivered count (PackageCheck icon, green)
+     - Each card has gold left border accent (`border-l-4 border-l-[#D4AF37]`)
+     - Loading state shows 4 skeleton stat cards
+   - **Copy Order Number**: Added copy button next to each order number with Check/Copy icon toggle and toast notification
+   - **Track Order Button**: Added "Track Order" button for non-cancelled/non-delivered orders, navigates to `order-tracking` page with order number parameter
+   - **Enhanced Empty State**: Replaced generic Package icon with gold-themed ShoppingBag icon in a pulsing animated container with gold gradient CTA button
+   - **Fixed item display**: Removed `coverImage` reference (not in DB schema), replaced with BookOpen icon in rounded-lg container
+   - **New icons imported**: Copy, Check, ShoppingBag, TrendingUp, Truck, PackageCheck
+   - **Fixed OrderItem interface**: Removed `coverImage: string`, added `bookId?: string`
+
+2. **Store Update** (`/src/lib/store.ts`):
+   - Added `'order-tracking'` to Page union type (was used in OrderSuccessPage but missing from type)
+
+3. **i18n Keys** (`/src/lib/i18n.ts`):
+   - Added 8 new translation keys (id/en):
+     - `dashboard.totalOrders` — Total Pesanan / Total Orders
+     - `dashboard.totalSpent` — Total Belanja / Total Spent
+     - `dashboard.activeOrders` — Pesanan Aktif / Active Orders
+     - `dashboard.completedOrders` — Selesai / Completed
+     - `dashboard.trackOrder` — Lacak Pesanan / Track Order
+     - `dashboard.orderCopied` — Nomor pesanan disalin / Order number copied
+     - `dashboard.items` — item / items
+
+### Files Modified
+- `src/components/pages/UserDashboard.tsx` — Enhanced OrdersTab with stats, copy, track, empty state
+- `src/lib/store.ts` — Added 'order-tracking' to Page type
+- `src/lib/i18n.ts` — Added 8 new translation keys (id/en)
+
+## Verification Results (Round 8)
+- `bun run lint` — zero errors, zero warnings ✅
+- Dev server compiles successfully with all changes ✅
+
+---
+
+## Completed Modifications (Round 9 - Premium Auth Pages Redesign)
+
+### Enhancement: AuthPages Premium Gold-Themed Redesign
+1. **AuthPages.tsx** (`/src/components/pages/AuthPages.tsx`) — Major visual and UX overhaul:
+   - **Decorative Left Panel** (`DecorativePanel` component): Hidden on mobile, visible on `lg+` screens (480px wide), showing:
+     - Dark gradient background (`#0a0a0a` → `#1a1a1a` → `#0f0f0f`) with radial gold blur orbs
+     - Large BookOpen icon with 3-stop gold gradient (#D4AF37 → #F5E6A3 → #D4AF37) and subtle float animation (y: 0 → -10 → 0, 4s loop)
+     - Brand name "Noveluxe" in gold text gradient
+     - Tagline: "Temukan cerita yang menginspirasi" / "Discover stories that inspire" (i18n)
+     - 5 decorative animated Star/Sparkles icons at varying positions, sizes (h-3 to h-5), opacities (10%-20%), with rotation + scale pulse animations at different durations/delays
+     - Decorative gold divider line with centered Star
+   - **Form Card Enhancements** (both Login & Register):
+     - Gold gradient top border (3px, 5-stop: #B8960C → #D4AF37 → #F5E6A3 → #D4AF37 → #B8960C)
+     - `shadow-xl shadow-black/5` for premium depth
+     - `backdrop-blur-sm bg-card/80` for glass-card effect
+     - `overflow-hidden` for clean gold border
+     - BookOpen icon with gold gradient background (was flat #D4AF37), spring hover animation (scale + rotate)
+     - Input fields: gold focus ring (`focus-visible:ring-1 focus-visible:ring-[#D4AF37]/50`)
+   - **Login Page Specific**:
+     - Gold divider replacing Separator: gradient lines with centered "ATAU"/"OR" in `#B8960C` with `tracking-widest` (`GoldDivider` component)
+     - Google login button: enhanced with `border-[#D4AF37]/30` hover, `hover:shadow-md`, `bg-background/50` base
+     - Submit button: gold gradient background (#D4AF37 → #B8960C) with shimmer overlay (white/20 gradient slides across on hover via `group-hover:translate-x-full` transition)
+   - **Register Page Specific**:
+     - Password strength indicator bar (`PasswordStrengthBar` component):
+       - Animated width/color transition using framer-motion (0.4s easeOut)
+       - Red (#ef4444, 33%) for weak: < 6 chars
+       - Orange (#f97316, 66%) for medium: 6-8 chars with < 2 character type mixes
+       - Green (#22c55e, 100%) for strong: 8+ chars with 2+ character type mixes (upper, lower, number, special)
+       - Label text (Lemah/Sedang/Kuat) in matching color via i18n
+     - Terms checkbox: gold border when unchecked, gold fill when checked
+     - Submit button matches login styling with gold gradient + shimmer
+   - **AnimatePresence Slide Transitions**:
+     - Directional tracking: clicking "register" slides form left-to-right (exit -300px, enter +300px), clicking "login" reverses
+     - `AnimatePresence mode="wait"` with custom direction prop
+     - 350ms easeInOut transitions for smooth feel
+     - Direction state managed via `handleSwitch` wrapper that sets direction + calls setPage
+
+2. **i18n Keys** (`/src/lib/i18n.ts`) — Added 5 new translation keys (id/en):
+   - `auth.or` — ATAU / OR
+   - `auth.tagline` — Temukan cerita yang menginspirasi / Discover stories that inspire
+   - `auth.passwordStrength.weak` — Lemah / Weak
+   - `auth.passwordStrength.medium` — Sedang / Medium
+   - `auth.passwordStrength.strong` — Kuat / Strong
+
+3. **Removed unused import**: `Separator` from shadcn/ui (replaced by custom GoldDivider)
+
+4. **New imports**: `AnimatePresence` (framer-motion), `Star, Sparkles` (lucide-react), `useMemo` (React)
+
+### Files Modified
+- `src/components/pages/AuthPages.tsx` — Major redesign with decorative panel, gold styling, password strength, slide transitions
+- `src/lib/i18n.ts` — Added 5 new translation keys
+
+### Files NOT Modified
+- `src/lib/store.ts` — No changes needed
+- `src/components/MainApp.tsx` — No changes needed
+
+## Verification Results (Round 9)
+- `bun run lint` — zero errors, zero warnings ✅
+
+---
+
+## Completed Modifications (Round 10 - Enhanced FAQ Page)
+
+### Enhancement: FAQPage Visual Redesign & Feature Upgrades
+1. **FAQPage.tsx** (`/src/components/pages/FAQPage.tsx`) — Major visual and UX overhaul:
+   - **Category Filter Tabs with Icons**: Replaced simple pill buttons with icon-based tabs (Truck, CreditCard, RotateCcw, User, Gift) using framer-motion `layoutId` for smooth animated underline and background transitions between active states. Scrollable horizontally on mobile via `overflow-x-auto`.
+   - **Enhanced Accordion Items**: Each FAQ item now has:
+     - Gold left border (`border-l-2 border-l-[#D4AF37]`)
+     - Gold-tinted hover state (`hover:bg-[#D4AF37]/5`)
+     - Category icon in a gold-tinted rounded box on the left of the question
+     - Smooth open/close animation via shadcn Accordion
+     - "Membantu"/"Helpful" thumb-up button at bottom-right of each answer with toggle state and gold fill
+   - **Contact Section Redesign**: Replaced inline pill links with 3 responsive cards in a grid:
+     - Email (Mail icon, hello@noveluxe.com)
+     - Phone (Phone icon, +62 21 1234 5678)
+     - WhatsApp (MessageSquare icon, "Chat dengan kami" link)
+     - Each card: icon in gold circle, uppercase label, value, `whileHover={{ y: -4 }}` lift effect
+   - **Search Enhancements**:
+     - Animated clear (X) button when search has text, with focus-restore
+     - Result count with Sparkles icon: "X pertanyaan ditemukan"
+     - HighlightText component renders matching search text with gold color + underline
+   - **Visual Polish**:
+     - Gold gradient orbs in hero section top-right (blurred circles)
+     - Better empty state: larger animated icon with pulsing ring, descriptive text, "Show All" reset button
+     - Loading skeletons now also have gold left border for consistency
+     - All labels use i18n `t()` function instead of inline ternaries
+
+2. **Category System Update**: Replaced old category system (all/shipping/orders/products/rewards) with new task-specified categories (all/shipping/payment/return/account/promo). Each FAQ_I18N entry now includes a `category` field.
+
+3. **i18n Keys** (`/src/lib/i18n.ts`) — Added 19 new translation keys (id/en):
+   - `faq.title`, `faq.subtitle`, `faq.searchPlaceholder`
+   - `faq.categoryAll`, `faq.categoryShipping`, `faq.categoryPayment`, `faq.categoryReturn`, `faq.categoryAccount`, `faq.categoryPromo`
+   - `faq.questionsFound`, `faq.noResults`, `faq.noResultsDesc`
+   - `faq.stillHaveQuestions`, `faq.contactDesc`
+   - `faq.contactEmail`, `faq.contactPhone`, `faq.contactWhatsApp`, `faq.contactWhatsAppDesc`
+   - `faq.helpful`
+
+4. **New imports**: `AnimatePresence`, `LayoutGroup` (framer-motion), `CreditCard`, `User`, `X`, `ThumbsUp`, `Sparkles` (lucide-react), `useCallback` (React)
+
+5. **Removed unused imports**: `Calendar`, `Award` (no longer needed)
+
+### Files Modified
+- `src/components/pages/FAQPage.tsx` — Complete rewrite with enhanced design
+- `src/lib/i18n.ts` — Added 19 new translation keys
+
+### Files NOT Modified
+- `src/lib/store.ts` — No changes needed
+- `src/components/MainApp.tsx` — No changes needed
+
+## Verification Results (Round 10)
+- `bun run lint` — zero errors, zero warnings ✅
+
+---
+
+## Completed Modifications (Round 11 - Reading List Collections Feature)
+
+### New Feature: Reading List Collections
+1. **ReadingListsPage** (`/src/components/pages/ReadingListsPage.tsx`) — Full reading list management page with:
+   - **All lists view**: Header with gold Library icon, "Buat Koleksi Baru" / "Create New List" CTA
+   - **Empty state**: Animated decorative circles with Library icon, gold CTA to create first list
+   - **List cards grid** (responsive 1/2/3 cols): Each card shows list name, inline rename (Pencil icon → Input with Check/Cancel), book count badge, stacked book cover thumbnails (up to 3, fanned out), created date, View button, Delete button
+   - **Expanded list view**: Back button, list heading with book count + date, grid of BookCards with X remove overlay, "Tambah Buku" button
+   - **Book picker dialog**: Search input with 300ms debounce, scrollable book list with cover thumbnails, click to add, already-added books shown with checkmark badge and disabled state
+   - **Create dialog**: Simple Dialog with name Input + Enter key support
+   - **Delete confirmation**: AlertDialog with destructive action styling
+   - **Toast notifications** for all actions (create, rename, delete, add/remove book, already in list)
+   - Full i18n support (id/en), framer-motion animations, breadcrumbs, loading skeletons
+
+2. **Store updates** (`/src/lib/store.ts`):
+   - Added `ReadingList` import from `@/types`
+   - Added `'reading-lists'` to `Page` union type
+   - Added to `AppState` interface: `readingLists`, `createReadingList`, `deleteReadingList`, `renameReadingList`, `addBookToReadingList`, `removeBookFromReadingList`
+   - Implemented all methods using `crypto.randomUUID()` for IDs, with duplicate prevention in `addBookToReadingList`
+   - Added `readingLists` to `partialize` for persistence
+
+3. **Type definition** (`/src/types/index.ts`):
+   - Added `ReadingList` interface: `{ id, name, bookIds, createdAt }`
+
+4. **i18n keys** (`/src/lib/i18n.ts`):
+   - Added 26 keys for both `id` and `en` locales (title, subtitle, create, createPlaceholder, empty, emptyDesc, createFirst, bookCount, viewList, rename, delete, deleteConfirm, addBook, searchBooks, bookPicker, noBooks, noBooksDesc, noResults, addedToList, removedFromList, alreadyInList, listCreated, listRenamed, listDeleted, createdAt, removeBook, nameRequired, allLists)
+
+5. **Route** (`/src/components/MainApp.tsx`):
+   - Added `import ReadingListsPage` and `case 'reading-lists': return <ReadingListsPage />;`
+
+6. **Navigation** (`/src/components/layout/Header.tsx`):
+   - Added `Library` icon import
+   - Added "Koleksi Bacaan" / "Reading Lists" menu item in user dropdown (after Orders, before Admin/Logout)
+   - Added same item in mobile menu (after Profile, before Logout)
+
+## Verification Results (Round 11)
+- `bun run lint` — zero errors, zero warnings ✅
+- Dev server compiled successfully, no runtime errors ✅
+
+---
+
+## Completed Modifications (Round 6 - Session: QA + 4 Major Features + Styling)
+
+### QA Assessment (agent-browser)
+- Homepage: All sections render correctly, no console errors ✅
+- Catalog: 12 book cards load, all filters working ✅
+- Login: Enhanced page renders with decorative left panel, gold accents, password strength ✅
+- FAQ: Category tabs filter working, contact section, search with highlighting ✅
+- Reading Lists: Empty state with gold CTA, breadcrumbs render correctly ✅
+- Dark mode: No errors, styling consistent ✅
+- All API endpoints returning 200 status ✅
+- No JavaScript console errors (the earlier error overlay was Next.js DevTools, not app code) ✅
+
+### Features Added (4 subagents in parallel)
+1. **Enhanced UserDashboard Order History** — Real API order fetching, 4 stat cards (total/active/completed/total spent), copy order number, track order button, enhanced empty state
+2. **Premium Auth Pages Redesign** — Decorative left panel with floating BookOpen icon + gold sparkles, gold gradient card borders, password strength indicator, gold OR divider, slide transitions between login/register, gold shimmer buttons
+3. **Enhanced FAQ Page** — Category filter tabs with icons + layoutId animation, gold accordion borders, helpful thumb-up buttons, contact section with 3 cards, search highlighting, visual polish
+4. **Reading List Collections** — Create/rename/delete custom reading lists, add books via picker dialog, stacked cover thumbnails, expanded list view with BookCards, persisted in localStorage
+
+### Files Created
+- `src/components/pages/ReadingListsPage.tsx` — **NEW** Full reading list management page (~740 lines)
+
+### Files Modified
+- `src/components/pages/UserDashboard.tsx` — Enhanced OrdersTab with real API data
+- `src/components/pages/AuthPages.tsx` — Major redesign with premium gold styling
+- `src/components/pages/FAQPage.tsx` — Complete rewrite with enhanced design
+- `src/lib/store.ts` — Added 'order-tracking' + 'reading-lists' to Page type, reading list state
+- `src/lib/i18n.ts` — Added 58+ new translation keys (id/en)
+- `src/types/index.ts` — Added ReadingList interface
+- `src/components/MainApp.tsx` — Added reading-lists route
+- `src/components/layout/Header.tsx` — Added Reading Lists in user dropdown + mobile menu
+
+## Verification Results (Round 6)
+- `bun run lint` — zero errors, zero warnings ✅
+- Homepage: Loads cleanly with all sections ✅
+- Login: Enhanced page with decorative panel, gold accents ✅
+- FAQ: Category filters, contact section, search highlighting ✅
+- Reading Lists: Empty state renders with gold CTA ✅
+- Dark mode: No errors ✅
+- No JavaScript console errors ✅
+- Dev server compiles successfully ✅
+
+## Current Project Status
+- **Status**: RUNNING - Dev server on port 3000, stable
+- **Features**: 15+ pages (home, catalog, book detail, wishlist, compare, cart, checkout, order success, order tracking, dashboard, admin, FAQ, blog, reading lists, auth), real-time search, notifications, live chat, i18n (id/en), dark mode
+- **Database**: 20 books, 8 categories, 2 users, 4 testimonials, 6 blogs, 15 reviews, 3 vouchers
+- **Overall Health**: Lint clean, no console errors, all QA tests pass
+
+## Unresolved Issues / Risks
+- Turbopack cache corruption: server may crash after heavy file changes; requires `rm -rf .next` to recover
+- URL never changes during SPA navigation (state-based, not URL-based) — known architecture limitation
+- Reading progress page slider uses book.pages from DB (may default to 400 if null)
+
+## Priority Recommendations for Next Phase
+1. Add admin CRUD operations (create/edit/delete books, categories) in AdminDashboard
+2. Add more book data (currently 20 titles) and blog content
+3. Consider URL-based routing for SEO and deep linking
+4. Add book recommendation engine based on purchase/view history
+5. Implement email notification system for order status changes
+6. Enhance dark mode consistency across newer components
+7. Add Loyalty Program page with tier benefits display
+8. Add social sharing (OG meta tags) for books and blogs

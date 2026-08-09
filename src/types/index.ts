@@ -65,3 +65,10 @@ export interface CartItem {
   book: Book;
   quantity: number;
 }
+
+export interface ReadingList {
+  id: string;
+  name: string;
+  bookIds: string[];
+  createdAt: string;
+}

@@ -18,6 +18,12 @@ import {
   Calendar,
   Clock,
   ChevronRight,
+  Copy,
+  Check,
+  ShoppingBag,
+  TrendingUp,
+  Truck,
+  PackageCheck,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -40,7 +46,7 @@ interface OrderItem {
   quantity: number;
   price: number;
   format: string;
-  coverImage: string;
+  bookId?: string;
 }
 
 interface Order {
@@ -713,12 +719,41 @@ interface OrdersTabProps {
 }
 
 function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyOrderNumber = (orderNumber: string, orderId: string) => {
+    navigator.clipboard.writeText(orderNumber).then(() => {
+      setCopiedId(orderId);
+      toast.success(t('dashboard.orderCopied', locale));
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  };
+
+  // Compute statistics
+  const totalOrders = orders.length;
+  const totalSpent = orders.reduce((sum, o) => sum + o.total, 0);
+  const activeOrders = orders.filter((o) => ['pending', 'processing', 'shipped'].includes(o.status)).length;
+  const completedOrders = orders.filter((o) => o.status === 'delivered').length;
+
   if (loading) {
     return (
       <div className="space-y-4">
         <h2 className="font-heading text-xl font-semibold text-foreground">
           {t('dashboard.orderHistory', locale)}
         </h2>
+        {/* Stats skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="border-border/50">
+              <CardContent className="p-4">
+                <Skeleton className="h-8 w-8 rounded-lg mb-2" />
+                <Skeleton className="h-4 w-20 mb-1" />
+                <Skeleton className="h-6 w-12" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {/* Orders skeleton */}
         {Array.from({ length: 3 }).map((_, i) => (
           <Card key={i} className="border-border/50">
             <CardContent className="p-6 space-y-3">
@@ -751,103 +786,189 @@ function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center justify-center py-16 text-center"
         >
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
-            <Package className="h-8 w-8 text-muted-foreground" />
+          <div className="relative mb-6">
+            <motion.div
+              className="flex h-20 w-20 items-center justify-center rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/20"
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <ShoppingBag className="h-10 w-10 text-[#D4AF37]" />
+            </motion.div>
+            <motion.div
+              className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-[#D4AF37]"
+              animate={{ opacity: [1, 0.3, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            />
           </div>
-          <p className="text-lg font-medium text-foreground mb-1">
+          <p className="text-lg font-semibold text-foreground mb-2">
             {t('dashboard.noOrders', locale)}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground max-w-xs">
             {locale === 'id'
               ? 'Mulai belanja dan pesananmu akan muncul di sini'
               : 'Start shopping and your orders will appear here'}
           </p>
           <Button
             onClick={() => useAppStore.getState().setPage('catalog')}
-            className="mt-6 bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+            className="mt-6 bg-gradient-to-r from-[#D4AF37] to-[#B8960C] text-white hover:from-[#B8960C] hover:to-[#9A7B0A] shadow-md shadow-[#D4AF37]/20"
           >
+            <BookOpen className="h-4 w-4 mr-2" />
             {locale === 'id' ? 'Belanja Sekarang' : 'Shop Now'}
           </Button>
         </motion.div>
       ) : (
-        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1 scrollbar-thin">
-          {orders.map((order, idx) => {
-            const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
-            return (
-              <motion.div
-                key={order.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: idx * 0.05 }}
-              >
-                <Card className="border-border/50 hover:border-[#D4AF37]/20 transition-colors">
-                  <CardContent className="p-5">
-                    {/* Header Row */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-sm font-semibold text-foreground">
-                          {order.orderNumber}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className={`${statusCfg.color} text-[11px] font-semibold border`}
-                        >
-                          {t(statusCfg.labelKey, locale)}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Calendar className="h-3.5 w-3.5" />
-                        {formatDate(order.createdAt)}
-                      </div>
-                    </div>
+        <div className="space-y-6">
+          {/* Statistics Cards */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+          >
+            {/* Total Orders */}
+            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+              <CardContent className="p-4">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#D4AF37]/10 mb-2">
+                  <Package className="h-4 w-4 text-[#D4AF37]" />
+                </div>
+                <p className="text-xs text-muted-foreground font-medium">{t('dashboard.totalOrders', locale)}</p>
+                <p className="text-xl font-bold text-foreground mt-0.5">{totalOrders}</p>
+              </CardContent>
+            </Card>
 
-                    {/* Items List */}
-                    <div className="space-y-2 mb-4">
-                      {order.items?.map((item, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center gap-3 py-1.5"
-                        >
-                          <div className="h-10 w-7 shrink-0 rounded bg-muted overflow-hidden">
-                            {item.coverImage && (
-                              <img
-                                src={item.coverImage}
-                                alt={item.title}
-                                className="h-full w-full object-cover"
-                              />
+            {/* Total Spent */}
+            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+              <CardContent className="p-4">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#D4AF37]/10 mb-2">
+                  <TrendingUp className="h-4 w-4 text-[#D4AF37]" />
+                </div>
+                <p className="text-xs text-muted-foreground font-medium">{t('dashboard.totalSpent', locale)}</p>
+                <p className="text-xl font-bold text-[#D4AF37] mt-0.5">{formatPrice(totalSpent, locale)}</p>
+              </CardContent>
+            </Card>
+
+            {/* Active Orders */}
+            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+              <CardContent className="p-4">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30 mb-2">
+                  <Truck className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                </div>
+                <p className="text-xs text-muted-foreground font-medium">{t('dashboard.activeOrders', locale)}</p>
+                <p className="text-xl font-bold text-foreground mt-0.5">{activeOrders}</p>
+              </CardContent>
+            </Card>
+
+            {/* Completed Orders */}
+            <Card className="border-border/50 border-l-4 border-l-[#D4AF37]">
+              <CardContent className="p-4">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30 mb-2">
+                  <PackageCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+                </div>
+                <p className="text-xs text-muted-foreground font-medium">{t('dashboard.completedOrders', locale)}</p>
+                <p className="text-xl font-bold text-foreground mt-0.5">{completedOrders}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Orders List */}
+          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1 scrollbar-thin">
+            {orders.map((order, idx) => {
+              const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+              const isCopied = copiedId === order.id;
+              return (
+                <motion.div
+                  key={order.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: idx * 0.05 }}
+                >
+                  <Card className="border-border/50 hover:border-[#D4AF37]/20 transition-colors">
+                    <CardContent className="p-5">
+                      {/* Header Row */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-foreground">
+                            {order.orderNumber}
+                          </span>
+                          <button
+                            onClick={() => copyOrderNumber(order.orderNumber, order.id)}
+                            className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-muted transition-colors"
+                            aria-label="Copy order number"
+                          >
+                            {isCopied ? (
+                              <Check className="h-3.5 w-3.5 text-green-500" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                             )}
+                          </button>
+                          <Badge
+                            variant="outline"
+                            className={`${statusCfg.color} text-[11px] font-semibold border`}
+                          >
+                            {t(statusCfg.labelKey, locale)}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {formatDate(order.createdAt)}
+                        </div>
+                      </div>
+
+                      {/* Items List */}
+                      <div className="space-y-2 mb-4">
+                        {order.items?.map((item, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-3 py-1.5"
+                          >
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                              <BookOpen className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">
+                                {item.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {item.format} × {item.quantity}
+                              </p>
+                            </div>
+                            <span className="text-sm font-medium text-foreground shrink-0">
+                              {formatPrice(item.price * item.quantity, locale)}
+                            </span>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">
-                              {item.title}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {item.format} × {item.quantity}
-                            </p>
-                          </div>
-                          <span className="text-sm font-medium text-foreground shrink-0">
-                            {formatPrice(item.price * item.quantity, locale)}
+                        ))}
+                      </div>
+
+                      <Separator className="mb-3" />
+
+                      {/* Total & Track */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            {t('cart.total', locale)}
+                          </span>
+                          <span className="text-base font-bold text-[#D4AF37]">
+                            {formatPrice(order.total, locale)}
                           </span>
                         </div>
-                      ))}
-                    </div>
-
-                    <Separator className="mb-3" />
-
-                    {/* Total */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        {t('cart.total', locale)}
-                      </span>
-                      <span className="text-base font-bold text-[#D4AF37]">
-                        {formatPrice(order.total, locale)}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            );
-          })}
+                        {order.status !== 'cancelled' && order.status !== 'delivered' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => useAppStore.getState().setPage('order-tracking', { orderNumber: order.orderNumber })}
+                            className="gap-1.5 border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 text-xs"
+                          >
+                            <Truck className="h-3.5 w-3.5" />
+                            {t('dashboard.trackOrder', locale)}
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

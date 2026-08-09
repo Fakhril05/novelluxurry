@@ -23,6 +23,7 @@ import OrderTrackingPage from '@/components/pages/OrderTrackingPage';
 import WishlistPage from '@/components/pages/WishlistPage';
 import OrderSuccessPage from '@/components/pages/OrderSuccessPage';
 import ComparePage from '@/components/pages/ComparePage';
+import ReadingListsPage from '@/components/pages/ReadingListsPage';
 
 const pageVariants = {
   initial: { opacity: 0, y: 16, scale: 0.995 },
@@ -80,6 +81,7 @@ export default function MainApp() {
       case 'order-tracking': return <OrderTrackingPage />;
       case 'wishlist': return <WishlistPage />;
       case 'compare': return <ComparePage />;
+      case 'reading-lists': return <ReadingListsPage />;
       case 'order-success': return <OrderSuccessPage />;
       default: return <HomePage />;
     }

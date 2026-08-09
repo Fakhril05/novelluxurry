@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Locale } from './i18n';
+import type { ReadingList } from '@/types';
 
 export type Page =
   | 'home'
@@ -18,7 +19,9 @@ export type Page =
   | 'categories'
   | 'wishlist'
   | 'order-success'
-  | 'compare';
+  | 'order-tracking'
+  | 'compare'
+  | 'reading-lists';
 
 export interface CartItem {
   id: string;
@@ -109,6 +112,14 @@ interface AppState {
   // Search open
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
+
+  // Reading Lists
+  readingLists: ReadingList[];
+  createReadingList: (name: string) => void;
+  deleteReadingList: (id: string) => void;
+  renameReadingList: (id: string, name: string) => void;
+  addBookToReadingList: (listId: string, bookId: string) => void;
+  removeBookFromReadingList: (listId: string, bookId: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -236,6 +247,50 @@ export const useAppStore = create<AppState>()(
       // Search open
       searchOpen: false,
       setSearchOpen: (open) => set({ searchOpen: open }),
+
+      // Reading Lists
+      readingLists: [],
+      createReadingList: (name) => {
+        const newList: ReadingList = {
+          id: crypto.randomUUID(),
+          name: name.trim(),
+          bookIds: [],
+          createdAt: new Date().toISOString(),
+        };
+        set({ readingLists: [...get().readingLists, newList] });
+      },
+      deleteReadingList: (id) => {
+        set({ readingLists: get().readingLists.filter((l) => l.id !== id) });
+      },
+      renameReadingList: (id, name) => {
+        set({
+          readingLists: get().readingLists.map((l) =>
+            l.id === id ? { ...l, name: name.trim() } : l
+          ),
+        });
+      },
+      addBookToReadingList: (listId, bookId) => {
+        const { readingLists } = get();
+        const list = readingLists.find((l) => l.id === listId);
+        if (list && !list.bookIds.includes(bookId)) {
+          set({
+            readingLists: readingLists.map((l) =>
+              l.id === listId
+                ? { ...l, bookIds: [...l.bookIds, bookId] }
+                : l
+            ),
+          });
+        }
+      },
+      removeBookFromReadingList: (listId, bookId) => {
+        set({
+          readingLists: get().readingLists.map((l) =>
+            l.id === listId
+              ? { ...l, bookIds: l.bookIds.filter((id) => id !== bookId) }
+              : l
+          ),
+        });
+      },
     }),
     {
       name: 'noveluxe-store',
@@ -244,6 +299,7 @@ export const useAppStore = create<AppState>()(
         cart: state.cart,
         wishlist: state.wishlist,
         comparison: state.comparison,
+        readingLists: state.readingLists,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
