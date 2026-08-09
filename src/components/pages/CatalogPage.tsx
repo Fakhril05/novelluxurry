@@ -139,7 +139,7 @@ function FilterSidebar({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 border-t-2 border-[#D4AF37]/20 pt-6">
       {/* Sort */}
       <div>
         <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
@@ -151,10 +151,10 @@ function FilterSidebar({
               key={opt.value}
               type="button"
               onClick={() => onFilterChange({ sort: opt.value })}
-              className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+              className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-all duration-200 ${
                 filters.sort === opt.value
-                  ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium border border-[#D4AF37]/30 shadow-sm shadow-[#D4AF37]/10'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
               }`}
             >
               {t(opt.labelKey, locale)}
@@ -519,7 +519,9 @@ export default function CatalogPage() {
   }, [currentPage, totalPages]);
 
   return (
-    <section className="min-h-screen bg-background">
+    <section className="relative min-h-screen bg-background">
+      {/* Subtle gold gradient overlay at top */}
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#D4AF37]/5 to-transparent pointer-events-none" aria-hidden="true" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Breadcrumb */}
         <motion.div
@@ -580,9 +582,11 @@ export default function CatalogPage() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.05 }}
-          className="mb-6"
+          className="mb-6 relative"
         >
-          <h1 className="font-heading text-2xl md:text-3xl font-bold text-foreground">
+          {/* Gold gradient accent behind title */}
+          <div className="absolute -left-2 -top-2 -right-2 -bottom-1 bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent rounded-lg -z-10 blur-sm" aria-hidden="true" />
+          <h1 className="font-heading text-2xl md:text-3xl font-bold text-gradient-gold">
             {genreCategory
               ? locale === 'en' && genreCategory.nameEn
                 ? genreCategory.nameEn
@@ -626,7 +630,7 @@ export default function CatalogPage() {
               <select
                 value={filters.sort}
                 onChange={(e) => handleFilterChange({ sort: e.target.value })}
-                className="appearance-none h-10 pl-3 pr-8 text-sm rounded-lg border border-border bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37]/50"
+                className="appearance-none h-10 pl-3 pr-8 text-sm rounded-lg border border-[#D4AF37]/20 bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37]/50 shadow-sm shadow-[#D4AF37]/5 hover:border-[#D4AF37]/40 transition-colors"
               >
                 {SORT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -648,13 +652,13 @@ export default function CatalogPage() {
                 <SlidersHorizontal className="h-4 w-4" />
                 <span>{t('catalog.filter', locale)}</span>
                 {hasActiveFilters && (
-                  <Badge className="h-5 w-5 p-0 flex items-center justify-center bg-[#D4AF37] text-white border-0 text-[10px] rounded-full">
+                  <Badge className="h-5 w-5 p-0 flex items-center justify-center bg-[#D4AF37] text-white border-0 text-[10px] rounded-full shadow-sm shadow-[#D4AF37]/30">
                     {activeFilters.length}
                   </Badge>
                 )}
               </Button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl">
+            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl glass backdrop-blur-xl bg-background/80 border-t border-[#D4AF37]/20 transition-all duration-300 ease-in-out">
               <SheetHeader className="pb-2">
                 <SheetTitle className="font-heading text-lg">
                   {t('catalog.filter', locale)}
@@ -730,7 +734,7 @@ export default function CatalogPage() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3, delay: 0.15 }}
-            className="hidden lg:block w-[240px] shrink-0"
+            className="hidden lg:block w-[240px] shrink-0 glass-card backdrop-blur-sm border border-[#D4AF37]/10"
           >
             <div className="sticky top-24">
               {categoriesLoading ? (
@@ -783,6 +787,8 @@ export default function CatalogPage() {
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ duration: 0.3, delay: index * 0.03 }}
+                        whileHover={{ y: -4 }}
+                        className="rounded-xl hover:card-glow transition-shadow duration-300"
                       >
                         <BookCard book={book} index={index} />
                       </motion.div>
@@ -827,10 +833,10 @@ export default function CatalogPage() {
                           key={item}
                           variant={currentPage === item ? 'default' : 'outline'}
                           size="icon"
-                          className={`h-9 w-9 ${
+                          className={`h-9 w-9 transition-all duration-200 ${
                             currentPage === item
-                              ? 'bg-[#D4AF37] text-white hover:bg-[#B8960C] border-[#D4AF37]'
-                              : 'border-border text-foreground hover:bg-muted hover:text-foreground'
+                              ? 'bg-[#D4AF37] text-white hover:bg-[#B8960C] border-[#D4AF37] shadow-md shadow-[#D4AF37]/30'
+                              : 'border-border text-foreground hover:bg-muted hover:text-foreground hover:border-[#D4AF37]/30'
                           }`}
                           onClick={() => setCurrentPage(item as number)}
                           aria-label={`Page ${item}`}

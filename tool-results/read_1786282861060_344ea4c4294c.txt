@@ -1,0 +1,869 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Search,
+     7→  Filter,
+     8→  X,
+     9→  SlidersHorizontal,
+    10→  ChevronLeft,
+    11→  ChevronRight,
+    12→  Star,
+    13→  BookOpen,
+    14→} from 'lucide-react';
+    15→import { Button } from '@/components/ui/button';
+    16→import { Input } from '@/components/ui/input';
+    17→import { Checkbox } from '@/components/ui/checkbox';
+    18→import { Skeleton } from '@/components/ui/skeleton';
+    19→import { Badge } from '@/components/ui/badge';
+    20→import {
+    21→  Sheet,
+    22→  SheetTrigger,
+    23→  SheetContent,
+    24→  SheetHeader,
+    25→  SheetTitle,
+    26→  SheetDescription,
+    27→} from '@/components/ui/sheet';
+    28→import { ScrollArea } from '@/components/ui/scroll-area';
+    29→import {
+    30→  Breadcrumb,
+    31→  BreadcrumbItem,
+    32→  BreadcrumbLink,
+    33→  BreadcrumbList,
+    34→  BreadcrumbPage,
+    35→  BreadcrumbSeparator,
+    36→} from '@/components/ui/breadcrumb';
+    37→import { useAppStore, formatPrice } from '@/lib/store';
+    38→import { t } from '@/lib/i18n';
+    39→import BookCard from '@/components/BookCard';
+    40→import type { Book, Category } from '@/types';
+    41→
+    42→const LIMIT = 12;
+    43→
+    44→const SORT_OPTIONS = [
+    45→  { value: 'newest', labelKey: 'catalog.sort.newest' },
+    46→  { value: 'bestseller', labelKey: 'catalog.sort.bestseller' },
+    47→  { value: 'priceLow', labelKey: 'catalog.sort.priceLow' },
+    48→  { value: 'priceHigh', labelKey: 'catalog.sort.priceHigh' },
+    49→  { value: 'rating', labelKey: 'catalog.sort.rating' },
+    50→];
+    51→
+    52→interface BooksResponse {
+    53→  books: Book[];
+    54→  total: number;
+    55→  page: number;
+    56→  limit: number;
+    57→}
+    58→
+    59→interface FilterState {
+    60→  genre?: string;
+    61→  minPrice?: number;
+    62→  maxPrice?: number;
+    63→  minRating?: number;
+    64→  sort: string;
+    65→}
+    66→
+    67→function StarSelector({
+    68→  value,
+    69→  onChange,
+    70→}: {
+    71→  value: number;
+    72→  onChange: (val: number) => void;
+    73→}) {
+    74→  const [hovered, setHovered] = useState(0);
+    75→
+    76→  return (
+    77→    <div className="flex items-center gap-0.5">
+    78→      {[1, 2, 3, 4, 5].map((star) => (
+    79→        <button
+    80→          key={star}
+    81→          type="button"
+    82→          onMouseEnter={() => setHovered(star)}
+    83→          onMouseLeave={() => setHovered(0)}
+    84→          onClick={() => onChange(value === star ? 0 : star)}
+    85→          className="p-0.5 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded"
+    86→          aria-label={`${star} stars`}
+    87→        >
+    88→          <Star
+    89→            className={`h-5 w-5 transition-colors ${
+    90→              star <= (hovered || value)
+    91→                ? 'fill-[#D4AF37] text-[#D4AF37]'
+    92→                : 'text-muted-foreground/30'
+    93→            }`}
+    94→          />
+    95→        </button>
+    96→      ))}
+    97→      {value > 0 && (
+    98→        <span className="ml-1 text-xs text-muted-foreground">{value}+</span>
+    99→      )}
+   100→    </div>
+   101→  );
+   102→}
+   103→
+   104→function FilterSidebar({
+   105→  categories,
+   106→  filters,
+   107→  onFilterChange,
+   108→  onReset,
+   109→  locale,
+   110→}: {
+   111→  categories: Category[];
+   112→  filters: FilterState;
+   113→  onFilterChange: (filters: Record<string, unknown>) => void;
+   114→  onReset: () => void;
+   115→  locale: 'id' | 'en';
+   116→}) {
+   117→  const [localPriceMin, setLocalPriceMin] = useState(
+   118→    filters.minPrice ? String(filters.minPrice) : ''
+   119→  );
+   120→  const [localPriceMax, setLocalPriceMax] = useState(
+   121→    filters.maxPrice ? String(filters.maxPrice) : ''
+   122→  );
+   123→
+   124→  const handlePriceSubmit = () => {
+   125→    const min = localPriceMin ? parseInt(localPriceMin, 10) : undefined;
+   126→    const max = localPriceMax ? parseInt(localPriceMax, 10) : undefined;
+   127→    onFilterChange({ minPrice: min, maxPrice: max });
+   128→  };
+   129→
+   130→  const selectedGenres = filters.genre
+   131→    ? filters.genre.split(',').filter(Boolean)
+   132→    : [];
+   133→
+   134→  const toggleGenre = (slug: string) => {
+   135→    const updated = selectedGenres.includes(slug)
+   136→      ? selectedGenres.filter((g) => g !== slug)
+   137→      : [...selectedGenres, slug];
+   138→    onFilterChange({ genre: updated.length > 0 ? updated.join(',') : undefined });
+   139→  };
+   140→
+   141→  return (
+   142→    <div className="space-y-6">
+   143→      {/* Sort */}
+   144→      <div>
+   145→        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+   146→          {t('catalog.sort', locale)}
+   147→        </h3>
+   148→        <div className="space-y-2">
+   149→          {SORT_OPTIONS.map((opt) => (
+   150→            <button
+   151→              key={opt.value}
+   152→              type="button"
+   153→              onClick={() => onFilterChange({ sort: opt.value })}
+   154→              className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+   155→                filters.sort === opt.value
+   156→                  ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-medium'
+   157→                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+   158→              }`}
+   159→            >
+   160→              {t(opt.labelKey, locale)}
+   161→            </button>
+   162→          ))}
+   163→        </div>
+   164→      </div>
+   165→
+   166→      {/* Divider */}
+   167→      <div className="border-t border-border" />
+   168→
+   169→      {/* Genre */}
+   170→      <div>
+   171→        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+   172→          {t('catalog.filter.genre', locale)}
+   173→        </h3>
+   174→        <ScrollArea className="max-h-56 overflow-y-auto">
+   175→          <div className="space-y-2.5 pr-1">
+   176→            {categories.map((cat) => (
+   177→              <label
+   178→                key={cat.id}
+   179→                className="flex items-center gap-2.5 cursor-pointer group"
+   180→              >
+   181→                <Checkbox
+   182→                  checked={selectedGenres.includes(cat.slug)}
+   183→                  onCheckedChange={() => toggleGenre(cat.slug)}
+   184→                  className="data-[state=checked]:bg-[#D4AF37] data-[state=checked]:border-[#D4AF37]"
+   185→                />
+   186→                <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors flex-1">
+   187→                  {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
+   188→                </span>
+   189→                <span className="text-xs text-muted-foreground/60">
+   190→                  {cat._count?.books || 0}
+   191→                </span>
+   192→              </label>
+   193→            ))}
+   194→          </div>
+   195→        </ScrollArea>
+   196→      </div>
+   197→
+   198→      {/* Divider */}
+   199→      <div className="border-t border-border" />
+   200→
+   201→      {/* Price Range */}
+   202→      <div>
+   203→        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+   204→          {t('catalog.filter.price', locale)}
+   205→        </h3>
+   206→        <div className="flex items-center gap-2">
+   207→          <Input
+   208→            type="number"
+   209→            placeholder="Min"
+   210→            value={localPriceMin}
+   211→            onChange={(e) => setLocalPriceMin(e.target.value)}
+   212→            className="h-9 text-sm"
+   213→            onKeyDown={(e) => e.key === 'Enter' && handlePriceSubmit()}
+   214→          />
+   215→          <span className="text-muted-foreground text-sm">—</span>
+   216→          <Input
+   217→            type="number"
+   218→            placeholder="Max"
+   219→            value={localPriceMax}
+   220→            onChange={(e) => setLocalPriceMax(e.target.value)}
+   221→            className="h-9 text-sm"
+   222→            onKeyDown={(e) => e.key === 'Enter' && handlePriceSubmit()}
+   223→          />
+   224→        </div>
+   225→        <Button
+   226→          variant="outline"
+   227→          size="sm"
+   228→          onClick={handlePriceSubmit}
+   229→          className="mt-2 w-full h-8 text-xs border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]"
+   230→        >
+   231→          {t('catalog.filter.apply', locale)}
+   232→        </Button>
+   233→      </div>
+   234→
+   235→      {/* Divider */}
+   236→      <div className="border-t border-border" />
+   237→
+   238→      {/* Rating */}
+   239→      <div>
+   240→        <h3 className="font-heading text-sm font-semibold uppercase tracking-wider mb-3 text-foreground">
+   241→          {t('catalog.filter.rating', locale)}
+   242→        </h3>
+   243→        <StarSelector
+   244→          value={filters.minRating || 0}
+   245→          onChange={(val) => onFilterChange({ minRating: val || undefined })}
+   246→        />
+   247→      </div>
+   248→
+   249→      {/* Reset */}
+   250→      <div className="pt-2">
+   251→        <Button
+   252→          variant="ghost"
+   253→          size="sm"
+   254→          onClick={onReset}
+   255→          className="w-full text-muted-foreground hover:text-foreground"
+   256→        >
+   257→          {t('catalog.filter.reset', locale)}
+   258→        </Button>
+   259→      </div>
+   260→    </div>
+   261→  );
+   262→}
+   263→
+   264→function BookGridSkeleton() {
+   265→  return (
+   266→    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+   267→      {Array.from({ length: 8 }).map((_, i) => (
+   268→        <div key={i} className="space-y-3">
+   269→          <Skeleton className="aspect-[2/3] w-full rounded-xl" />
+   270→          <Skeleton className="h-3 w-16" />
+   271→          <Skeleton className="h-4 w-full" />
+   272→          <Skeleton className="h-3 w-24" />
+   273→          <div className="flex items-center gap-1">
+   274→            {Array.from({ length: 5 }).map((_, j) => (
+   275→              <Skeleton key={j} className="h-3 w-3 rounded-full" />
+   276→            ))}
+   277→          </div>
+   278→          <Skeleton className="h-5 w-28" />
+   279→        </div>
+   280→      ))}
+   281→    </div>
+   282→  );
+   283→}
+   284→
+   285→function EmptyState({ locale }: { locale: 'id' | 'en' }) {
+   286→  return (
+   287→    <motion.div
+   288→      initial={{ opacity: 0, y: 20 }}
+   289→      animate={{ opacity: 1, y: 0 }}
+   290→      className="flex flex-col items-center justify-center py-20 px-4"
+   291→    >
+   292→      <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-5">
+   293→        <BookOpen className="w-10 h-10 text-muted-foreground" />
+   294→      </div>
+   295→      <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
+   296→        {t('catalog.noResults', locale)}
+   297→      </h3>
+   298→      <p className="text-sm text-muted-foreground text-center max-w-sm">
+   299→        {locale === 'id'
+   300→          ? 'Coba ubah filter atau kata kunci pencarian kamu'
+   301→          : 'Try adjusting your filters or search keywords'}
+   302→      </p>
+   303→    </motion.div>
+   304→  );
+   305→}
+   306→
+   307→export default function CatalogPage() {
+   308→  const { locale, pageParams, setPage, filters, setFilters, resetFilters } =
+   309→    useAppStore();
+   310→
+   311→  const [books, setBooks] = useState<Book[]>([]);
+   312→  const [categories, setCategories] = useState<Category[]>([]);
+   313→  const [total, setTotal] = useState(0);
+   314→  const [currentPage, setCurrentPage] = useState(1);
+   315→  const [loading, setLoading] = useState(true);
+   316→  const [categoriesLoading, setCategoriesLoading] = useState(true);
+   317→  const [searchInput, setSearchInput] = useState('');
+   318→  const [sheetOpen, setSheetOpen] = useState(false);
+   319→
+   320→  // Sync genre from pageParams on mount
+   321→  useEffect(() => {
+   322→    if (pageParams.genre && !filters.genre) {
+   323→      setFilters({ genre: pageParams.genre });
+   324→    }
+   325→    if (pageParams.search) {
+   326→      setSearchInput(pageParams.search);
+   327→    }
+   328→  }, []);
+   329→
+   330→  // Fetch categories
+   331→  useEffect(() => {
+   332→    let cancelled = false;
+   333→    const fetchCategories = async () => {
+   334→      try {
+   335→        const res = await fetch('/api/categories');
+   336→        if (res.ok && !cancelled) {
+   337→          const data = await res.json();
+   338→          setCategories(Array.isArray(data) ? data : data.categories || []);
+   339→        }
+   340→      } catch {
+   341→        // silently fail
+   342→      } finally {
+   343→        if (!cancelled) setCategoriesLoading(false);
+   344→      }
+   345→    };
+   346→    fetchCategories();
+   347→    return () => {
+   348→      cancelled = true;
+   349→    };
+   350→  }, []);
+   351→
+   352→  // Reset to page 1 when filters change (except page itself)
+   353→  useEffect(() => {
+   354→    setCurrentPage(1);
+   355→  }, [filters.genre, filters.minPrice, filters.maxPrice, filters.minRating, filters.sort, pageParams.search]);
+   356→
+   357→  // Fetch books
+   358→  useEffect(() => {
+   359→    let cancelled = false;
+   360→    const doFetch = async () => {
+   361→      setLoading(true);
+   362→      try {
+   363→        const params = new URLSearchParams();
+   364→        params.set('limit', String(LIMIT));
+   365→        params.set('page', String(currentPage));
+   366→
+   367→        if (filters.genre) params.set('genre', filters.genre);
+   368→        if (filters.minPrice !== undefined && filters.minPrice > 0)
+   369→          params.set('minPrice', String(filters.minPrice));
+   370→        if (filters.maxPrice !== undefined && filters.maxPrice > 0)
+   371→          params.set('maxPrice', String(filters.maxPrice));
+   372→        if (filters.minRating !== undefined && filters.minRating > 0)
+   373→          params.set('minRating', String(filters.minRating));
+   374→        if (filters.sort) params.set('sort', filters.sort);
+   375→        if (pageParams.search) params.set('search', pageParams.search);
+   376→
+   377→        const res = await fetch(`/api/books?${params.toString()}`);
+   378→        if (res.ok && !cancelled) {
+   379→          const data: BooksResponse = await res.json();
+   380→          setBooks(data.books || []);
+   381→          setTotal(data.total || 0);
+   382→        }
+   383→      } catch {
+   384→        // silently fail
+   385→      } finally {
+   386→        if (!cancelled) setLoading(false);
+   387→      }
+   388→    };
+   389→    doFetch();
+   390→    return () => {
+   391→      cancelled = true;
+   392→    };
+   393→  }, [filters, currentPage, pageParams.search]);
+   394→
+   395→  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+   396→
+   397→  const handleFilterChange = useCallback(
+   398→    (newFilters: Record<string, unknown>) => {
+   399→      setFilters(newFilters as Partial<FilterState>);
+   400→    },
+   401→    [setFilters]
+   402→  );
+   403→
+   404→  const handleReset = useCallback(() => {
+   405→    resetFilters();
+   406→    setSearchInput('');
+   407→    setCurrentPage(1);
+   408→    setPage('catalog', {});
+   409→  }, [resetFilters, setPage]);
+   410→
+   411→  const handleSearch = useCallback(
+   412→    (e: React.FormEvent) => {
+   413→      e.preventDefault();
+   414→      setPage('catalog', { ...pageParams, search: searchInput.trim() });
+   415→      setCurrentPage(1);
+   416→    },
+   417→    [searchInput, pageParams, setPage]
+   418→  );
+   419→
+   420→  // Active filter badges
+   421→  const activeFilters = useMemo(() => {
+   422→    const items: { key: string; label: string; clear: () => void }[] = [];
+   423→
+   424→    if (filters.genre) {
+   425→      const slugs = filters.genre.split(',').filter(Boolean);
+   426→      slugs.forEach((slug) => {
+   427→        const cat = categories.find((c) => c.slug === slug);
+   428→        const name = cat
+   429→          ? locale === 'en' && cat.nameEn
+   430→            ? cat.nameEn
+   431→            : cat.name
+   432→          : slug;
+   433→        items.push({
+   434→          key: `genre-${slug}`,
+   435→          label: name,
+   436→          clear: () => {
+   437→            const updated = slugs.filter((s) => s !== slug);
+   438→            setFilters({ genre: updated.length > 0 ? updated.join(',') : undefined });
+   439→          },
+   440→        });
+   441→      });
+   442→    }
+   443→
+   444→    if (filters.minPrice !== undefined && filters.minPrice > 0) {
+   445→      items.push({
+   446→        key: 'minPrice',
+   447→        label: `Min ${formatPrice(filters.minPrice, locale)}`,
+   448→        clear: () => setFilters({ minPrice: undefined }),
+   449→      });
+   450→    }
+   451→
+   452→    if (filters.maxPrice !== undefined && filters.maxPrice > 0) {
+   453→      items.push({
+   454→        key: 'maxPrice',
+   455→        label: `Max ${formatPrice(filters.maxPrice, locale)}`,
+   456→        clear: () => setFilters({ maxPrice: undefined }),
+   457→      });
+   458→    }
+   459→
+   460→    if (filters.minRating !== undefined && filters.minRating > 0) {
+   461→      items.push({
+   462→        key: 'minRating',
+   463→        label: `${filters.minRating}+ \u2605`,
+   464→        clear: () => setFilters({ minRating: undefined }),
+   465→      });
+   466→    }
+   467→
+   468→    if (pageParams.search) {
+   469→      items.push({
+   470→        key: 'search',
+   471→        label: `"${pageParams.search}"`,
+   472→        clear: () => {
+   473→          setSearchInput('');
+   474→          setPage('catalog', { ...pageParams, search: '' });
+   475→        },
+   476→      });
+   477→    }
+   478→
+   479→    return items;
+   480→  }, [filters, categories, locale, pageParams, setFilters, setPage]);
+   481→
+   482→  // Breadcrumb: if single genre filtered, show the category name
+   483→  const genreCategory = useMemo(() => {
+   484→    if (!filters.genre) return null;
+   485→    const slugs = filters.genre.split(',').filter(Boolean);
+   486→    if (slugs.length === 1) {
+   487→      return categories.find((c) => c.slug === slugs[0]) || null;
+   488→    }
+   489→    return null;
+   490→  }, [filters.genre, categories]);
+   491→
+   492→  const hasActiveFilters = activeFilters.length > 0;
+   493→
+   494→  const filterSidebar = (
+   495→    <FilterSidebar
+   496→      categories={categories}
+   497→      filters={filters}
+   498→      onFilterChange={handleFilterChange}
+   499→      onReset={handleReset}
+   500→      locale={locale}
+   501→    />
+   502→  );
+   503→
+   504→  // Pagination range
+   505→  const paginationRange = useMemo(() => {
+   506→    const pages: (number | string)[] = [];
+   507→    if (totalPages <= 7) {
+   508→      for (let i = 1; i <= totalPages; i++) pages.push(i);
+   509→    } else {
+   510→      pages.push(1);
+   511→      if (currentPage > 3) pages.push('...');
+   512→      const start = Math.max(2, currentPage - 1);
+   513→      const end = Math.min(totalPages - 1, currentPage + 1);
+   514→      for (let i = start; i <= end; i++) pages.push(i);
+   515→      if (currentPage < totalPages - 2) pages.push('...');
+   516→      pages.push(totalPages);
+   517→    }
+   518→    return pages;
+   519→  }, [currentPage, totalPages]);
+   520→
+   521→  return (
+   522→    <section className="min-h-screen bg-background">
+   523→      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+   524→        {/* Breadcrumb */}
+   525→        <motion.div
+   526→          initial={{ opacity: 0, y: -10 }}
+   527→          animate={{ opacity: 1, y: 0 }}
+   528→          transition={{ duration: 0.3 }}
+   529→          className="mb-6"
+   530→        >
+   531→          <Breadcrumb>
+   532→            <BreadcrumbList>
+   533→              <BreadcrumbItem>
+   534→                <BreadcrumbLink
+   535→                  href="#"
+   536→                  onClick={(e) => {
+   537→                    e.preventDefault();
+   538→                    setPage('home');
+   539→                  }}
+   540→                >
+   541→                  {t('nav.home', locale)}
+   542→                </BreadcrumbLink>
+   543→              </BreadcrumbItem>
+   544→              <BreadcrumbSeparator />
+   545→              {genreCategory ? (
+   546→                <>
+   547→                  <BreadcrumbItem>
+   548→                    <BreadcrumbLink
+   549→                      href="#"
+   550→                      onClick={(e) => {
+   551→                        e.preventDefault();
+   552→                        handleReset();
+   553→                      }}
+   554→                    >
+   555→                      {t('nav.catalog', locale)}
+   556→                    </BreadcrumbLink>
+   557→                  </BreadcrumbItem>
+   558→                  <BreadcrumbSeparator />
+   559→                  <BreadcrumbItem>
+   560→                    <BreadcrumbPage>
+   561→                      {locale === 'en' && genreCategory.nameEn
+   562→                        ? genreCategory.nameEn
+   563→                        : genreCategory.name}
+   564→                    </BreadcrumbPage>
+   565→                  </BreadcrumbItem>
+   566→                </>
+   567→              ) : (
+   568→                <BreadcrumbItem>
+   569→                  <BreadcrumbPage>
+   570→                    {t('catalog.title', locale)}
+   571→                  </BreadcrumbPage>
+   572→                </BreadcrumbItem>
+   573→              )}
+   574→            </BreadcrumbList>
+   575→          </Breadcrumb>
+   576→        </motion.div>
+   577→
+   578→        {/* Page Header */}
+   579→        <motion.div
+   580→          initial={{ opacity: 0, y: -10 }}
+   581→          animate={{ opacity: 1, y: 0 }}
+   582→          transition={{ duration: 0.3, delay: 0.05 }}
+   583→          className="mb-6"
+   584→        >
+   585→          <h1 className="font-heading text-2xl md:text-3xl font-bold text-foreground">
+   586→            {genreCategory
+   587→              ? locale === 'en' && genreCategory.nameEn
+   588→                ? genreCategory.nameEn
+   589→                : genreCategory.name
+   590→              : t('catalog.title', locale)}
+   591→          </h1>
+   592→          <p className="text-sm text-muted-foreground mt-1">
+   593→            {!loading && (
+   594→              <>
+   595→                {total} {t('catalog.results', locale)}
+   596→              </>
+   597→            )}
+   598→          </p>
+   599→        </motion.div>
+   600→
+   601→        {/* Search & Filter Bar */}
+   602→        <motion.div
+   603→          initial={{ opacity: 0, y: -10 }}
+   604→          animate={{ opacity: 1, y: 0 }}
+   605→          transition={{ duration: 0.3, delay: 0.1 }}
+   606→          className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6"
+   607→        >
+   608→          {/* Search */}
+   609→          <form onSubmit={handleSearch} className="relative flex-1">
+   610→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   611→            <Input
+   612→              type="text"
+   613→              placeholder={t('nav.search', locale)}
+   614→              value={searchInput}
+   615→              onChange={(e) => setSearchInput(e.target.value)}
+   616→              className="pl-10 h-10 bg-background border-border"
+   617→            />
+   618→          </form>
+   619→
+   620→          {/* Sort Select (Desktop) */}
+   621→          <div className="hidden sm:flex items-center gap-2">
+   622→            <span className="text-sm text-muted-foreground whitespace-nowrap">
+   623→              {t('catalog.sort', locale)}:
+   624→            </span>
+   625→            <div className="relative">
+   626→              <select
+   627→                value={filters.sort}
+   628→                onChange={(e) => handleFilterChange({ sort: e.target.value })}
+   629→                className="appearance-none h-10 pl-3 pr-8 text-sm rounded-lg border border-border bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37]/50"
+   630→              >
+   631→                {SORT_OPTIONS.map((opt) => (
+   632→                  <option key={opt.value} value={opt.value}>
+   633→                    {t(opt.labelKey, locale)}
+   634→                  </option>
+   635→                ))}
+   636→              </select>
+   637→              <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground rotate-90 pointer-events-none" />
+   638→            </div>
+   639→          </div>
+   640→
+   641→          {/* Mobile Filter Button */}
+   642→          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+   643→            <SheetTrigger asChild>
+   644→              <Button
+   645→                variant="outline"
+   646→                className="lg:hidden h-10 border-border gap-2"
+   647→              >
+   648→                <SlidersHorizontal className="h-4 w-4" />
+   649→                <span>{t('catalog.filter', locale)}</span>
+   650→                {hasActiveFilters && (
+   651→                  <Badge className="h-5 w-5 p-0 flex items-center justify-center bg-[#D4AF37] text-white border-0 text-[10px] rounded-full">
+   652→                    {activeFilters.length}
+   653→                  </Badge>
+   654→                )}
+   655→              </Button>
+   656→            </SheetTrigger>
+   657→            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl">
+   658→              <SheetHeader className="pb-2">
+   659→                <SheetTitle className="font-heading text-lg">
+   660→                  {t('catalog.filter', locale)}
+   661→                </SheetTitle>
+   662→                <SheetDescription>
+   663→                  {locale === 'id'
+   664→                    ? 'Sesuaikan pencarian kamu'
+   665→                    : 'Refine your search'}
+   666→                </SheetDescription>
+   667→              </SheetHeader>
+   668→              <ScrollArea className="flex-1 px-4 pb-4">
+   669→                {filterSidebar}
+   670→              </ScrollArea>
+   671→              <div className="p-4 border-t border-border">
+   672→                <Button
+   673→                  className="w-full bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+   674→                  onClick={() => setSheetOpen(false)}
+   675→                >
+   676→                  {locale === 'id'
+   677→                    ? 'Tampilkan Hasil'
+   678→                    : 'Show Results'}
+   679→                </Button>
+   680→              </div>
+   681→            </SheetContent>
+   682→          </Sheet>
+   683→        </motion.div>
+   684→
+   685→        {/* Active Filter Badges */}
+   686→        <AnimatePresence>
+   687→          {hasActiveFilters && (
+   688→            <motion.div
+   689→              initial={{ opacity: 0, height: 0 }}
+   690→              animate={{ opacity: 1, height: 'auto' }}
+   691→              exit={{ opacity: 0, height: 0 }}
+   692→              className="mb-6"
+   693→            >
+   694→              <div className="flex flex-wrap items-center gap-2">
+   695→                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+   696→                  <Filter className="h-3 w-3 inline mr-1" />
+   697→                  {locale === 'id' ? 'Filter aktif:' : 'Active filters:'}
+   698→                </span>
+   699→                {activeFilters.map((filter) => (
+   700→                  <Badge
+   701→                    key={filter.key}
+   702→                    variant="secondary"
+   703→                    className="gap-1.5 pr-1 py-1 text-xs bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20 hover:bg-[#D4AF37]/20 cursor-default"
+   704→                  >
+   705→                    <span>{filter.label}</span>
+   706→                    <button
+   707→                      onClick={filter.clear}
+   708→                      className="ml-0.5 rounded-full p-0.5 hover:bg-[#D4AF37]/20 transition-colors"
+   709→                      aria-label={`Remove ${filter.label} filter`}
+   710→                    >
+   711→                      <X className="h-3 w-3" />
+   712→                    </button>
+   713→                  </Badge>
+   714→                ))}
+   715→                <button
+   716→                  onClick={handleReset}
+   717→                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+   718→                >
+   719→                  {t('catalog.filter.reset', locale)}
+   720→                </button>
+   721→              </div>
+   722→            </motion.div>
+   723→          )}
+   724→        </AnimatePresence>
+   725→
+   726→        {/* Main Content: Sidebar + Grid */}
+   727→        <div className="flex gap-8">
+   728→          {/* Desktop Sidebar */}
+   729→          <motion.aside
+   730→            initial={{ opacity: 0, x: -20 }}
+   731→            animate={{ opacity: 1, x: 0 }}
+   732→            transition={{ duration: 0.3, delay: 0.15 }}
+   733→            className="hidden lg:block w-[240px] shrink-0"
+   734→          >
+   735→            <div className="sticky top-24">
+   736→              {categoriesLoading ? (
+   737→                <div className="space-y-6">
+   738→                  <Skeleton className="h-5 w-24" />
+   739→                  <div className="space-y-3">
+   740→                    {Array.from({ length: 5 }).map((_, i) => (
+   741→                      <Skeleton key={i} className="h-8 w-full" />
+   742→                    ))}
+   743→                  </div>
+   744→                  <Skeleton className="h-5 w-20" />
+   745→                  <div className="space-y-3">
+   746→                    {Array.from({ length: 6 }).map((_, i) => (
+   747→                      <div key={i} className="flex items-center gap-2.5">
+   748→                        <Skeleton className="h-4 w-4 rounded" />
+   749→                        <Skeleton className="h-4 flex-1" />
+   750→                      </div>
+   751→                    ))}
+   752→                  </div>
+   753→                  <Skeleton className="h-5 w-16" />
+   754→                  <div className="flex gap-2">
+   755→                    <Skeleton className="h-9 flex-1" />
+   756→                    <Skeleton className="h-9 flex-1" />
+   757→                  </div>
+   758→                  <Skeleton className="h-5 w-16" />
+   759→                  <Skeleton className="h-5 w-28" />
+   760→                </div>
+   761→              ) : (
+   762→                filterSidebar
+   763→              )}
+   764→            </div>
+   765→          </motion.aside>
+   766→
+   767→          {/* Book Grid + Pagination */}
+   768→          <div className="flex-1 min-w-0">
+   769→            {loading ? (
+   770→              <BookGridSkeleton />
+   771→            ) : books.length === 0 ? (
+   772→              <EmptyState locale={locale} />
+   773→            ) : (
+   774→              <>
+   775→                {/* Books Grid */}
+   776→                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+   777→                  <AnimatePresence mode="popLayout">
+   778→                    {books.map((book, index) => (
+   779→                      <motion.div
+   780→                        key={book.id}
+   781→                        layout
+   782→                        initial={{ opacity: 0, scale: 0.95 }}
+   783→                        animate={{ opacity: 1, scale: 1 }}
+   784→                        exit={{ opacity: 0, scale: 0.95 }}
+   785→                        transition={{ duration: 0.3, delay: index * 0.03 }}
+   786→                      >
+   787→                        <BookCard book={book} index={index} />
+   788→                      </motion.div>
+   789→                    ))}
+   790→                  </AnimatePresence>
+   791→                </div>
+   792→
+   793→                {/* Pagination */}
+   794→                {totalPages > 1 && (
+   795→                  <motion.nav
+   796→                    initial={{ opacity: 0, y: 10 }}
+   797→                    animate={{ opacity: 1, y: 0 }}
+   798→                    transition={{ duration: 0.3, delay: 0.2 }}
+   799→                    className="mt-10 flex items-center justify-center gap-1.5"
+   800→                    aria-label="Pagination"
+   801→                  >
+   802→                    {/* Prev */}
+   803→                    <Button
+   804→                      variant="outline"
+   805→                      size="icon"
+   806→                      className="h-9 w-9 border-border disabled:opacity-40"
+   807→                      disabled={currentPage <= 1}
+   808→                      onClick={() =>
+   809→                        setCurrentPage((p) => Math.max(1, p - 1))
+   810→                      }
+   811→                      aria-label={t('general.previous', locale)}
+   812→                    >
+   813→                      <ChevronLeft className="h-4 w-4" />
+   814→                    </Button>
+   815→
+   816→                    {/* Page Numbers */}
+   817→                    {paginationRange.map((item, idx) =>
+   818→                      item === '...' ? (
+   819→                        <span
+   820→                          key={`ellipsis-${idx}`}
+   821→                          className="flex h-9 w-9 items-center justify-center text-sm text-muted-foreground"
+   822→                        >
+   823→                          ...
+   824→                        </span>
+   825→                      ) : (
+   826→                        <Button
+   827→                          key={item}
+   828→                          variant={currentPage === item ? 'default' : 'outline'}
+   829→                          size="icon"
+   830→                          className={`h-9 w-9 ${
+   831→                            currentPage === item
+   832→                              ? 'bg-[#D4AF37] text-white hover:bg-[#B8960C] border-[#D4AF37]'
+   833→                              : 'border-border text-foreground hover:bg-muted hover:text-foreground'
+   834→                          }`}
+   835→                          onClick={() => setCurrentPage(item as number)}
+   836→                          aria-label={`Page ${item}`}
+   837→                          aria-current={
+   838→                            currentPage === item ? 'page' : undefined
+   839→                          }
+   840→                        >
+   841→                          {item}
+   842→                        </Button>
+   843→                      )
+   844→                    )}
+   845→
+   846→                    {/* Next */}
+   847→                    <Button
+   848→                      variant="outline"
+   849→                      size="icon"
+   850→                      className="h-9 w-9 border-border disabled:opacity-40"
+   851→                      disabled={currentPage >= totalPages}
+   852→                      onClick={() =>
+   853→                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+   854→                      }
+   855→                      aria-label={t('general.next', locale)}
+   856→                    >
+   857→                      <ChevronRight className="h-4 w-4" />
+   858→                    </Button>
+   859→                  </motion.nav>
+   860→                )}
+   861→              </>
+   862→            )}
+   863→          </div>
+   864→        </div>
+   865→      </div>
+   866→    </section>
+   867→  );
+   868→}
+   869→

@@ -192,7 +192,7 @@ export default function HomePage() {
           catsRes.json(),
           testRes.json(),
         ]);
-        setBooks(booksData);
+        setBooks(booksData.books || []);
         setCategories(catsData);
         setTestimonials(testData);
       } catch (err) {
@@ -246,72 +246,115 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
         </div>
 
+        {/* Radial gradient glow behind text */}
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(ellipse at 35% 40%, rgba(212,175,55,0.15) 0%, transparent 70%)',
+          }}
+        />
+
+        {/* Floating gold particles */}
+        <div className="absolute top-[15%] left-[10%] z-[2] h-2 w-2 rounded-full bg-[#D4AF37]/40 animate-float-subtle" />
+        <div className="absolute top-[25%] right-[20%] z-[2] h-1.5 w-1.5 rounded-full bg-[#D4AF37]/30 animate-float-subtle [animation-delay:0.5s]" />
+        <div className="absolute top-[60%] left-[8%] z-[2] h-1 w-1 rounded-full bg-[#E8D48B]/50 animate-float-subtle [animation-delay:1s]" />
+        <div className="absolute top-[70%] right-[15%] z-[2] h-2.5 w-2.5 rounded-full bg-[#D4AF37]/25 animate-float-subtle [animation-delay:1.5s]" />
+        <div className="absolute top-[40%] right-[35%] z-[2] h-1.5 w-1.5 rounded-full bg-[#D4AF37]/35 animate-float-subtle [animation-delay:2s]" />
+        <div className="absolute top-[80%] left-[25%] z-[2] h-1 w-1 rounded-full bg-[#E8D48B]/40 animate-float-subtle [animation-delay:0.8s]" />
+
         {/* Content */}
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pt-24 pb-16">
-          <div className="max-w-2xl">
-            {/* Gold pill */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5 text-sm text-[#E8D48B]">
-                <Sparkles className="h-3.5 w-3.5" />
-                Noveluxe
-              </div>
-            </motion.div>
-
-            {/* Title */}
-            <motion.h1
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.15 }}
-              className="mt-6 font-heading text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl leading-[1.1]"
-            >
-              {t('hero.title', locale)}
-            </motion.h1>
-
-            {/* Subtitle */}
-            <motion.p
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="mt-5 max-w-xl text-lg text-white/70 leading-relaxed"
-            >
-              {t('hero.subtitle', locale)}
-            </motion.p>
-
-            {/* CTA buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.45 }}
-              className="mt-8 flex flex-col sm:flex-row gap-4"
-            >
-              <Button
-                size="lg"
-                onClick={() => setPage('catalog')}
-                className="bg-[#D4AF37] hover:bg-[#B8960C] text-white h-12 px-8 text-base font-semibold shadow-lg shadow-[#D4AF37]/25 transition-all"
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.2 }}
+          >
+            <div className="max-w-2xl rounded-2xl border border-[#D4AF37]/15 p-6 sm:p-8 bg-black/10 backdrop-blur-[2px]">
+              {/* Gold pill */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
               >
-                {t('hero.cta1', locale)}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => setPage('catalog')}
-                className="border-white/25 text-white hover:bg-white/10 h-12 px-8 text-base transition-all"
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5 text-sm text-[#E8D48B]">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Noveluxe
+                </div>
+              </motion.div>
+
+              {/* Title */}
+              <motion.h1
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.15 }}
+                className="mt-6 font-heading text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl leading-[1.1]"
               >
-                {t('hero.cta2', locale)}
-              </Button>
-            </motion.div>
+                {t('hero.title', locale)}
+              </motion.h1>
+
+              {/* Decorative gold line divider */}
+              <div className="mt-5 w-16 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/60 to-transparent" />
+
+              {/* Subtitle */}
+              <motion.p
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="mt-4 max-w-xl text-lg text-white/70 leading-relaxed"
+              >
+                {t('hero.subtitle', locale)}
+              </motion.p>
+
+              {/* CTA buttons */}
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.45 }}
+                className="mt-8 flex flex-col sm:flex-row gap-4"
+              >
+                <Button
+                  size="lg"
+                  onClick={() => setPage('catalog')}
+                  className="bg-[#D4AF37] hover:bg-[#B8960C] text-white h-12 px-8 text-base font-semibold shadow-[0_0_30px_rgba(212,175,55,0.4)] hover:shadow-[0_0_40px_rgba(212,175,55,0.55)] transition-all"
+                >
+                  {t('hero.cta1', locale)}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => setPage('catalog')}
+                  className="border-[#D4AF37]/50 text-[#E8D48B] hover:bg-[#D4AF37]/15 hover:border-[#D4AF37] hover:shadow-[0_0_20px_rgba(212,175,55,0.25)] h-12 px-8 text-base transition-all"
+                >
+                  {t('hero.cta2', locale)}
+                </Button>
+              </motion.div>
+
+              {/* Stat badges */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.55 }}
+                className="mt-6 flex items-center gap-3"
+              >
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-xs font-medium text-[#E8D48B]">
+                  <BookOpen className="h-3 w-3" />
+                  18+ {locale === 'id' ? 'Judul' : 'Titles'}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-xs font-medium text-[#E8D48B]">
+                  <Users className="h-3 w-3" />
+                  5000+ {locale === 'id' ? 'Pembeli' : 'Buyers'}
+                </span>
+              </motion.div>
+            </div>
 
             {/* Stats */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.6 }}
-              className="mt-12 flex items-center gap-8 sm:gap-10 flex-wrap"
+              className="mt-10 flex items-center gap-8 sm:gap-10 flex-wrap px-2"
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D4AF37]/15">
@@ -343,7 +386,7 @@ export default function HomePage() {
                 </div>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -476,12 +519,16 @@ function PromoBanner({ locale }: { locale: 'id' | 'en' }) {
   return (
     <section ref={ref} className="py-16 sm:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* Gradient border wrapper with glow */}
+        <div className="relative rounded-[1.6rem] p-[2px] bg-gradient-to-br from-[#D4AF37] via-[#E8D48B] to-[#B8960C] shadow-[0_0_50px_rgba(212,175,55,0.3)]">
+          {/* Glass effect outer ring */}
+          <div className="absolute -inset-4 rounded-[2.2rem] bg-gradient-to-br from-[#D4AF37]/10 via-transparent to-[#D4AF37]/5 blur-xl pointer-events-none" />
         <motion.div
           initial="hidden"
           animate={inView ? 'visible' : 'hidden'}
           variants={fadeIn}
           custom={0}
-          className="relative overflow-hidden rounded-3xl"
+          className="relative overflow-hidden rounded-[calc(1.6rem-2px)]"
         >
           {/* Gold gradient background */}
           <div className="absolute inset-0 bg-gradient-to-br from-[#D4AF37] via-[#E8D48B] to-[#B8960C]" />
@@ -550,6 +597,7 @@ function PromoBanner({ locale }: { locale: 'id' | 'en' }) {
             </div>
           </div>
         </motion.div>
+        </div>
       </div>
     </section>
   );

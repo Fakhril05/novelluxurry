@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
 
     const orderBy: Record<string, string> = {};
     switch (sort) {
-      case 'price-asc': orderBy.price = 'asc'; break;
-      case 'price-desc': orderBy.price = 'desc'; break;
+      case 'priceLow': orderBy.price = 'asc'; break;
+      case 'priceHigh': orderBy.price = 'desc'; break;
       case 'rating': orderBy.rating = 'desc'; break;
       case 'bestseller': orderBy.soldCount = 'desc'; break;
       case 'newest':

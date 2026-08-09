@@ -363,7 +363,7 @@ export default function BookDetailPage() {
             className="space-y-4"
           >
             {/* Main cover image */}
-            <div className="relative overflow-hidden rounded-xl shadow-2xl shadow-black/10 bg-secondary">
+            <div className="relative overflow-hidden rounded-xl shadow-2xl shadow-[0_0_40px_rgba(212,175,55,0.3)] bg-secondary">
               <AnimatePresence mode="wait">
                 <motion.img
                   key={selectedImage}
@@ -427,7 +427,7 @@ export default function BookDetailPage() {
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="space-y-5"
+            className="space-y-5 glass-card backdrop-blur-sm border border-[#D4AF37]/10 rounded-2xl p-6"
           >
             {/* Badges (desktop duplicates for mobile visibility) */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -449,7 +449,7 @@ export default function BookDetailPage() {
             </div>
 
             {/* Title */}
-            <h1 className="font-heading text-3xl sm:text-4xl font-bold leading-tight tracking-tight">
+            <h1 className="font-heading text-3xl sm:text-4xl font-bold leading-tight tracking-tight text-gradient-gold">
               {book.title}
             </h1>
 
@@ -462,16 +462,16 @@ export default function BookDetailPage() {
               className="flex items-center gap-2 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-md"
               aria-label={`Scroll to reviews, ${book.rating} out of 5`}
             >
-              <div className="flex items-center">
+              <div className="flex items-center dark:drop-shadow-[0_0_6px_rgba(212,175,55,0.4)]">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Star
                     key={i}
-                    className={`h-5 w-5 transition-colors ${
+                    className={`h-5 w-5 transition-colors dark:drop-shadow-[0_0_3px_rgba(212,175,55,0.3)] ${
                       i < Math.floor(book.rating)
                         ? 'fill-[#D4AF37] text-[#D4AF37]'
                         : i < book.rating
                         ? 'fill-[#D4AF37]/50 text-[#D4AF37]'
-                        : 'text-muted-foreground/30'
+                        : 'text-muted-foreground/30 dark:text-muted-foreground/20'
                     }`}
                   />
                 ))}
@@ -516,7 +516,7 @@ export default function BookDetailPage() {
                       onClick={() => setSelectedFormat(fmt)}
                       className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
                         isActive
-                          ? 'bg-[#D4AF37] text-white border-[#D4AF37] shadow-md shadow-[#D4AF37]/20'
+                          ? 'border-[#D4AF37]/50 bg-[#D4AF37]/10 text-[#D4AF37] shadow-md shadow-[#D4AF37]/15'
                           : 'bg-muted/50 text-muted-foreground border-border hover:border-[#D4AF37]/40 hover:text-foreground'
                       }`}
                       aria-pressed={isActive}
@@ -524,7 +524,7 @@ export default function BookDetailPage() {
                       {fmt}
                       <span
                         className={`text-xs ${
-                          isActive ? 'text-white/80' : 'text-muted-foreground'
+                          isActive ? 'text-[#D4AF37]/70' : 'text-muted-foreground'
                         }`}
                       >
                         {formatPrice(fmtPrice, locale)}
@@ -596,7 +596,7 @@ export default function BookDetailPage() {
               <Button
                 onClick={handleAddToCart}
                 disabled={book.stock <= 0}
-                className="flex-1 bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold h-12 text-base rounded-xl shadow-lg shadow-[#D4AF37]/20 hover:shadow-xl hover:shadow-[#D4AF37]/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold h-12 text-base rounded-xl shadow-lg shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:shadow-xl hover:shadow-[0_0_30px_rgba(212,175,55,0.4)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ShoppingCart className="mr-2 h-5 w-5" />
                 {t('book.addCart', locale)}
@@ -689,22 +689,23 @@ export default function BookDetailPage() {
           transition={{ duration: 0.5, delay: 0.3 }}
         >
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full justify-start bg-muted/50 h-auto p-1 rounded-xl border border-border">
+            <TabsList className="w-full justify-start bg-muted/50 h-auto p-1 rounded-xl border border-border overflow-x-auto relative">
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/30 to-transparent" aria-hidden="true" />
               <TabsTrigger
                 value="synopsis"
-                className="flex-1 sm:flex-none data-[state=active]:bg-[#D4AF37] data-[state=active]:text-white rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200"
+                className="flex-1 sm:flex-none data-[state=active]:text-[#D4AF37] data-[state=active]:bg-transparent rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:w-3/4 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-[#D4AF37]"
               >
                 {t('book.synopsis', locale)}
               </TabsTrigger>
               <TabsTrigger
                 value="author"
-                className="flex-1 sm:flex-none data-[state=active]:bg-[#D4AF37] data-[state=active]:text-white rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200"
+                className="flex-1 sm:flex-none data-[state=active]:text-[#D4AF37] data-[state=active]:bg-transparent rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:w-3/4 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-[#D4AF37]"
               >
                 {t('book.author', locale)}
               </TabsTrigger>
               <TabsTrigger
                 value="reviews"
-                className="flex-1 sm:flex-none data-[state=active]:bg-[#D4AF37] data-[state=active]:text-white rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200"
+                className="flex-1 sm:flex-none data-[state=active]:text-[#D4AF37] data-[state=active]:bg-transparent rounded-lg px-6 py-2.5 text-sm font-medium transition-all duration-200 relative data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-1/2 data-[state=active]:after:-translate-x-1/2 data-[state=active]:after:w-3/4 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-[#D4AF37]"
               >
                 {t('book.reviews', locale)} ({reviews.length})
               </TabsTrigger>

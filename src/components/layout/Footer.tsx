@@ -3,7 +3,6 @@
 import { BookOpen, Mail, MapPin, Phone, Instagram, Twitter, Facebook, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useAppStore } from '@/lib/store';
 import { t } from '@/lib/i18n';
@@ -25,6 +24,8 @@ export default function Footer() {
 
   return (
     <footer className="bg-[#111111] text-white mt-auto">
+      {/* Gold gradient line at top */}
+      <div className="h-[1px] bg-gradient-to-r from-transparent via-[#D4AF37]/30 to-transparent" />
       {/* Newsletter */}
       <div className="border-b border-white/10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
@@ -37,7 +38,7 @@ export default function Footer() {
             </div>
             <form onSubmit={handleSubscribe} className="flex w-full md:w-auto gap-2">
               <Input name="email" type="email" required placeholder={t('newsletter.placeholder', locale)} className="h-11 w-full md:w-72 bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-[#D4AF37]/50 focus-visible:border-[#D4AF37]/50" />
-              <Button type="submit" className="h-11 px-6 bg-[#D4AF37] hover:bg-[#B8960C] text-white shrink-0 font-medium">
+              <Button type="submit" className="h-11 px-6 bg-[#D4AF37] hover:bg-[#B8960C] text-white shrink-0 font-medium relative overflow-hidden animate-pulse-gold">
                 {t('newsletter.button', locale)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -61,7 +62,7 @@ export default function Footer() {
             </p>
             <div className="flex items-center gap-2.5 mt-6">
               {[Instagram, Twitter, Facebook].map((Icon, i) => (
-                <a key={i} href="#" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-[#D4AF37]/20 hover:border-[#D4AF37]/30 transition-all duration-300" aria-label="Social media">
+                <a key={i} href="#" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-[#D4AF37]/20 hover:border-[#D4AF37]/30 hover:scale-110 transition-all duration-300" aria-label="Social media">
                   <Icon className="h-4 w-4" />
                 </a>
               ))}
@@ -78,7 +79,7 @@ export default function Footer() {
                 { label: 'FAQ', page: 'faq' as const },
               ].map((item) => (
                 <li key={item.page}>
-                  <button onClick={() => setPage(item.page)} className="text-sm text-white/40 hover:text-[#D4AF37] transition-colors">{item.label}</button>
+                  <button onClick={() => setPage(item.page)} className="text-sm text-white/40 hover:text-[#D4AF37] transition-all duration-300">{item.label}</button>
                 </li>
               ))}
             </ul>
@@ -94,7 +95,7 @@ export default function Footer() {
                 locale === 'id' ? 'Syarat & Ketentuan' : 'Terms & Conditions',
                 locale === 'id' ? 'Kebijakan Privasi' : 'Privacy Policy',
               ].map((item) => (
-                <li key={item}><span className="text-sm text-white/40 hover:text-[#D4AF37] transition-colors cursor-pointer">{item}</span></li>
+                <li key={item}><span className="text-sm text-white/40 hover:text-[#D4AF37] transition-all duration-300 cursor-pointer">{item}</span></li>
               ))}
             </ul>
           </div>
@@ -118,12 +119,13 @@ export default function Footer() {
           </div>
         </div>
 
-        <Separator className="my-8 bg-white/10" />
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-white/30">&copy; {new Date().getFullYear()} Noveluxe. {t('footer.rights', locale)}</p>
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-white/30 hover:text-[#D4AF37] transition-colors cursor-pointer">{t('footer.terms', locale)}</span>
-            <span className="text-xs text-white/30 hover:text-[#D4AF37] transition-colors cursor-pointer">{t('footer.privacy', locale)}</span>
+        <div className="border-t border-[#D4AF37]/10 pt-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-xs text-white/30">&copy; {new Date().getFullYear()} Noveluxe. {t('footer.rights', locale)}</p>
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-white/30 hover:text-[#D4AF37] transition-colors cursor-pointer">{t('footer.terms', locale)}</span>
+              <span className="text-xs text-white/30 hover:text-[#D4AF37] transition-colors cursor-pointer">{t('footer.privacy', locale)}</span>
+            </div>
           </div>
         </div>
       </div>

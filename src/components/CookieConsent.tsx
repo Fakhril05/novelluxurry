@@ -31,7 +31,7 @@ export default function CookieConsent() {
           animate={{ opacity: 1, y: 0, x: '-50%' }}
           exit={{ opacity: 0, y: 80, x: '-50%' }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="fixed bottom-6 left-1/2 z-50 w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl shadow-black/15"
+          className="fixed bottom-6 left-1/2 z-40 w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl shadow-black/15"
         >
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#D4AF37]/10">

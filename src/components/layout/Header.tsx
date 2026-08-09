@@ -93,7 +93,9 @@ export default function Header() {
   const darkMode = theme === 'dark';
 
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled ? (darkMode ? 'bg-[#0A0A0A]/90' : 'bg-white/90') + ' backdrop-blur-xl border-b border-border shadow-sm' : 'bg-transparent'}`}>
+    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled ? (darkMode ? 'bg-[#0A0A0A]/90' : 'bg-white/90') + ' backdrop-blur-[30px] border-b border-border shadow-sm' : 'bg-transparent'}`}>
+      {/* Gold glow line when scrolled */}
+      {isScrolled && <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#D4AF37]/40 to-transparent" />}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between md:h-20">
           {/* Logo */}
@@ -101,7 +103,7 @@ export default function Header() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D4AF37] text-white transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-[#D4AF37]/30">
               <BookOpen className="h-5 w-5" />
             </div>
-            <span className="font-heading text-xl font-bold tracking-tight md:text-2xl">
+            <span className="font-heading text-xl font-bold tracking-tight md:text-2xl transition-all duration-300 group-hover:drop-shadow-[0_0_15px_rgba(212,175,55,0.3)]">
               Novel<span className="text-[#D4AF37]">uxe</span>
             </span>
           </button>

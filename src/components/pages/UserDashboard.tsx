@@ -996,7 +996,7 @@ function PointsTab({ points, currentTier, nextTier, tierProgress, locale, format
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>{currentTier.min.toLocaleString()}</span>
                 <span>{locale === 'id'
-                  ? `${nextTier.min - points.toLocaleString()} poin lagi`
+                  ? `${(nextTier.min - points).toLocaleString()} poin lagi`
                   : `${(nextTier.min - points).toLocaleString()} points to go`}
                 </span>
                 <span>{nextTier.min.toLocaleString()}</span>

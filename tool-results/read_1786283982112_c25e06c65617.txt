@@ -1,0 +1,1111 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  User,
+     7→  Package,
+     8→  Heart,
+     9→  Star,
+    10→  Award,
+    11→  Edit,
+    12→  Save,
+    13→  X,
+    14→  BookOpen,
+    15→  MapPin,
+    16→  Phone,
+    17→  Mail,
+    18→  Calendar,
+    19→  Clock,
+    20→  ChevronRight,
+    21→} from 'lucide-react';
+    22→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    23→import { Button } from '@/components/ui/button';
+    24→import { Input } from '@/components/ui/input';
+    25→import { Card, CardContent, CardHeader } from '@/components/ui/card';
+    26→import { Badge } from '@/components/ui/badge';
+    27→import { Separator } from '@/components/ui/separator';
+    28→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    29→import { Progress } from '@/components/ui/progress';
+    30→import { Skeleton } from '@/components/ui/skeleton';
+    31→import { useAppStore, formatPrice } from '@/lib/store';
+    32→import { t } from '@/lib/i18n';
+    33→import type { Book } from '@/types';
+    34→import BookCard from '@/components/BookCard';
+    35→import { toast } from 'sonner';
+    36→
+    37→// --- Types ---
+    38→interface OrderItem {
+    39→  title: string;
+    40→  quantity: number;
+    41→  price: number;
+    42→  format: string;
+    43→  coverImage: string;
+    44→}
+    45→
+    46→interface Order {
+    47→  id: string;
+    48→  orderNumber: string;
+    49→  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+    50→  total: number;
+    51→  createdAt: string;
+    52→  items: OrderItem[];
+    53→}
+    54→
+    55→interface PointsHistoryEntry {
+    56→  id: string;
+    57→  type: 'earned' | 'redeemed';
+    58→  amount: number;
+    59→  description: string;
+    60→  date: string;
+    61→}
+    62→
+    63→interface TierInfo {
+    64→  name: string;
+    65→  min: number;
+    66→  max: number;
+    67→  color: string;
+    68→  bgColor: string;
+    69→  borderColor: string;
+    70→  icon: string;
+    71→}
+    72→
+    73→const TIERS: TierInfo[] = [
+    74→  { name: 'Bronze', min: 0, max: 499, color: 'text-amber-700', bgColor: 'bg-amber-100 dark:bg-amber-900/30', borderColor: 'border-amber-400', icon: '🥉' },
+    75→  { name: 'Silver', min: 500, max: 1999, color: 'text-gray-500 dark:text-gray-300', bgColor: 'bg-gray-100 dark:bg-gray-800', borderColor: 'border-gray-400', icon: '🥈' },
+    76→  { name: 'Gold', min: 2000, max: 4999, color: 'text-[#D4AF37]', bgColor: 'bg-[#D4AF37]/10', borderColor: 'border-[#D4AF37]', icon: '🥇' },
+    77→  { name: 'Platinum', min: 5000, max: Infinity, color: 'text-slate-400 dark:text-slate-200', bgColor: 'bg-slate-100 dark:bg-slate-800', borderColor: 'border-slate-400', icon: '💎' },
+    78→];
+    79→
+    80→const MOCK_POINTS_HISTORY: PointsHistoryEntry[] = [
+    81→  { id: '1', type: 'earned', amount: 150, description: 'Purchase order #NVX-20250115', date: '2025-01-15' },
+    82→  { id: '2', type: 'earned', amount: 80, description: 'Purchase order #NVX-20250102', date: '2025-01-02' },
+    83→  { id: '3', type: 'redeemed', amount: -500, description: 'Redeemed Rp5,000 voucher', date: '2024-12-28' },
+    84→  { id: '4', type: 'earned', amount: 200, description: 'Purchase order #NVX-20241220', date: '2024-12-20' },
+    85→  { id: '5', type: 'earned', amount: 120, description: 'Purchase order #NVX-20241210', date: '2024-12-10' },
+    86→  { id: '6', type: 'earned', amount: 300, description: 'Purchase order #NVX-20241125', date: '2024-11-25' },
+    87→  { id: '7', type: 'redeemed', amount: -200, description: 'Redeemed Rp2,000 voucher', date: '2024-11-15' },
+    88→  { id: '8', type: 'earned', amount: 90, description: 'Purchase order #NVX-20241101', date: '2024-11-01' },
+    89→];
+    90→
+    91→const STATUS_CONFIG: Record<string, { labelKey: string; color: string }> = {
+    92→  pending: { labelKey: 'dashboard.pending', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-300' },
+    93→  processing: { labelKey: 'dashboard.processing', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-300' },
+    94→  shipped: { labelKey: 'dashboard.shipped', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-300' },
+    95→  delivered: { labelKey: 'dashboard.delivered', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-300' },
+    96→  cancelled: { labelKey: 'dashboard.cancelled', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-300' },
+    97→};
+    98→
+    99→// --- Component ---
+   100→export default function UserDashboard() {
+   101→  const { user, isAuthenticated, locale, pageParams, setPage, wishlist, setUser } = useAppStore();
+   102→
+   103→  // Redirect if not authenticated
+   104→  useEffect(() => {
+   105→    if (!isAuthenticated || !user) {
+   106→      setPage('login');
+   107→    }
+   108→  }, [isAuthenticated, user, setPage]);
+   109→
+   110→  const activeTab = pageParams.tab || 'profile';
+   111→
+   112→  // --- Profile Edit State ---
+   113→  const [isEditing, setIsEditing] = useState(false);
+   114→  const [editForm, setEditForm] = useState({
+   115→    name: '',
+   116→    phone: '',
+   117→    address: '',
+   118→    city: '',
+   119→    postalCode: '',
+   120→  });
+   121→
+   122→  const startEditing = useCallback(() => {
+   123→    if (!user) return;
+   124→    setEditForm({
+   125→      name: user.name,
+   126→      phone: user.phone || '',
+   127→      address: user.address || '',
+   128→      city: user.city || '',
+   129→      postalCode: user.postalCode || '',
+   130→    });
+   131→    setIsEditing(true);
+   132→  }, [user]);
+   133→
+   134→  const cancelEditing = useCallback(() => {
+   135→    setIsEditing(false);
+   136→  }, []);
+   137→
+   138→  const saveProfile = useCallback(() => {
+   139→    if (!user) return;
+   140→    setUser({ ...user, ...editForm });
+   141→    setIsEditing(false);
+   142→    toast.success(locale === 'id' ? 'Profil berhasil diperbarui' : 'Profile updated successfully');
+   143→  }, [user, editForm, setUser, locale]);
+   144→
+   145→  // --- Orders State ---
+   146→  const [orders, setOrders] = useState<Order[]>([]);
+   147→  const [ordersLoading, setOrdersLoading] = useState(false);
+   148→
+   149→  const fetchOrders = useCallback(async () => {
+   150→    if (!user) return;
+   151→    setOrdersLoading(true);
+   152→    try {
+   153→      const res = await fetch(`/api/orders?userId=${user.id}`);
+   154→      if (res.ok) {
+   155→        const data = await res.json();
+   156→        setOrders(data.orders || data || []);
+   157→      }
+   158→    } catch {
+   159→      // silently fail
+   160→    } finally {
+   161→      setOrdersLoading(false);
+   162→    }
+   163→  }, [user]);
+   164→
+   165→  useEffect(() => {
+   166→    if (activeTab === 'orders') {
+   167→      fetchOrders();
+   168→    }
+   169→  }, [activeTab, fetchOrders]);
+   170→
+   171→  // --- Wishlist Books State ---
+   172→  const [wishlistBooks, setWishlistBooks] = useState<Book[]>([]);
+   173→  const [wishlistLoading, setWishlistLoading] = useState(false);
+   174→
+   175→  const fetchWishlistBooks = useCallback(async () => {
+   176→    if (wishlist.length === 0) {
+   177→      setWishlistBooks([]);
+   178→      return;
+   179→    }
+   180→    setWishlistLoading(true);
+   181→    try {
+   182→      const res = await fetch(`/api/books?ids=${wishlist.join(',')}`);
+   183→      if (res.ok) {
+   184→        const data = await res.json();
+   185→        setWishlistBooks(data.books || data || []);
+   186→      }
+   187→    } catch {
+   188→      // silently fail
+   189→    } finally {
+   190→      setWishlistLoading(false);
+   191→    }
+   192→  }, [wishlist]);
+   193→
+   194→  useEffect(() => {
+   195→    if (activeTab === 'wishlist') {
+   196→      fetchWishlistBooks();
+   197→    }
+   198→  }, [activeTab, fetchWishlistBooks]);
+   199→
+   200→  // --- Helpers ---
+   201→  const getInitials = (name: string) => {
+   202→    return name
+   203→      .split(' ')
+   204→      .map((n) => n[0])
+   205→      .join('')
+   206→      .toUpperCase()
+   207→      .slice(0, 2);
+   208→  };
+   209→
+   210→  const getCurrentTier = (points: number): TierInfo => {
+   211→    return TIERS.find((tier) => points >= tier.min && points < tier.max) || TIERS[TIERS.length - 1];
+   212→  };
+   213→
+   214→  const getNextTier = (points: number): TierInfo | null => {
+   215→    const currentIdx = TIERS.findIndex((tier) => points >= tier.min && points < tier.max);
+   216→    if (currentIdx === -1 || currentIdx === TIERS.length - 1) return null;
+   217→    return TIERS[currentIdx + 1];
+   218→  };
+   219→
+   220→  const getTierProgress = (points: number): number => {
+   221→    const current = getCurrentTier(points);
+   222→    const next = getNextTier(points);
+   223→    if (!next) return 100;
+   224→    const range = next.min - current.min;
+   225→    const progress = points - current.min;
+   226→    return Math.min(Math.round((progress / range) * 100), 100);
+   227→  };
+   228→
+   229→  const formatDate = (dateStr: string) => {
+   230→    const date = new Date(dateStr);
+   231→    return date.toLocaleDateString(locale === 'id' ? 'id-ID' : 'en-US', {
+   232→      year: 'numeric',
+   233→      month: 'short',
+   234→      day: 'numeric',
+   235→    });
+   236→  };
+   237→
+   238→  // Don't render until auth check is done
+   239→  if (!isAuthenticated || !user) {
+   240→    return null;
+   241→  }
+   242→
+   243→  const currentTier = getCurrentTier(user.points);
+   244→  const nextTier = getNextTier(user.points);
+   245→  const tierProgress = getTierProgress(user.points);
+   246→
+   247→  // --- Sidebar Tab Items ---
+   248→  const tabItems = [
+   249→    { value: 'profile', label: t('dashboard.profile', locale), icon: User },
+   250→    { value: 'orders', label: t('dashboard.orders', locale), icon: Package },
+   251→    { value: 'wishlist', label: t('dashboard.wishlist', locale), icon: Heart },
+   252→    { value: 'points', label: t('dashboard.points', locale), icon: Star },
+   253→  ];
+   254→
+   255→  const handleTabChange = (value: string) => {
+   256→    setPage('dashboard', { tab: value });
+   257→  };
+   258→
+   259→  return (
+   260→    <motion.div
+   261→      initial={{ opacity: 0, y: 20 }}
+   262→      animate={{ opacity: 1, y: 0 }}
+   263→      transition={{ duration: 0.4 }}
+   264→      className="min-h-screen"
+   265→    >
+   266→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+   267→        {/* Page Header */}
+   268→        <div className="mb-8">
+   269→          <h1 className="font-heading text-3xl font-bold text-foreground">
+   270→            {t('dashboard.title', locale)}
+   271→          </h1>
+   272→          <p className="mt-1 text-muted-foreground">
+   273→            {locale === 'id' ? 'Kelola akun dan lihat aktivitasmu' : 'Manage your account and view your activity'}
+   274→          </p>
+   275→        </div>
+   276→
+   277→        {/* Desktop: Sidebar Layout */}
+   278→        <div className="hidden lg:grid lg:grid-cols-[240px_1fr] lg:gap-8">
+   279→          {/* Sidebar */}
+   280→          <aside className="space-y-1">
+   281→            {tabItems.map((item) => {
+   282→              const Icon = item.icon;
+   283→              const isActive = activeTab === item.value;
+   284→              return (
+   285→                <button
+   286→                  key={item.value}
+   287→                  onClick={() => handleTabChange(item.value)}
+   288→                  className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 ${
+   289→                    isActive
+   290→                      ? 'bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20'
+   291→                      : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
+   292→                  }`}
+   293→                >
+   294→                  <Icon className="h-4 w-4" />
+   295→                  <span>{item.label}</span>
+   296→                  {item.value === 'wishlist' && wishlist.length > 0 && (
+   297→                    <span className={`ml-auto text-xs rounded-full px-2 py-0.5 ${
+   298→                      isActive ? 'bg-[#D4AF37] text-white' : 'bg-muted text-muted-foreground'
+   299→                    }`}>
+   300→                      {wishlist.length}
+   301→                    </span>
+   302→                  )}
+   303→                  {item.value === 'points' && (
+   304→                    <span className={`ml-auto text-xs font-semibold ${
+   305→                      isActive ? 'text-[#D4AF37]' : 'text-muted-foreground'
+   306→                    }`}>
+   307→                      {user.points.toLocaleString()}
+   308→                    </span>
+   309→                  )}
+   310→                </button>
+   311→              );
+   312→            })}
+   313→          </aside>
+   314→
+   315→          {/* Content */}
+   316→          <div>
+   317→            <AnimatePresence mode="wait">
+   318→              {activeTab === 'profile' && (
+   319→                <motion.div
+   320→                  key="profile"
+   321→                  initial={{ opacity: 0, x: 20 }}
+   322→                  animate={{ opacity: 1, x: 0 }}
+   323→                  exit={{ opacity: 0, x: -20 }}
+   324→                  transition={{ duration: 0.3 }}
+   325→                >
+   326→                  <ProfileTab
+   327→                    user={user}
+   328→                    locale={locale}
+   329→                    isEditing={isEditing}
+   330→                    editForm={editForm}
+   331→                    setEditForm={setEditForm}
+   332→                    onStartEdit={startEditing}
+   333→                    onCancelEdit={cancelEditing}
+   334→                    onSave={saveProfile}
+   335→                    getInitials={getInitials}
+   336→                  />
+   337→                </motion.div>
+   338→              )}
+   339→              {activeTab === 'orders' && (
+   340→                <motion.div
+   341→                  key="orders"
+   342→                  initial={{ opacity: 0, x: 20 }}
+   343→                  animate={{ opacity: 1, x: 0 }}
+   344→                  exit={{ opacity: 0, x: -20 }}
+   345→                  transition={{ duration: 0.3 }}
+   346→                >
+   347→                  <OrdersTab
+   348→                    orders={orders}
+   349→                    loading={ordersLoading}
+   350→                    locale={locale}
+   351→                    formatDate={formatDate}
+   352→                  />
+   353→                </motion.div>
+   354→              )}
+   355→              {activeTab === 'wishlist' && (
+   356→                <motion.div
+   357→                  key="wishlist"
+   358→                  initial={{ opacity: 0, x: 20 }}
+   359→                  animate={{ opacity: 1, x: 0 }}
+   360→                  exit={{ opacity: 0, x: -20 }}
+   361→                  transition={{ duration: 0.3 }}
+   362→                >
+   363→                  <WishlistTab
+   364→                    books={wishlistBooks}
+   365→                    loading={wishlistLoading}
+   366→                    locale={locale}
+   367→                  />
+   368→                </motion.div>
+   369→              )}
+   370→              {activeTab === 'points' && (
+   371→                <motion.div
+   372→                  key="points"
+   373→                  initial={{ opacity: 0, x: 20 }}
+   374→                  animate={{ opacity: 1, x: 0 }}
+   375→                  exit={{ opacity: 0, x: -20 }}
+   376→                  transition={{ duration: 0.3 }}
+   377→                >
+   378→                  <PointsTab
+   379→                    points={user.points}
+   380→                    currentTier={currentTier}
+   381→                    nextTier={nextTier}
+   382→                    tierProgress={tierProgress}
+   383→                    locale={locale}
+   384→                    formatDate={formatDate}
+   385→                  />
+   386→                </motion.div>
+   387→              )}
+   388→            </AnimatePresence>
+   389→          </div>
+   390→        </div>
+   391→
+   392→        {/* Mobile: Horizontal Tabs */}
+   393→        <div className="lg:hidden">
+   394→          <Tabs value={activeTab} onValueChange={handleTabChange}>
+   395→            <TabsList className="w-full bg-muted/50 h-auto p-1 flex flex-wrap gap-1">
+   396→              {tabItems.map((item) => {
+   397→                const Icon = item.icon;
+   398→                return (
+   399→                  <TabsTrigger
+   400→                    key={item.value}
+   401→                    value={item.value}
+   402→                    className="flex items-center gap-1.5 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-white data-[state=active]:shadow-sm text-xs px-3 py-2 rounded-md flex-1 justify-center"
+   403→                  >
+   404→                    <Icon className="h-3.5 w-3.5" />
+   405→                    <span className="hidden sm:inline">{item.label}</span>
+   406→                  </TabsTrigger>
+   407→                );
+   408→              })}
+   409→            </TabsList>
+   410→
+   411→            <div className="mt-6">
+   412→              <AnimatePresence mode="wait">
+   413→                <TabsContent value="profile" forceMount={activeTab === 'profile'}>
+   414→                  {activeTab === 'profile' && (
+   415→                    <motion.div
+   416→                      initial={{ opacity: 0, y: 10 }}
+   417→                      animate={{ opacity: 1, y: 0 }}
+   418→                      exit={{ opacity: 0, y: -10 }}
+   419→                      transition={{ duration: 0.25 }}
+   420→                    >
+   421→                      <ProfileTab
+   422→                        user={user}
+   423→                        locale={locale}
+   424→                        isEditing={isEditing}
+   425→                        editForm={editForm}
+   426→                        setEditForm={setEditForm}
+   427→                        onStartEdit={startEditing}
+   428→                        onCancelEdit={cancelEditing}
+   429→                        onSave={saveProfile}
+   430→                        getInitials={getInitials}
+   431→                      />
+   432→                    </motion.div>
+   433→                  )}
+   434→                </TabsContent>
+   435→                <TabsContent value="orders" forceMount={activeTab === 'orders'}>
+   436→                  {activeTab === 'orders' && (
+   437→                    <motion.div
+   438→                      initial={{ opacity: 0, y: 10 }}
+   439→                      animate={{ opacity: 1, y: 0 }}
+   440→                      exit={{ opacity: 0, y: -10 }}
+   441→                      transition={{ duration: 0.25 }}
+   442→                    >
+   443→                      <OrdersTab
+   444→                        orders={orders}
+   445→                        loading={ordersLoading}
+   446→                        locale={locale}
+   447→                        formatDate={formatDate}
+   448→                      />
+   449→                    </motion.div>
+   450→                  )}
+   451→                </TabsContent>
+   452→                <TabsContent value="wishlist" forceMount={activeTab === 'wishlist'}>
+   453→                  {activeTab === 'wishlist' && (
+   454→                    <motion.div
+   455→                      initial={{ opacity: 0, y: 10 }}
+   456→                      animate={{ opacity: 1, y: 0 }}
+   457→                      exit={{ opacity: 0, y: -10 }}
+   458→                      transition={{ duration: 0.25 }}
+   459→                    >
+   460→                      <WishlistTab
+   461→                        books={wishlistBooks}
+   462→                        loading={wishlistLoading}
+   463→                        locale={locale}
+   464→                      />
+   465→                    </motion.div>
+   466→                  )}
+   467→                </TabsContent>
+   468→                <TabsContent value="points" forceMount={activeTab === 'points'}>
+   469→                  {activeTab === 'points' && (
+   470→                    <motion.div
+   471→                      initial={{ opacity: 0, y: 10 }}
+   472→                      animate={{ opacity: 1, y: 0 }}
+   473→                      exit={{ opacity: 0, y: -10 }}
+   474→                      transition={{ duration: 0.25 }}
+   475→                    >
+   476→                      <PointsTab
+   477→                        points={user.points}
+   478→                        currentTier={currentTier}
+   479→                        nextTier={nextTier}
+   480→                        tierProgress={tierProgress}
+   481→                        locale={locale}
+   482→                        formatDate={formatDate}
+   483→                      />
+   484→                    </motion.div>
+   485→                  )}
+   486→                </TabsContent>
+   487→              </AnimatePresence>
+   488→            </div>
+   489→          </Tabs>
+   490→        </div>
+   491→      </div>
+   492→    </motion.div>
+   493→  );
+   494→}
+   495→
+   496→// --- Profile Tab ---
+   497→interface ProfileTabProps {
+   498→  user: {
+   499→    name: string;
+   500→    email: string;
+   501→    phone?: string | null;
+   502→    address?: string | null;
+   503→    city?: string | null;
+   504→    postalCode?: string | null;
+   505→    points: number;
+   506→  };
+   507→  locale: 'id' | 'en';
+   508→  isEditing: boolean;
+   509→  editForm: { name: string; phone: string; address: string; city: string; postalCode: string };
+   510→  setEditForm: React.Dispatch<React.SetStateAction<typeof editForm>>;
+   511→  onStartEdit: () => void;
+   512→  onCancelEdit: () => void;
+   513→  onSave: () => void;
+   514→  getInitials: (name: string) => string;
+   515→}
+   516→
+   517→function ProfileTab({ user, locale, isEditing, editForm, setEditForm, onStartEdit, onCancelEdit, onSave, getInitials }: ProfileTabProps) {
+   518→  return (
+   519→    <Card className="border-border/50">
+   520→      <CardHeader className="pb-4">
+   521→        <div className="flex items-center justify-between">
+   522→          <h2 className="font-heading text-xl font-semibold text-foreground">
+   523→            {t('dashboard.profile', locale)}
+   524→          </h2>
+   525→          {!isEditing ? (
+   526→            <Button
+   527→              variant="outline"
+   528→              size="sm"
+   529→              onClick={onStartEdit}
+   530→              className="gap-1.5 border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10"
+   531→            >
+   532→              <Edit className="h-3.5 w-3.5" />
+   533→              {t('dashboard.editProfile', locale)}
+   534→            </Button>
+   535→          ) : (
+   536→            <div className="flex gap-2">
+   537→              <Button
+   538→                size="sm"
+   539→                onClick={onSave}
+   540→                className="gap-1.5 bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+   541→              >
+   542→                <Save className="h-3.5 w-3.5" />
+   543→                {t('general.save', locale)}
+   544→              </Button>
+   545→              <Button
+   546→                variant="outline"
+   547→                size="sm"
+   548→                onClick={onCancelEdit}
+   549→                className="gap-1.5"
+   550→              >
+   551→                <X className="h-3.5 w-3.5" />
+   552→                {t('general.cancel', locale)}
+   553→              </Button>
+   554→            </div>
+   555→          )}
+   556→        </div>
+   557→      </CardHeader>
+   558→      <CardContent>
+   559→        <div className="flex flex-col sm:flex-row gap-6">
+   560→          {/* Avatar & Name Section */}
+   561→          <div className="flex flex-col items-center sm:items-start gap-4 sm:min-w-[200px]">
+   562→            <Avatar className="h-20 w-20 border-2 border-[#D4AF37] shadow-lg shadow-[#D4AF37]/20">
+   563→              <AvatarFallback className="bg-[#D4AF37] text-white text-2xl font-bold">
+   564→                {getInitials(user.name)}
+   565→              </AvatarFallback>
+   566→            </Avatar>
+   567→            <div className="text-center sm:text-left">
+   568→              {isEditing ? (
+   569→                <Input
+   570→                  value={editForm.name}
+   571→                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+   572→                  className="max-w-[240px] h-9"
+   573→                />
+   574→              ) : (
+   575→                <h3 className="font-heading text-lg font-semibold text-foreground">{user.name}</h3>
+   576→              )}
+   577→              <div className="flex items-center gap-1.5 mt-1.5">
+   578→                <Star className="h-4 w-4 fill-[#D4AF37] text-[#D4AF37]" />
+   579→                <span className="text-sm font-bold text-[#D4AF37]">
+   580→                  {user.points.toLocaleString()} {t('points.label', locale)}
+   581→                </span>
+   582→              </div>
+   583→            </div>
+   584→          </div>
+   585→
+   586→          {/* Details Section */}
+   587→          <div className="flex-1 space-y-4">
+   588→            <Separator />
+   589→
+   590→            <div className="grid gap-4 sm:grid-cols-2">
+   591→              {/* Email */}
+   592→              <div className="flex items-start gap-3">
+   593→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   594→                  <Mail className="h-4 w-4 text-muted-foreground" />
+   595→                </div>
+   596→                <div className="min-w-0">
+   597→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   598→                    {t('auth.email', locale)}
+   599→                  </p>
+   600→                  <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
+   601→                </div>
+   602→              </div>
+   603→
+   604→              {/* Phone */}
+   605→              <div className="flex items-start gap-3">
+   606→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   607→                  <Phone className="h-4 w-4 text-muted-foreground" />
+   608→                </div>
+   609→                <div className="min-w-0 flex-1">
+   610→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   611→                    {t('checkout.phone', locale)}
+   612→                  </p>
+   613→                  {isEditing ? (
+   614→                    <Input
+   615→                      value={editForm.phone}
+   616→                      onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+   617→                      className="h-9 mt-0.5"
+   618→                      placeholder="08xxxxxxxxxx"
+   619→                    />
+   620→                  ) : (
+   621→                    <p className="text-sm font-medium text-foreground">
+   622→                      {user.phone || (locale === 'id' ? 'Belum diisi' : 'Not set')}
+   623→                    </p>
+   624→                  )}
+   625→                </div>
+   626→              </div>
+   627→
+   628→              {/* Address */}
+   629→              <div className="flex items-start gap-3 sm:col-span-2">
+   630→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   631→                  <MapPin className="h-4 w-4 text-muted-foreground" />
+   632→                </div>
+   633→                <div className="min-w-0 flex-1">
+   634→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   635→                    {t('checkout.addressField', locale)}
+   636→                  </p>
+   637→                  {isEditing ? (
+   638→                    <Input
+   639→                      value={editForm.address}
+   640→                      onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+   641→                      className="h-9 mt-0.5"
+   642→                      placeholder={locale === 'id' ? 'Jl. Contoh No. 123' : '123 Example St.'}
+   643→                    />
+   644→                  ) : (
+   645→                    <p className="text-sm font-medium text-foreground">
+   646→                      {user.address || (locale === 'id' ? 'Belum diisi' : 'Not set')}
+   647→                    </p>
+   648→                  )}
+   649→                </div>
+   650→              </div>
+   651→
+   652→              {/* City */}
+   653→              <div className="flex items-start gap-3">
+   654→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   655→                  <MapPin className="h-4 w-4 text-muted-foreground" />
+   656→                </div>
+   657→                <div className="min-w-0 flex-1">
+   658→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   659→                    {t('checkout.city', locale)}
+   660→                  </p>
+   661→                  {isEditing ? (
+   662→                    <Input
+   663→                      value={editForm.city}
+   664→                      onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
+   665→                      className="h-9 mt-0.5"
+   666→                      placeholder={locale === 'id' ? 'Jakarta' : 'City'}
+   667→                    />
+   668→                  ) : (
+   669→                    <p className="text-sm font-medium text-foreground">
+   670→                      {user.city || (locale === 'id' ? 'Belum diisi' : 'Not set')}
+   671→                    </p>
+   672→                  )}
+   673→                </div>
+   674→              </div>
+   675→
+   676→              {/* Postal Code */}
+   677→              <div className="flex items-start gap-3">
+   678→                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+   679→                  <MapPin className="h-4 w-4 text-muted-foreground" />
+   680→                </div>
+   681→                <div className="min-w-0 flex-1">
+   682→                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+   683→                    {t('checkout.postal', locale)}
+   684→                  </p>
+   685→                  {isEditing ? (
+   686→                    <Input
+   687→                      value={editForm.postalCode}
+   688→                      onChange={(e) => setEditForm((f) => ({ ...f, postalCode: e.target.value }))}
+   689→                      className="h-9 mt-0.5"
+   690→                      placeholder="12345"
+   691→                    />
+   692→                  ) : (
+   693→                    <p className="text-sm font-medium text-foreground">
+   694→                      {user.postalCode || (locale === 'id' ? 'Belum diisi' : 'Not set')}
+   695→                    </p>
+   696→                  )}
+   697→                </div>
+   698→              </div>
+   699→            </div>
+   700→          </div>
+   701→        </div>
+   702→      </CardContent>
+   703→    </Card>
+   704→  );
+   705→}
+   706→
+   707→// --- Orders Tab ---
+   708→interface OrdersTabProps {
+   709→  orders: Order[];
+   710→  loading: boolean;
+   711→  locale: 'id' | 'en';
+   712→  formatDate: (dateStr: string) => string;
+   713→}
+   714→
+   715→function OrdersTab({ orders, loading, locale, formatDate }: OrdersTabProps) {
+   716→  if (loading) {
+   717→    return (
+   718→      <div className="space-y-4">
+   719→        <h2 className="font-heading text-xl font-semibold text-foreground">
+   720→          {t('dashboard.orderHistory', locale)}
+   721→        </h2>
+   722→        {Array.from({ length: 3 }).map((_, i) => (
+   723→          <Card key={i} className="border-border/50">
+   724→            <CardContent className="p-6 space-y-3">
+   725→              <div className="flex justify-between">
+   726→                <Skeleton className="h-5 w-32" />
+   727→                <Skeleton className="h-6 w-20 rounded-full" />
+   728→              </div>
+   729→              <Skeleton className="h-4 w-24" />
+   730→              <Separator />
+   731→              <div className="space-y-2">
+   732→                <Skeleton className="h-4 w-full" />
+   733→                <Skeleton className="h-4 w-3/4" />
+   734→              </div>
+   735→            </CardContent>
+   736→          </Card>
+   737→        ))}
+   738→      </div>
+   739→    );
+   740→  }
+   741→
+   742→  return (
+   743→    <div>
+   744→      <h2 className="font-heading text-xl font-semibold text-foreground mb-6">
+   745→        {t('dashboard.orderHistory', locale)}
+   746→      </h2>
+   747→
+   748→      {orders.length === 0 ? (
+   749→        <motion.div
+   750→          initial={{ opacity: 0, scale: 0.95 }}
+   751→          animate={{ opacity: 1, scale: 1 }}
+   752→          className="flex flex-col items-center justify-center py-16 text-center"
+   753→        >
+   754→          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
+   755→            <Package className="h-8 w-8 text-muted-foreground" />
+   756→          </div>
+   757→          <p className="text-lg font-medium text-foreground mb-1">
+   758→            {t('dashboard.noOrders', locale)}
+   759→          </p>
+   760→          <p className="text-sm text-muted-foreground">
+   761→            {locale === 'id'
+   762→              ? 'Mulai belanja dan pesananmu akan muncul di sini'
+   763→              : 'Start shopping and your orders will appear here'}
+   764→          </p>
+   765→          <Button
+   766→            onClick={() => useAppStore.getState().setPage('catalog')}
+   767→            className="mt-6 bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+   768→          >
+   769→            {locale === 'id' ? 'Belanja Sekarang' : 'Shop Now'}
+   770→          </Button>
+   771→        </motion.div>
+   772→      ) : (
+   773→        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1 scrollbar-thin">
+   774→          {orders.map((order, idx) => {
+   775→            const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+   776→            return (
+   777→              <motion.div
+   778→                key={order.id}
+   779→                initial={{ opacity: 0, y: 10 }}
+   780→                animate={{ opacity: 1, y: 0 }}
+   781→                transition={{ duration: 0.3, delay: idx * 0.05 }}
+   782→              >
+   783→                <Card className="border-border/50 hover:border-[#D4AF37]/20 transition-colors">
+   784→                  <CardContent className="p-5">
+   785→                    {/* Header Row */}
+   786→                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+   787→                      <div className="flex items-center gap-3">
+   788→                        <span className="font-mono text-sm font-semibold text-foreground">
+   789→                          {order.orderNumber}
+   790→                        </span>
+   791→                        <Badge
+   792→                          variant="outline"
+   793→                          className={`${statusCfg.color} text-[11px] font-semibold border`}
+   794→                        >
+   795→                          {t(statusCfg.labelKey, locale)}
+   796→                        </Badge>
+   797→                      </div>
+   798→                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   799→                        <Calendar className="h-3.5 w-3.5" />
+   800→                        {formatDate(order.createdAt)}
+   801→                      </div>
+   802→                    </div>
+   803→
+   804→                    {/* Items List */}
+   805→                    <div className="space-y-2 mb-4">
+   806→                      {order.items?.map((item, i) => (
+   807→                        <div
+   808→                          key={i}
+   809→                          className="flex items-center gap-3 py-1.5"
+   810→                        >
+   811→                          <div className="h-10 w-7 shrink-0 rounded bg-muted overflow-hidden">
+   812→                            {item.coverImage && (
+   813→                              <img
+   814→                                src={item.coverImage}
+   815→                                alt={item.title}
+   816→                                className="h-full w-full object-cover"
+   817→                              />
+   818→                            )}
+   819→                          </div>
+   820→                          <div className="flex-1 min-w-0">
+   821→                            <p className="text-sm font-medium text-foreground truncate">
+   822→                              {item.title}
+   823→                            </p>
+   824→                            <p className="text-xs text-muted-foreground">
+   825→                              {item.format} × {item.quantity}
+   826→                            </p>
+   827→                          </div>
+   828→                          <span className="text-sm font-medium text-foreground shrink-0">
+   829→                            {formatPrice(item.price * item.quantity, locale)}
+   830→                          </span>
+   831→                        </div>
+   832→                      ))}
+   833→                    </div>
+   834→
+   835→                    <Separator className="mb-3" />
+   836→
+   837→                    {/* Total */}
+   838→                    <div className="flex items-center justify-between">
+   839→                      <span className="text-sm text-muted-foreground">
+   840→                        {t('cart.total', locale)}
+   841→                      </span>
+   842→                      <span className="text-base font-bold text-[#D4AF37]">
+   843→                        {formatPrice(order.total, locale)}
+   844→                      </span>
+   845→                    </div>
+   846→                  </CardContent>
+   847→                </Card>
+   848→              </motion.div>
+   849→            );
+   850→          })}
+   851→        </div>
+   852→      )}
+   853→    </div>
+   854→  );
+   855→}
+   856→
+   857→// --- Wishlist Tab ---
+   858→interface WishlistTabProps {
+   859→  books: Book[];
+   860→  loading: boolean;
+   861→  locale: 'id' | 'en';
+   862→}
+   863→
+   864→function WishlistTab({ books, loading, locale }: WishlistTabProps) {
+   865→  const wishlist = useAppStore((s) => s.wishlist);
+   866→
+   867→  if (loading) {
+   868→    return (
+   869→      <div>
+   870→        <h2 className="font-heading text-xl font-semibold text-foreground mb-6">
+   871→          {t('dashboard.wishlist', locale)}
+   872→        </h2>
+   873→        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+   874→          {Array.from({ length: 4 }).map((_, i) => (
+   875→            <div key={i} className="space-y-2.5">
+   876→              <Skeleton className="aspect-[2/3] w-full rounded-xl" />
+   877→              <Skeleton className="h-4 w-3/4" />
+   878→              <Skeleton className="h-3 w-1/2" />
+   879→              <Skeleton className="h-4 w-1/3" />
+   880→            </div>
+   881→          ))}
+   882→        </div>
+   883→      </div>
+   884→    );
+   885→  }
+   886→
+   887→  return (
+   888→    <div>
+   889→      <h2 className="font-heading text-xl font-semibold text-foreground mb-6">
+   890→        {t('dashboard.wishlist', locale)}
+   891→      </h2>
+   892→
+   893→      {wishlist.length === 0 ? (
+   894→        <motion.div
+   895→          initial={{ opacity: 0, scale: 0.95 }}
+   896→          animate={{ opacity: 1, scale: 1 }}
+   897→          className="flex flex-col items-center justify-center py-16 text-center"
+   898→        >
+   899→          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
+   900→            <Heart className="h-8 w-8 text-muted-foreground" />
+   901→          </div>
+   902→          <p className="text-lg font-medium text-foreground mb-1">
+   903→            {locale === 'id' ? 'Wishlist kosong' : 'Wishlist is empty'}
+   904→          </p>
+   905→          <p className="text-sm text-muted-foreground">
+   906→            {locale === 'id'
+   907→              ? 'Simpan novel favoritmu agar mudah ditemukan'
+   908→              : 'Save your favorite novels for easy access'}
+   909→          </p>
+   910→          <Button
+   911→            onClick={() => useAppStore.getState().setPage('catalog')}
+   912→            className="mt-6 bg-[#D4AF37] text-white hover:bg-[#B8960C]"
+   913→          >
+   914→            {locale === 'id' ? 'Jelajahi Katalog' : 'Explore Catalog'}
+   915→          </Button>
+   916→        </motion.div>
+   917→      ) : (
+   918→        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+   919→          {books.map((book, idx) => (
+   920→            <BookCard key={book.id} book={book} index={idx} />
+   921→          ))}
+   922→        </div>
+   923→      )}
+   924→    </div>
+   925→  );
+   926→}
+   927→
+   928→// --- Points Tab ---
+   929→interface PointsTabProps {
+   930→  points: number;
+   931→  currentTier: TierInfo;
+   932→  nextTier: TierInfo | null;
+   933→  tierProgress: number;
+   934→  locale: 'id' | 'en';
+   935→  formatDate: (dateStr: string) => string;
+   936→}
+   937→
+   938→function PointsTab({ points, currentTier, nextTier, tierProgress, locale, formatDate }: PointsTabProps) {
+   939→  return (
+   940→    <div className="space-y-6">
+   941→      <h2 className="font-heading text-xl font-semibold text-foreground">
+   942→        {t('dashboard.points', locale)}
+   943→      </h2>
+   944→
+   945→      {/* Points Summary Card */}
+   946→      <Card className="border-border/50 overflow-hidden">
+   947→        <div className="bg-gradient-to-r from-[#D4AF37]/10 via-[#D4AF37]/5 to-transparent p-6">
+   948→          <div className="flex flex-col sm:flex-row items-center gap-6">
+   949→            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+   950→              <Award className="h-10 w-10 text-[#D4AF37]" />
+   951→            </div>
+   952→            <div className="flex-1 text-center sm:text-left">
+   953→              <p className="text-sm text-muted-foreground mb-1">
+   954→                {locale === 'id' ? 'Total Poin Kamu' : 'Your Total Points'}
+   955→              </p>
+   956→              <p className="text-4xl font-bold text-[#D4AF37] font-heading">
+   957→                {points.toLocaleString()}
+   958→              </p>
+   959→              <p className="text-sm text-muted-foreground mt-1">
+   960→                {locale === 'id'
+   961→                  ? `Tier saat ini: `
+   962→                  : 'Current tier: '}
+   963→                <span className={`font-semibold ${currentTier.color}`}>
+   964→                  {currentTier.icon} {currentTier.name}
+   965→                </span>
+   966→              </p>
+   967→            </div>
+   968→          </div>
+   969→        </div>
+   970→
+   971→        <CardContent className="p-6">
+   972→          {/* Tier Progress */}
+   973→          {nextTier && (
+   974→            <div className="space-y-3">
+   975→              <div className="flex items-center justify-between text-sm">
+   976→                <span className={`font-medium ${currentTier.color}`}>
+   977→                  {currentTier.icon} {currentTier.name}
+   978→                </span>
+   979→                <span className="text-muted-foreground">
+   980→                  <ChevronRight className="inline h-4 w-4" />
+   981→                </span>
+   982→                <span className={`font-medium ${nextTier.color}`}>
+   983→                  {nextTier.icon} {nextTier.name}
+   984→                </span>
+   985→              </div>
+   986→              <div className="relative">
+   987→                <Progress
+   988→                  value={tierProgress}
+   989→                  className="h-3 bg-muted rounded-full"
+   990→                />
+   991→                <div
+   992→                  className="absolute top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-[#D4AF37] border-2 border-background shadow-md transition-all duration-500"
+   993→                  style={{ left: `calc(${tierProgress}% - 10px)` }}
+   994→                />
+   995→              </div>
+   996→              <div className="flex justify-between text-xs text-muted-foreground">
+   997→                <span>{currentTier.min.toLocaleString()}</span>
+   998→                <span>{locale === 'id'
+   999→                  ? `${nextTier.min - points.toLocaleString()} poin lagi`
+  1000→                  : `${(nextTier.min - points).toLocaleString()} points to go`}
+  1001→                </span>
+  1002→                <span>{nextTier.min.toLocaleString()}</span>
+  1003→              </div>
+  1004→            </div>
+  1005→          )}
+  1006→
+  1007→          {!nextTier && (
+  1008→            <div className="text-center py-4">
+  1009→              <p className="text-sm text-muted-foreground">
+  1010→                {locale === 'id'
+  1011→                  ? '🎉 Kamu sudah mencapai tier tertinggi!'
+  1012→                  : '🎉 You\'ve reached the highest tier!'}
+  1013→              </p>
+  1014→            </div>
+  1015→          )}
+  1016→        </CardContent>
+  1017→      </Card>
+  1018→
+  1019→      {/* Tier Overview */}
+  1020→      <Card className="border-border/50">
+  1021→        <CardHeader className="pb-3">
+  1022→          <h3 className="font-heading text-lg font-semibold text-foreground">
+  1023→            {locale === 'id' ? 'Tier Overview' : 'Tier Overview'}
+  1024→          </h3>
+  1025→        </CardHeader>
+  1026→        <CardContent>
+  1027→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  1028→            {TIERS.map((tier) => {
+  1029→              const isCurrentTier = tier.name === currentTier.name;
+  1030→              return (
+  1031→                <div
+  1032→                  key={tier.name}
+  1033→                  className={`rounded-xl border p-4 text-center transition-all ${
+  1034→                    isCurrentTier
+  1035→                      ? `${tier.bgColor} ${tier.borderColor} border-2 shadow-md`
+  1036→                      : 'border-border/50 bg-card'
+  1037→                  }`}
+  1038→                >
+  1039→                  <span className="text-2xl">{tier.icon}</span>
+  1040→                  <p className={`text-sm font-semibold mt-1.5 ${isCurrentTier ? tier.color : 'text-foreground'}`}>
+  1041→                    {tier.name}
+  1042→                  </p>
+  1043→                  <p className="text-xs text-muted-foreground mt-0.5">
+  1044→                    {tier.max === Infinity
+  1045→                      ? `${tier.min.toLocaleString()}+`
+  1046→                      : `${tier.min.toLocaleString()} - ${tier.max.toLocaleString()}`}
+  1047→                  </p>
+  1048→                </div>
+  1049→              );
+  1050→            })}
+  1051→          </div>
+  1052→        </CardContent>
+  1053→      </Card>
+  1054→
+  1055→      {/* Points History */}
+  1056→      <Card className="border-border/50">
+  1057→        <CardHeader className="pb-3">
+  1058→          <h3 className="font-heading text-lg font-semibold text-foreground">
+  1059→            {locale === 'id' ? 'Riwayat Poin' : 'Points History'}
+  1060→          </h3>
+  1061→        </CardHeader>
+  1062→        <CardContent>
+  1063→          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1 scrollbar-thin">
+  1064→            {MOCK_POINTS_HISTORY.map((entry, idx) => (
+  1065→              <motion.div
+  1066→                key={entry.id}
+  1067→                initial={{ opacity: 0, x: -10 }}
+  1068→                animate={{ opacity: 1, x: 0 }}
+  1069→                transition={{ duration: 0.2, delay: idx * 0.03 }}
+  1070→                className="flex items-center gap-4 py-2.5"
+  1071→              >
+  1072→                <div
+  1073→                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+  1074→                    entry.type === 'earned'
+  1075→                      ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+  1076→                      : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+  1077→                  }`}
+  1078→                >
+  1079→                  {entry.type === 'earned' ? (
+  1080→                    <Star className="h-4 w-4" />
+  1081→                  ) : (
+  1082→                    <X className="h-4 w-4" />
+  1083→                  )}
+  1084→                </div>
+  1085→                <div className="flex-1 min-w-0">
+  1086→                  <p className="text-sm font-medium text-foreground truncate">
+  1087→                    {entry.description}
+  1088→                  </p>
+  1089→                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+  1090→                    <Clock className="h-3 w-3" />
+  1091→                    {formatDate(entry.date)}
+  1092→                  </div>
+  1093→                </div>
+  1094→                <span
+  1095→                  className={`text-sm font-bold shrink-0 ${
+  1096→                    entry.type === 'earned'
+  1097→                      ? 'text-emerald-600 dark:text-emerald-400'
+  1098→                      : 'text-red-600 dark:text-red-400'
+  1099→                  }`}
+  1100→                >
+  1101→                  {entry.amount > 0 ? '+' : ''}{entry.amount.toLocaleString()}
+  1102→                </span>
+  1103→              </motion.div>
+  1104→            ))}
+  1105→          </div>
+  1106→        </CardContent>
+  1107→      </Card>
+  1108→    </div>
+  1109→  );
+  1110→}
+  1111→
