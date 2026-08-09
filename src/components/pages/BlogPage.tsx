@@ -383,6 +383,7 @@ export default function BlogPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [visibleCount, setVisibleCount] = useState(POSTS_PER_PAGE);
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   const slug = pageParams.slug as string | undefined;
 
@@ -429,7 +430,26 @@ export default function BlogPage() {
     }
   }, [slug]);
 
-  const hasMore = visibleCount < blogs.length;
+  // Collect all unique categories
+  const allCategories = useMemo(() => {
+    const cats = new Set<string>();
+    blogs.forEach((b) => {
+      const cat = getLocalizedField(b.category, b.categoryEn, locale);
+      if (cat) cats.add(cat);
+    });
+    return Array.from(cats);
+  }, [blogs, locale]);
+
+  // Filter blogs by category
+  const filteredBlogs = useMemo(() => {
+    if (selectedCategory === 'all') return blogs;
+    return blogs.filter((b) => {
+      const cat = getLocalizedField(b.category, b.categoryEn, locale);
+      return cat === selectedCategory;
+    });
+  }, [blogs, selectedCategory, locale]);
+
+  const hasMore = visibleCount < filteredBlogs.length;
 
   const handleLoadMore = () => {
  setLoadingMore(true);
@@ -440,8 +460,8 @@ export default function BlogPage() {
   };
 
   const visibleBlogs = useMemo(
-    () => blogs.slice(0, visibleCount),
-    [blogs, visibleCount]
+    () => filteredBlogs.slice(0, visibleCount),
+    [filteredBlogs, visibleCount]
   );
 
   const featuredBlog = visibleBlogs[0];
@@ -869,8 +889,42 @@ export default function BlogPage() {
         </Breadcrumb>
       </div>
 
+      {/* Category Filter Pills */}
+      <div className="mx-auto max-w-6xl px-4 pt-4 pb-2">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="flex flex-wrap gap-2"
+        >
+          <button
+            onClick={() => { setSelectedCategory('all'); setVisibleCount(POSTS_PER_PAGE); }}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border ${
+              selectedCategory === 'all'
+                ? 'bg-[#D4AF37] text-black border-[#D4AF37] shadow-sm shadow-[#D4AF37]/25'
+                : 'bg-background text-muted-foreground border-border hover:border-[#D4AF37]/40 hover:text-foreground'
+            }`}
+          >
+            {t('blog.allCategories', locale)}
+          </button>
+          {allCategories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => { setSelectedCategory(cat); setVisibleCount(POSTS_PER_PAGE); }}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border ${
+                selectedCategory === cat
+                  ? 'bg-[#D4AF37] text-black border-[#D4AF37] shadow-sm shadow-[#D4AF37]/25'
+                  : 'bg-background text-muted-foreground border-border hover:border-[#D4AF37]/40 hover:text-foreground'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </motion.div>
+      </div>
+
       {/* Blog Grid */}
-      <section className="mx-auto max-w-6xl px-4 py-8">
+      <section className="mx-auto max-w-6xl px-4 py-6">
         {loading ? (
           <>
             <div className="mb-6">
@@ -882,7 +936,7 @@ export default function BlogPage() {
               ))}
             </div>
           </>
-        ) : blogs.length === 0 ? (
+        ) : filteredBlogs.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}

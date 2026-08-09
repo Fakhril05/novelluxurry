@@ -169,6 +169,7 @@ export default function BookDetailPage() {
           ids.unshift(bookData.id);
           ids = ids.slice(0, 8);
           localStorage.setItem('noveluxe-recently-viewed', JSON.stringify(ids));
+          window.dispatchEvent(new CustomEvent('recently-viewed-updated'));
         } catch { /* ignore */ }
       }
 

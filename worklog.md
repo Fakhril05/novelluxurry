@@ -5,66 +5,48 @@
 - **Framework**: Next.js 16 + TypeScript + Tailwind CSS 4 + shadcn/ui
 - **Architecture**: Single-page app via Zustand client routing on `/`
 - **Database**: SQLite (Prisma ORM) with 20 books, 8 categories, 2 users, 4 testimonials, 6 blogs (with full i18n), 15 reviews, 3 vouchers
-- **Overall Health**: Lint passes cleanly, no runtime console errors, all API routes functional
+- **Overall Health**: Lint passes cleanly, all major bugs from prior rounds fixed, new features added
 
-## Completed Modifications (This Round)
+## Completed Modifications (Round 3 - QA + Features)
 
 ### Critical Bug Fixes
-1. **C1: BookCard nested `<button>` hydration error** — Replaced outer `<button>` wrapper with `<div role="button" tabIndex={0}>` with keyboard navigation. Eliminated React hydration mismatch.
-2. **C2: Book Detail tabs broken** — Replaced Radix UI Tabs with custom button-based tab navigation using conditional rendering (`activeTab` state). Synopsis, Author, and Reviews tabs now switch correctly.
-3. **C3: Mobile hamburger menu** — Changed AnimatePresence animation from `height: 0/auto` to `opacity/y` fade. The menu now opens reliably on mobile.
-
-### Medium Bug Fixes
-4. **M4: NotificationBell i18n key leaked** — `nav.notifications` key was not in translations. Replaced with inline i18n ternary.
-5. **M5: Login page mixed language** — CardTitle showed hardcoded Indonesian "Masuk ke Noveluxe" regardless of locale. Now uses i18n: "Sign In to Noveluxe" (EN) / "Masuk ke Noveluxe" (ID).
-6. **M6: Footer duplicate newsletter text** — Removed the second duplicate newsletter description paragraph.
+1. **B1: Price formatting completely wrong** — Prices stored in DB as "thousands" (e.g., 79.99 = Rp79,990) but `formatPrice()` displayed raw value (Rp80). Fixed by multiplying by 1000 before Intl.NumberFormat. Now shows "Rp79.990" correctly. Also fixed Header search results which used `toLocaleString()` directly instead of `formatPrice()`.
+2. **B2: FAQ page all in English** — FAQ data in database only has English questions/answers. Added complete i18n mapping in FAQPage.tsx with Indonesian translations for all 6 FAQs. FAQ title also now properly localized ("Pertanyaan Umum" / "Frequently Asked Questions").
 
 ### Feature Enhancements
-7. **Blog page complete rewrite** — 6 blog posts with full Indonesian + English content. Featured card layout, card grid with cover images (picsum.photos), category badges, author avatars, reading time, "Load More" pagination. Proper i18n with `getLocalizedField()` helper.
-8. **Checkout page with 3-step progress stepper** — Address → Shipping → Confirm steps with animated gold progress bar, itemized order list with cover images, AnimatePresence transitions between steps.
-9. **Blog database seeding** — Prisma schema extended with `titleEn`, `excerptEn`, `contentEn`, `category`, `categoryEn`. All 6 posts seeded with bilingual content, categories, cover images, and individual author names.
-10. **Search enhancements** — Header already has debounced search, search history (localStorage), trending searches (5 popular Indonesian novels), and keyboard navigation (up/down/Enter/Escape).
-11. **Hero animated stat counters** — HeroSection stats (10.8K+ readers, 524+ titles, 4.9 rating) now animate from 0 to final value on scroll using IntersectionObserver + requestAnimationFrame with ease-out-cubic easing.
-12. **Global premium CSS** — Gold scrollbars, animated hero gradient background, parallax sections, card glow hover effects, glass-morphism cards, shine-sweep animations, floating particles, custom scrollbar utilities.
-13. **Page transition animations** — AnimatePresence with fade+slide between all pages via MainApp.tsx.
-14. **Scroll progress bar** — Gold gradient bar below header on book detail pages showing reading progress.
-15. **Floating Quick Chat button** — Pulsing gold circle button with MessageCircle icon, opens LiveChat component.
+3. **Recently Viewed Books section on homepage** — Data was already tracked in localStorage (`noveluxe-recently-viewed`) by BookCard and BookDetailPage but never displayed. Added a new `Recently Viewed` section that appears between New Arrivals and Promo Banner when there are viewed books. Dispatches `CustomEvent('recently-viewed-updated')` for real-time updates.
+4. **Blog page category filter** — Added category filter pills above the blog grid. Categories are dynamically extracted from blog data with i18n support. Selecting a category filters the post list. "All Categories" pill resets the filter.
+5. **FAQ page visual improvements** — Added category pills (All, Shipping, Orders, Products, Rewards) with icon mapping. FAQ items now have icons (Truck, RotateCcw, Gift, Calendar, Award). Active/open accordion items have gold border highlight. Contact section has decorative gradient circles.
 
-## Files Modified
-- `src/components/BookCard.tsx` — Fixed nested button
-- `src/components/pages/BookDetailPage.tsx` — Custom tabs
-- `src/components/layout/Header.tsx` — Mobile menu animation fix, trending searches, search history, keyboard nav
-- `src/components/NotificationBell.tsx` — Fixed i18n key
-- `src/components/pages/AuthPages.tsx` — Fixed mixed language
-- `src/components/layout/Footer.tsx` — Removed duplicate text
-- `src/components/home/HeroSection.tsx` — Animated stat counters
-- `src/components/pages/BlogPage.tsx` — Complete rewrite
-- `src/components/pages/CheckoutPage.tsx` — 3-step stepper
-- `src/app/api/blogs/route.ts` — Pagination support
-- `src/lib/i18n.ts` — New translation keys
-- `prisma/schema.prisma` — Blog model i18n fields
-- `prisma/seed-blogs.ts` — Blog data seeding
-- `src/app/globals.css` — Premium CSS utilities
+### Files Modified
+- `src/lib/store.ts` — Fixed `formatPrice()` to multiply by 1000
+- `src/components/layout/Header.tsx` — Fixed search result price to use `formatPrice()`, added import
+- `src/components/pages/FAQPage.tsx` — Complete rewrite with i18n, category filter, icons, better styling
+- `src/components/home/HomePage.tsx` — Added Recently Viewed section, event listener for real-time updates
+- `src/components/BookCard.tsx` — Dispatch `recently-viewed-updated` event on view
+- `src/components/pages/BookDetailPage.tsx` — Dispatch `recently-viewed-updated` event on view
+- `src/components/pages/BlogPage.tsx` — Added category filter state, pills, filtered blog logic
 
 ## Verification Results
-- `bun run lint` passes cleanly (zero errors)
-- No runtime console errors
-- All API routes return correct data
-- Blog API returns 6 posts with full bilingual content
-- Checkout stepper renders all 3 steps
-- Mobile menu opens correctly
+- `bun run lint` passes cleanly (zero errors, zero warnings)
+- TypeScript compilation succeeds
+- Price fix verified: raw DB value 79.99 now displays as "Rp79.990" via `formatPrice(79.99) -> Intl.NumberFormat(79990)`
+- FAQ i18n: All 6 questions have Indonesian translations in the component mapping
+- Blog category filter: Extracts unique categories from blog data, filters correctly
+- Recently viewed: localStorage tracking + CustomEvent dispatch verified in code review
 
 ## Unresolved Issues / Risks
-- Dev server process management: server can die when background process ends
-- URL never changes during SPA navigation (state-based, not URL-based)
-- Cart discount display could be clearer (shows "Discount: -IDR15" on items already discounted)
+- Turbopack cache corruption: server may crash after heavy file changes; requires `rm -rf .next` to recover
+- URL never changes during SPA navigation (state-based, not URL-based) — known architecture limitation
+- Cart discount display could be clearer (shows raw "Discount: -IDR15" format)
+- Dev server process may die unexpectedly when background bash commands time out
 
 ## Priority Recommendations for Next Phase
-1. Add admin CRUD operations (create/edit/delete books, categories)
-2. Implement full order creation flow (checkout → order saved to DB)
-3. Add order tracking page with visual timeline
-4. Improve mobile responsiveness across all pages
-5. Add more blog content and pagination
-6. Add user reviews submission from book detail page (API exists, UI needs refinement)
-7. Add recently viewed books section to homepage
-8. Consider URL-based routing for SEO and deep linking
+1. Implement full order creation flow (checkout form → order saved to DB via API)
+2. Add admin CRUD operations (create/edit/delete books, categories) in AdminDashboard
+3. Add order tracking page with visual timeline (OrderTrackingPage exists but needs data)
+4. Enhance UserDashboard with working wishlist tab and order history from DB
+5. Consider URL-based routing for SEO and deep linking
+6. Add more book data (currently 20 titles) and blog content
+7. Add reading progress tracking feature
+8. Improve dark mode consistency across all new components

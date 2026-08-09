@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/lib/cart-store';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, formatPrice } from '@/lib/store';
 import { t } from '@/lib/i18n';
 
 const TRENDING_SEARCHES = [
@@ -283,7 +283,7 @@ export default function Header() {
                                   {book.author && <p className="text-xs text-muted-foreground">{book.author}</p>}
                                 </div>
                                 {book.discountPrice || book.price ? (
-                                  <span className="text-sm font-semibold text-[#D4AF37] shrink-0">{(book.discountPrice || book.price).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 })}</span>
+                                  <span className="text-sm font-semibold text-[#D4AF37] shrink-0">{formatPrice(book.discountPrice || book.price, locale)}</span>
                                 ) : null}
                               </button>
                             ))}

@@ -218,18 +218,20 @@ export const useAppStore = create<AppState>()(
 );
 
 export function formatPrice(price: number, locale: Locale = 'id'): string {
+  // Prices in DB are stored as "thousands" (e.g. 79.99 = Rp79,990)
+  const actualPrice = Math.round(price * 1000);
   if (locale === 'id') {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(price);
+    }).format(actualPrice);
   }
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(price);
+  }).format(actualPrice);
 }

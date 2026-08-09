@@ -445,14 +445,16 @@ export default function HomePage() {
         onViewAll={() => setPage('catalog', { sort: 'newest' })}
       />
 
-      {/* Recently Viewed */}
+      {/* ────────────────────────────────────────────────────
+          4.5 RECENTLY VIEWED SECTION
+          ──────────────────────────────────────────────────── */
       {recentlyViewed.length > 0 && (
         <HorizontalBookRow
           books={recentlyViewed}
-          title={locale === "id" ? "Terakhir Dilihat" : "Recently Viewed"}
-          subtitle={locale === "id" ? "Buku yang baru saja kamu lihat" : "Books you recently viewed"}
-          viewAllLabel={t("general.viewAll", locale)}
-          onViewAll={() => setPage("catalog")}
+          title={locale === 'id' ? 'Terakhir Dilihat' : 'Recently Viewed'}
+          subtitle={locale === 'id' ? 'Buku yang baru saja kamu lihat' : 'Books you recently viewed'}
+          viewAllLabel={t('general.viewAll', locale)}
+          onViewAll={() => setPage('catalog')}
         />
       )}
 
