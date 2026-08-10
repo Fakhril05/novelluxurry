@@ -432,7 +432,7 @@ export default function UserDashboard() {
 
             <div className="mt-6">
               <AnimatePresence mode="wait">
-                <TabsContent value="profile" forceMount={activeTab === 'profile'}>
+                <TabsContent key="profile" value="profile" forceMount={activeTab === 'profile'}>
                   {activeTab === 'profile' && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
@@ -454,7 +454,7 @@ export default function UserDashboard() {
                     </motion.div>
                   )}
                 </TabsContent>
-                <TabsContent value="orders" forceMount={activeTab === 'orders'}>
+                <TabsContent key="orders" value="orders" forceMount={activeTab === 'orders'}>
                   {activeTab === 'orders' && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
@@ -471,7 +471,7 @@ export default function UserDashboard() {
                     </motion.div>
                   )}
                 </TabsContent>
-                <TabsContent value="wishlist" forceMount={activeTab === 'wishlist'}>
+                <TabsContent key="wishlist" value="wishlist" forceMount={activeTab === 'wishlist'}>
                   {activeTab === 'wishlist' && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
@@ -487,7 +487,7 @@ export default function UserDashboard() {
                     </motion.div>
                   )}
                 </TabsContent>
-                <TabsContent value="points" forceMount={activeTab === 'points'}>
+                <TabsContent key="points" value="points" forceMount={activeTab === 'points'}>
                   {activeTab === 'points' && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
