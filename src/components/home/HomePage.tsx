@@ -19,6 +19,7 @@ import {
   Eye,
   Crown,
   BookMarked,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -167,7 +168,7 @@ function HorizontalBookRow({
    MAIN HOMEPAGE COMPONENT
    ═══════════════════════════════════════════════════════════ */
 export default function HomePage() {
-  const { locale, setPage } = useAppStore();
+  const { locale, setPage, recentlyViewed: storeRecentlyViewed } = useAppStore();
 
   // ── Data state ──
   const [books, setBooks] = useState<Book[]>([]);
@@ -175,6 +176,8 @@ export default function HomePage() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [recentlyViewed, setRecentlyViewed] = useState<Book[]>([]);
   const [editorPicks, setEditorPicks] = useState<Book[]>([]);
+  const [recommended, setRecommended] = useState<Book[]>([]);
+  const [recommendBasedOnCategory, setRecommendBasedOnCategory] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // ── Testimonial carousel auto-play index ──
@@ -207,6 +210,26 @@ export default function HomePage() {
     return () => window.removeEventListener('recently-viewed-updated', handler);
   }, [fetchRecentlyViewed]);
 
+  // ── Fetch recommendations ──
+  const fetchRecommendations = useCallback(async () => {
+    try {
+      const ids = storeRecentlyViewed.length > 0 ? storeRecentlyViewed.slice(0, 10) : [];
+      // Find the most recent book's category from the store's recently viewed
+      let categoryId: string | null = null;
+      // We'll determine category after books are loaded
+      const params = new URLSearchParams();
+      if (ids.length > 0) {
+        params.set('exclude', ids.join(','));
+      }
+      params.set('limit', '8');
+      const res = await fetch(`/api/books/recommendations?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setRecommended(data.books || []);
+      }
+    } catch { /* ignore */ }
+  }, [storeRecentlyViewed]);
+
   // ── Fetch data ──
   useEffect(() => {
     async function fetchData() {
@@ -224,10 +247,47 @@ export default function HomePage() {
           testRes.json(),
           picksRes.ok ? picksRes.json() : { books: [] },
         ]);
-        setBooks(booksData.books || []);
+        const loadedBooks = booksData.books || [];
+        setBooks(loadedBooks);
         setCategories(catsData);
         setTestimonials(testData);
         setEditorPicks(picksData.books || []);
+
+        // Determine recommendation category from store's recentlyViewed
+        if (storeRecentlyViewed.length > 0) {
+          const mostRecentBook = loadedBooks.find((b: Book) => b.id === storeRecentlyViewed[0]);
+          if (mostRecentBook?.categoryId) {
+            setRecommendBasedOnCategory(true);
+            const params = new URLSearchParams();
+            params.set('categoryId', mostRecentBook.categoryId);
+            params.set('exclude', storeRecentlyViewed.slice(0, 10).join(','));
+            params.set('limit', '8');
+            const recRes = await fetch(`/api/books/recommendations?${params.toString()}`);
+            if (recRes.ok) {
+              const recData = await recRes.json();
+              setRecommended(recData.books || []);
+            }
+          } else {
+            // No category match, fetch diverse recommendations
+            const params = new URLSearchParams();
+            if (storeRecentlyViewed.length > 0) {
+              params.set('exclude', storeRecentlyViewed.slice(0, 10).join(','));
+            }
+            params.set('limit', '8');
+            const recRes = await fetch(`/api/books/recommendations?${params.toString()}`);
+            if (recRes.ok) {
+              const recData = await recRes.json();
+              setRecommended(recData.books || []);
+            }
+          }
+        } else {
+          // No recently viewed, fetch diverse recommendations
+          const recRes = await fetch('/api/books/recommendations?limit=8');
+          if (recRes.ok) {
+            const recData = await recRes.json();
+            setRecommended(recData.books || []);
+          }
+        }
       } catch (err) {
         console.error('Error loading homepage data:', err);
       } finally {
@@ -236,7 +296,7 @@ export default function HomePage() {
     }
     fetchData();
     fetchRecentlyViewed();
-  }, [fetchRecentlyViewed]);
+  }, [fetchRecentlyViewed, storeRecentlyViewed]);
 
   // ── Auto-play testimonial carousel ──
   useEffect(() => {
@@ -441,6 +501,16 @@ export default function HomePage() {
         onViewAll={() => setPage('catalog', { sort: 'newest' })}
       />
 
+      {/* ────────────────────────────────────────────────────
+          4.5 RECOMMENDED FOR YOU (Buku Untukmu)
+          ──────────────────────────────────────────────────── */}
+      <RecommendedSection
+        locale={locale}
+        recommended={recommended}
+        basedOnCategory={recommendBasedOnCategory}
+        onRefresh={fetchRecommendations}
+      />
+
       {/* Recently Viewed */}
       {recentlyViewed.length > 0 && (
         <HorizontalBookRow
@@ -467,6 +537,136 @@ export default function HomePage() {
         locale={locale}
       />
     </main>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RECOMMENDED FOR YOU SECTION (Buku Untukmu)
+   ═══════════════════════════════════════════════════════════ */
+function RecommendedSection({
+  locale,
+  recommended,
+  basedOnCategory,
+  onRefresh,
+}: {
+  locale: 'id' | 'en';
+  recommended: Book[];
+  basedOnCategory: boolean;
+  onRefresh: () => Promise<void>;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-100px' });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await onRefresh();
+    setRefreshing(false);
+    toast.success(t('recommend.refreshed', locale));
+  };
+
+  const scroll = (dir: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollBy({
+      left: dir === 'left' ? -340 : 340,
+      behavior: 'smooth',
+    });
+  };
+
+  if (recommended.length === 0) return null;
+
+  return (
+    <section ref={ref} className="py-16 sm:py-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* Section header with Sparkles + refresh */}
+        <motion.div
+          initial="hidden"
+          animate={inView ? 'visible' : 'hidden'}
+          variants={fadeUp}
+          custom={0}
+          className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8"
+        >
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+                <Sparkles className="h-5 w-5 text-[#D4AF37]" />
+              </div>
+              <h2 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight">
+                {t('recommend.title', locale)}
+              </h2>
+            </div>
+            <p className="text-muted-foreground text-sm sm:text-base max-w-md">
+              {t('recommend.subtitle', locale)}
+            </p>
+            {basedOnCategory && (
+              <Badge
+                variant="outline"
+                className="mt-2 border-[#D4AF37]/30 text-[#D4AF37] bg-[#D4AF37]/5 text-xs"
+              >
+                {t('recommend.basedOn', locale)}: {t('recommend.basedOnCategory', locale)}
+              </Badge>
+            )}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-all shrink-0 h-9 px-4"
+          >
+            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            {t('recommend.refresh', locale)}
+          </Button>
+        </motion.div>
+      </div>
+
+      {/* Book row */}
+      <div className="relative group/row">
+        {/* Left arrow */}
+        <button
+          onClick={() => scroll('left')}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 hidden lg:flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg border border-[#D4AF37]/20 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-all opacity-0 group-hover/row:opacity-100"
+          aria-label="Scroll left"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+
+        {/* Right arrow */}
+        <button
+          onClick={() => scroll('right')}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 hidden lg:flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg border border-[#D4AF37]/20 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-all opacity-0 group-hover/row:opacity-100"
+          aria-label="Scroll right"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+
+        {/* Scrollable row */}
+        <div
+          ref={scrollRef}
+          className="flex gap-5 overflow-x-auto scrollbar-hide px-4 sm:px-6 lg:px-8 snap-x snap-mandatory"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {recommended.map((book, i) => (
+            <motion.div
+              key={book.id}
+              initial="hidden"
+              animate={inView ? 'visible' : 'hidden'}
+              variants={fadeUp}
+              custom={i}
+              className="shrink-0 w-[180px] sm:w-[200px] md:w-[210px] snap-start"
+            >
+              <BookCard book={book} />
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Fade edges */}
+        <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent hidden md:block" />
+        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent hidden md:block" />
+      </div>
+    </section>
   );
 }
 

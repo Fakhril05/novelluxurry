@@ -23,6 +23,9 @@ import {
   Play,
   RotateCcw,
   CheckCircle2,
+  BookMarked,
+  PenLine,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -48,6 +52,7 @@ import { Slider } from '@/components/ui/slider';
 
 interface Review {
   id: string;
+  title?: string | null;
   rating: number;
   comment: string | null;
   userId: string;
@@ -96,6 +101,7 @@ export default function BookDetailPage() {
     user,
     wishlist,
     toggleWishlist,
+    addRecentlyViewed,
   } = useAppStore();
   const addItem = useCartStore((s) => s.addItem);
 
@@ -111,8 +117,10 @@ export default function BookDetailPage() {
   const [selectedFormat, setSelectedFormat] = useState<FormatOption>('Paperback');
   const [activeTab, setActiveTab] = useState('synopsis');
   const [reviewRating, setReviewRating] = useState(0);
+  const [reviewTitle, setReviewTitle] = useState('');
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [relatedBooks, setRelatedBooks] = useState<Book[]>([]);
 
   const reviewsRef = useRef<HTMLDivElement>(null);
 
@@ -243,6 +251,12 @@ export default function BookDetailPage() {
     [book?.rating, reviews.length]
   );
 
+  // Check if current user already reviewed this book
+  const userReview = useMemo(
+    () => (user && reviews.length > 0 ? reviews.find((r) => r.userId === user.id) : null),
+    [user, reviews]
+  );
+
   const fetchBook = useCallback(async () => {
     if (!slug) return;
     setLoading(true);
@@ -260,9 +274,10 @@ export default function BookDetailPage() {
       setBook(bookData);
       setReviews(bookData.reviews || []);
 
-      // Track recently viewed
+      // Track recently viewed (both store + localStorage for backward compat)
       if (bookData?.id) {
         try {
+          addRecentlyViewed(bookData.id);
           let ids: string[] = JSON.parse(localStorage.getItem('noveluxe-recently-viewed') || '[]');
           ids = ids.filter((id: string) => id !== bookData.id);
           ids.unshift(bookData.id);
@@ -286,6 +301,29 @@ export default function BookDetailPage() {
           setRecommendations(recBooks.slice(0, 8));
         }
       }
+
+      // Fetch related books (same category + same author, sorted by rating)
+      const relatedRes = await fetch(`/api/books?limit=12&sort=rating`, {
+        signal: controller.signal,
+      });
+      if (relatedRes.ok) {
+        const relatedData = await relatedRes.json();
+        const bookData2 = data.book || data;
+        const allRelated = (relatedData.books || relatedData || []).filter(
+          (b: Book) => b.slug !== slug
+        );
+        // Prioritize: same category first, then same author, sort by rating desc
+        const sortedRelated = allRelated.sort((a: Book, b: Book) => {
+          const aCat = a.categoryId === bookData2.categoryId ? 0 : 1;
+          const bCat = b.categoryId === bookData2.categoryId ? 0 : 1;
+          if (aCat !== bCat) return aCat - bCat;
+          const aAuthor = a.author === bookData2.author ? 0 : 1;
+          const bAuthor = b.author === bookData2.author ? 0 : 1;
+          if (aAuthor !== bAuthor) return aAuthor - bAuthor;
+          return b.rating - a.rating;
+        });
+        setRelatedBooks(sortedRelated.slice(0, 6));
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(locale === 'id' ? 'Gagal memuat detail buku' : 'Failed to load book details');
@@ -307,6 +345,7 @@ export default function BookDetailPage() {
     setSelectedFormat('Paperback');
     setActiveTab('synopsis');
     setReviewRating(0);
+    setReviewTitle('');
     setReviewComment('');
   }, [slug]);
 
@@ -344,33 +383,38 @@ export default function BookDetailPage() {
       toast.error(locale === 'id' ? 'Pilih rating terlebih dahulu' : 'Please select a rating first');
       return;
     }
+    if (reviewComment.trim().length < 10) {
+      toast.error(t('review.minLength', locale));
+      return;
+    }
     if (!user) return;
     setSubmittingReview(true);
     try {
-      const res = await fetch('/api/reviews', {
+      const res = await fetch(`/api/books/${book.slug}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookId: book.id,
-          rating: reviewRating,
-          comment: reviewComment.trim() || null,
           userId: user.id,
+          rating: reviewRating,
+          title: reviewTitle.trim() || undefined,
+          comment: reviewComment.trim(),
         }),
       });
       if (res.ok) {
         const result = await res.json();
-        toast.success(t('book.reviewSuccess', locale));
+        toast.success(t('review.success', locale));
 
-        // Append new review to the displayed list
+        // Prepend new review to the displayed list
         const newReview: Review = {
           id: result.review.id,
+          title: result.review.title,
           rating: result.review.rating,
           comment: result.review.comment,
           userId: result.review.userId,
           user: {
             id: user.id,
             name: user.name,
-            avatar: null,
+            avatar: result.review.user?.avatar || null,
           },
           createdAt: result.review.createdAt,
         };
@@ -388,9 +432,24 @@ export default function BookDetailPage() {
 
         // Reset form
         setReviewRating(0);
+        setReviewTitle('');
         setReviewComment('');
+      } else if (res.status === 409) {
+        // Already reviewed
+        const errData = await res.json();
+        toast.warning(t('review.alreadyReviewed', locale));
+        // If the API returns the existing review, refresh from book data
+        if (errData.alreadyReviewed) {
+          const bookRes = await fetch(`/api/books/${book.slug}`);
+          if (bookRes.ok) {
+            const bookData = await bookRes.json();
+            const bd = bookData.book || bookData;
+            setReviews(bd.reviews || []);
+          }
+        }
       } else {
-        toast.error(locale === 'id' ? 'Gagal mengirim ulasan' : 'Failed to submit review');
+        const errData = await res.json().catch(() => null);
+        toast.error(errData?.error || (locale === 'id' ? 'Gagal mengirim ulasan' : 'Failed to submit review'));
       }
     } catch {
       toast.error(locale === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
@@ -1057,81 +1116,175 @@ export default function BookDetailPage() {
 
               {/* Write Review Form (authenticated users only) */}
               {isAuthenticated ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-xl border border-[#D4AF37]/20 bg-card p-6 sm:p-8 space-y-5"
-                >
-                  <h3 className="font-heading text-lg font-semibold text-gradient-gold">
-                    {t('book.writeReview', locale)}
-                  </h3>
-                  {/* Star selector */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">
-                      {t('book.ratingLabel', locale)}
-                    </label>
+                userReview ? (
+                  /* Already Reviewed - show existing review */
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-xl border-2 border-[#D4AF37]/20 bg-gradient-to-br from-[#D4AF37]/5 to-card p-6 sm:p-8 space-y-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D4AF37]/15">
+                        <CheckCircle2 className="h-5 w-5 text-[#D4AF37]" />
+                      </div>
+                      <div>
+                        <h3 className="font-heading text-lg font-semibold text-foreground">
+                          {t('review.yourReview', locale)}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(userReview.createdAt)}
+                        </p>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-1">
                       {Array.from({ length: 5 }).map((_, i) => (
-                        <button
+                        <Star
                           key={i}
-                          onClick={() => setReviewRating(i + 1)}
-                          onMouseEnter={() => {}}
-                          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-sm p-0.5 transition-transform hover:scale-110"
-                          aria-label={`Rate ${i + 1} star${i > 0 ? 's' : ''}`}
-                        >
-                          <Star
-                            className={`h-7 w-7 transition-colors duration-150 ${
-                              i < reviewRating
-                                ? 'fill-[#D4AF37] text-[#D4AF37]'
-                                : 'text-muted-foreground/30 hover:text-[#D4AF37]/50'
-                            }`}
-                          />
-                        </button>
+                          className={`h-5 w-5 ${
+                            i < userReview.rating
+                              ? 'fill-[#D4AF37] text-[#D4AF37]'
+                              : 'text-muted-foreground/30'
+                          }`}
+                        />
                       ))}
-                      {reviewRating > 0 && (
-                        <span className="ml-2 text-sm font-medium text-[#D4AF37]">
-                          {reviewRating}/5
-                        </span>
-                      )}
                     </div>
-                  </div>
-                  {/* Comment textarea */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">
-                      {t('book.reviewLabel', locale)}
-                    </label>
-                    <Textarea
-                      value={reviewComment}
-                      onChange={(e) => {
-                        if (e.target.value.length <= 500) {
-                          setReviewComment(e.target.value);
-                        }
-                      }}
-                      placeholder={t('book.reviewPlaceholder', locale)}
-                      rows={4}
-                      className="resize-none rounded-xl border-border focus-visible:ring-[#D4AF37]"
-                    />
-                    <div className="flex justify-end">
-                      <span className={`text-xs ${reviewComment.length >= 500 ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
-                        {reviewComment.length}/500
-                      </span>
+                    {userReview.title && (
+                      <p className="font-semibold text-sm text-foreground">{userReview.title}</p>
+                    )}
+                    {userReview.comment && (
+                      <p className="text-sm text-muted-foreground leading-relaxed">{userReview.comment}</p>
+                    )}
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 text-xs"
+                        disabled
+                      >
+                        <PenLine className="mr-1.5 h-3 w-3" />
+                        {t('review.editReview', locale)}
+                      </Button>
                     </div>
-                  </div>
-                  <Button
-                    onClick={handleSubmitReview}
-                    disabled={reviewRating === 0 || submittingReview}
-                    className="bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold rounded-xl px-6 disabled:opacity-50"
+                  </motion.div>
+                ) : (
+                  /* Review Form */
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-xl border border-[#D4AF37]/20 bg-card p-6 sm:p-8 space-y-5"
                   >
-                    {submittingReview
-                      ? t('general.loading', locale)
-                      : t('book.submitReview', locale)}
-                  </Button>
-                </motion.div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D4AF37]/15">
+                        <PenLine className="h-5 w-5 text-[#D4AF37]" />
+                      </div>
+                      <h3 className="font-heading text-lg font-semibold text-gradient-gold">
+                        {t('book.writeReview', locale)}
+                      </h3>
+                    </div>
+                    {/* Star selector */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-muted-foreground">
+                        {t('book.ratingLabel', locale)}
+                      </label>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setReviewRating(i + 1)}
+                            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-sm p-0.5 transition-transform hover:scale-110"
+                            aria-label={`Rate ${i + 1} star${i > 0 ? 's' : ''}`}
+                          >
+                            <Star
+                              className={`h-8 w-8 transition-colors duration-150 ${
+                                i < reviewRating
+                                  ? 'fill-[#D4AF37] text-[#D4AF37]'
+                                  : 'text-muted-foreground/30 hover:text-[#D4AF37]/50'
+                              }`}
+                            />
+                          </button>
+                        ))}
+                        {reviewRating > 0 && (
+                          <span className="ml-3 text-sm font-semibold text-[#D4AF37]">
+                            {reviewRating}/5
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Title input (optional) */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-muted-foreground">
+                        {t('book.reviewLabel', locale)} <span className="text-xs text-muted-foreground/60">({t('review.titleOptional', locale)})</span>
+                      </label>
+                      <Input
+                        value={reviewTitle}
+                        onChange={(e) => {
+                          if (e.target.value.length <= 200) {
+                            setReviewTitle(e.target.value);
+                          }
+                        }}
+                        placeholder={t('review.titlePlaceholder', locale)}
+                        maxLength={200}
+                        className="rounded-xl border-border focus-visible:ring-[#D4AF37]"
+                      />
+                    </div>
+                    {/* Comment textarea */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-muted-foreground">
+                        {locale === 'id' ? 'Komentar' : 'Comment'} <span className="text-red-400">*</span>
+                      </label>
+                      <Textarea
+                        value={reviewComment}
+                        onChange={(e) => {
+                          if (e.target.value.length <= 1000) {
+                            setReviewComment(e.target.value);
+                          }
+                        }}
+                        placeholder={t('review.commentPlaceholder', locale)}
+                        rows={4}
+                        className="resize-none rounded-xl border-border focus-visible:ring-[#D4AF37]"
+                      />
+                      <div className="flex items-center justify-between">
+                        <AnimatePresence>
+                          {reviewComment.trim().length > 0 && reviewComment.trim().length < 10 && (
+                            <motion.p
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -4 }}
+                              className="text-xs text-amber-500"
+                            >
+                              {t('review.minLength', locale)}
+                            </motion.p>
+                          )}
+                        </AnimatePresence>
+                        <span className={`text-xs ml-auto ${reviewComment.length >= 1000 ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+                          {reviewComment.length}/1000
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleSubmitReview}
+                      disabled={reviewRating === 0 || reviewComment.trim().length < 10 || submittingReview}
+                      className="bg-[#D4AF37] hover:bg-[#B8960C] text-white font-semibold rounded-xl px-8 h-11 disabled:opacity-50 shadow-lg shadow-[0_0_20px_rgba(212,175,55,0.2)] transition-all"
+                    >
+                      {submittingReview ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {t('review.submitting', locale)}
+                        </>
+                      ) : (
+                        <>
+                          <Star className="mr-2 h-4 w-4" />
+                          {t('review.submit', locale)}
+                        </>
+                      )}
+                    </Button>
+                  </motion.div>
+                )
               ) : (
                 <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
                   <Heart className="mx-auto h-8 w-8 text-muted-foreground/30 mb-2" />
                   <p className="text-sm text-muted-foreground">
-                    {t('book.loginToReview', locale)}
+                    {t('review.loginToReview', locale)}
                   </p>
                   <Button
                     variant="outline"
@@ -1190,6 +1343,9 @@ export default function BookDetailPage() {
                           ))}
                         </div>
                       </div>
+                      {review.title && (
+                        <p className="font-semibold text-sm text-foreground">{review.title}</p>
+                      )}
                       {review.comment && (
                         <p className="text-sm text-muted-foreground leading-relaxed">
                           {review.comment}
@@ -1332,6 +1488,45 @@ export default function BookDetailPage() {
                   </Button>
                 )}
               </div>
+            </div>
+          </motion.section>
+        )}
+
+        {/* ---- Related Books Section ---- */}
+        {relatedBooks.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.45 }}
+            className="space-y-6 pt-4"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#D4AF37]/15">
+                <BookMarked className="h-5 w-5 text-[#D4AF37]" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-heading text-2xl font-bold tracking-tight text-gradient-gold">
+                  {t('book.related', locale)}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {t('book.relatedDesc', locale)}
+                </p>
+              </div>
+              <button
+                onClick={() => setPage('catalog')}
+                className="text-sm font-medium text-[#D4AF37] hover:text-[#B8960C] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-md px-3 py-1.5 border border-[#D4AF37]/20 hover:border-[#D4AF37]/40"
+              >
+                {t('general.viewAll', locale)} →
+              </button>
+            </div>
+            {/* Gold divider */}
+            <div className="h-px w-full" style={{ background: 'linear-gradient(to right, #D4AF37, rgba(212,175,55,0.2), transparent)' }} />
+            <div className="flex gap-5 overflow-x-auto scrollbar-hide pb-4 snap-x snap-mandatory px-1">
+              {relatedBooks.map((relBook, idx) => (
+                <div key={relBook.id} className="w-[180px] sm:w-[200px] shrink-0 snap-start">
+                  <BookCard book={relBook} index={idx} />
+                </div>
+              ))}
             </div>
           </motion.section>
         )}

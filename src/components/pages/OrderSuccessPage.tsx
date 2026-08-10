@@ -45,6 +45,15 @@ function generateParticles(count: number): Particle[] {
   }));
 }
 
+// Floating decorative gold particles data
+const FLOATING_PARTICLES = [
+  { top: '12%', left: '15%', size: 'h-2.5 w-2.5', color: 'bg-[#D4AF37]/30', delay: '0s' },
+  { top: '20%', right: '12%', size: 'h-1.5 w-1.5', color: 'bg-[#E8D48B]/40', delay: '0.6s' },
+  { top: '65%', left: '10%', size: 'h-2 w-2', color: 'bg-[#D4AF37]/25', delay: '1.2s' },
+  { top: '70%', right: '18%', size: 'h-3 w-3', color: 'bg-[#D4AF37]/20', delay: '1.8s' },
+  { top: '45%', left: '8%', size: 'h-1.5 w-1.5', color: 'bg-[#E8D48B]/35', delay: '0.9s' },
+];
+
 export default function OrderSuccessPage() {
   const { locale, pageParams, setPage } = useAppStore();
   const lang = locale as Locale;
@@ -67,6 +76,28 @@ export default function OrderSuccessPage() {
 
   return (
     <section className="relative min-h-[80vh] flex items-center justify-center px-4 py-12 overflow-hidden">
+      {/* Floating decorative gold particles behind main content */}
+      {FLOATING_PARTICLES.map((p, i) => (
+        <div
+          key={`float-${i}`}
+          className={`absolute z-[1] rounded-full ${p.size} ${p.color} animate-float-subtle pointer-events-none`}
+          style={{
+            top: p.top,
+            left: p.left,
+            right: p.right,
+            animationDelay: p.delay,
+          }}
+        />
+      ))}
+
+      {/* Gold radial gradient background */}
+      <div
+        className="absolute inset-0 pointer-events-none z-0"
+        style={{
+          background: 'radial-gradient(ellipse at center top, rgba(212,175,55,0.08) 0%, transparent 60%)',
+        }}
+      />
+
       {/* Confetti particles */}
       <div className="absolute inset-0 pointer-events-none z-10">
         {particles.map((p) => (
@@ -172,7 +203,7 @@ export default function OrderSuccessPage() {
                   {t('orderSuccess.subtitle', lang)}
                 </motion.p>
 
-                {/* Order number card */}
+                {/* Order number card with subtle gold border */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -180,7 +211,7 @@ export default function OrderSuccessPage() {
                   className="w-full rounded-xl p-4 sm:p-5 mb-6"
                   style={{
                     background: `linear-gradient(135deg, ${GOLD}08, ${GOLD}03)`,
-                    border: `1px solid ${GOLD}25`,
+                    border: `1px solid ${GOLD}35`,
                   }}
                 >
                   <div className="flex items-center justify-center gap-3 mb-3">
@@ -229,6 +260,14 @@ export default function OrderSuccessPage() {
                   </div>
                 </motion.div>
 
+                {/* Decorative gold line divider between order info and timeline */}
+                <div
+                  className="w-full h-[1px] mb-8"
+                  style={{
+                    background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.4), rgba(232,212,139,0.5), rgba(212,175,55,0.4), transparent)',
+                  }}
+                />
+
                 {/* Order timeline tracker */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -251,23 +290,41 @@ export default function OrderSuccessPage() {
                       const Icon = step.icon;
                       return (
                         <div key={step.key} className="relative flex flex-col items-center z-10 flex-1">
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 1 + index * 0.15, type: 'spring', stiffness: 260, damping: 20 }}
-                            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors ${
-                              step.active || step.done
-                                ? 'text-white'
-                                : 'bg-muted text-muted-foreground'
-                            }`}
-                            style={
-                              step.active || step.done
-                                ? { background: `linear-gradient(135deg, ${GOLD_DARK}, ${GOLD})` }
-                                : undefined
-                            }
-                          >
-                            <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </motion.div>
+                          <div className="relative">
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ delay: 1 + index * 0.15, type: 'spring', stiffness: 260, damping: 20 }}
+                              className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors ${
+                                step.active || step.done
+                                  ? 'text-white'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}
+                              style={
+                                step.active || step.done
+                                  ? { background: `linear-gradient(135deg, ${GOLD_DARK}, ${GOLD})` }
+                                  : undefined
+                              }
+                            >
+                              <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </motion.div>
+                            {/* Pulse animation on current step */}
+                            {step.active && (
+                              <motion.div
+                                className="absolute inset-0 rounded-full"
+                                style={{ border: `2px solid ${GOLD}60` }}
+                                animate={{
+                                  scale: [1, 1.3, 1],
+                                  opacity: [0.6, 0, 0.6],
+                                }}
+                                transition={{
+                                  duration: 2,
+                                  repeat: Infinity,
+                                  ease: 'easeInOut',
+                                }}
+                              />
+                            )}
+                          </div>
                           <motion.span
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -292,17 +349,38 @@ export default function OrderSuccessPage() {
                   transition={{ delay: 1.1 }}
                   className="w-full flex flex-col sm:flex-row gap-3"
                 >
-                  <Button
-                    onClick={() => setPage('order-tracking', { orderNumber })}
-                    className="flex-1 gap-2 text-white font-semibold"
-                    style={{
-                      background: `linear-gradient(135deg, ${GOLD_DARK}, ${GOLD})`,
-                    }}
-                    size="lg"
-                  >
-                    <Truck className="w-4 h-4" />
-                    {t('orderSuccess.trackOrder', lang)}
-                  </Button>
+                  {/* Track Order button with animated shimmer overlay */}
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button
+                      onClick={() => setPage('order-tracking', { orderNumber })}
+                      className="relative flex-1 h-11 gap-2 font-semibold overflow-hidden transition-all hover:shadow-xl hover:shadow-[#D4AF37]/25"
+                      style={{
+                        background: `linear-gradient(135deg, ${GOLD_DARK}, ${GOLD})`,
+                      }}
+                      size="lg"
+                    >
+                      {/* Shimmer overlay */}
+                      <motion.div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%)',
+                          backgroundSize: '200% 100%',
+                        }}
+                        animate={{
+                          backgroundPosition: ['-200% 0', '200% 0'],
+                        }}
+                        transition={{
+                          duration: 2.5,
+                          repeat: Infinity,
+                          ease: 'linear',
+                        }}
+                      />
+                      <span className="relative z-10 flex items-center justify-center">
+                        <Truck className="w-4 h-4" />
+                        {t('orderSuccess.trackOrder', lang)}
+                      </span>
+                    </Button>
+                  </motion.div>
                   <Button
                     variant="outline"
                     onClick={() => setPage('catalog')}

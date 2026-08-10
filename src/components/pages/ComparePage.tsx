@@ -31,47 +31,77 @@ import type { Book } from '@/types';
 
 function CompareEmptyState({ locale, onBrowse }: { locale: 'id' | 'en'; onBrowse: () => void }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="flex flex-col items-center justify-center py-20 px-4"
-    >
-      {/* Decorative circles */}
-      <div className="relative mb-8">
-        <motion.div
-          animate={{ scale: [1, 1.08, 1], rotate: [0, 5, -5, 0] }}
-          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          className="relative flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-[#D4AF37]/20 via-[#D4AF37]/10 to-[#F5E6A3]/20 border border-[#D4AF37]/30"
-        >
-          <Scale className="h-14 w-14 text-[#D4AF37]" />
-        </motion.div>
-        <motion.div
-          animate={{ opacity: [0.2, 0.5, 0.2] }}
-          transition={{ duration: 3, repeat: Infinity, delay: 1 }}
-          className="absolute -inset-4 rounded-full border border-[#D4AF37]/20"
-        />
-        <motion.div
-          animate={{ opacity: [0.1, 0.3, 0.1] }}
-          transition={{ duration: 3, repeat: Infinity, delay: 2 }}
-          className="absolute -inset-10 rounded-full border border-[#D4AF37]/10"
+    <div className="min-h-[60vh]">
+      {/* Gold gradient decorative bar at top */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+        <div
+          className="h-[3px] w-full rounded-full mb-8"
+          style={{
+            background:
+              'linear-gradient(90deg, transparent, #D4AF37, #E8D48B, #D4AF37, transparent)',
+          }}
         />
       </div>
 
-      <h2 className="text-2xl font-bold text-foreground mb-3">
-        {t('compare.empty', locale)}
-      </h2>
-      <p className="text-muted-foreground text-center max-w-md mb-8">
-        {t('compare.emptyDesc', locale)}
-      </p>
-      <Button
-        onClick={onBrowse}
-        className="bg-[#D4AF37] hover:bg-[#B8960C] text-white rounded-full px-8 py-2.5 shadow-lg shadow-[#D4AF37]/25 transition-all hover:shadow-xl hover:shadow-[#D4AF37]/30 hover:scale-105"
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="flex flex-col items-center justify-center py-20 px-4"
       >
-        <BookOpen className="h-4 w-4 mr-2" />
-        {t('compare.browseCatalog', locale)}
-      </Button>
-    </motion.div>
+        {/* Decorative circles with animated gold ring pulse behind Scale icon */}
+        <div className="relative mb-8">
+          {/* Animated gold ring pulse */}
+          <motion.div
+            animate={{
+              scale: [1, 1.3, 1.5],
+              opacity: [0.4, 0.15, 0],
+            }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeOut' }}
+            className="absolute inset-0 rounded-full border-2 border-[#D4AF37]/30"
+          />
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1.4],
+              opacity: [0.25, 0.1, 0],
+            }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeOut', delay: 0.8 }}
+            className="absolute inset-0 rounded-full border-2 border-[#D4AF37]/20"
+          />
+          <motion.div
+            animate={{ scale: [1, 1.08, 1], rotate: [0, 5, -5, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            className="relative flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-[#D4AF37]/20 via-[#D4AF37]/10 to-[#F5E6A3]/20 border border-[#D4AF37]/30"
+          >
+            <Scale className="h-14 w-14 text-[#D4AF37]" />
+          </motion.div>
+          <motion.div
+            animate={{ opacity: [0.2, 0.5, 0.2] }}
+            transition={{ duration: 3, repeat: Infinity, delay: 1 }}
+            className="absolute -inset-4 rounded-full border border-[#D4AF37]/20"
+          />
+          <motion.div
+            animate={{ opacity: [0.1, 0.3, 0.1] }}
+            transition={{ duration: 3, repeat: Infinity, delay: 2 }}
+            className="absolute -inset-10 rounded-full border border-[#D4AF37]/10"
+          />
+        </div>
+
+        <h2 className="text-2xl font-bold text-foreground mb-3">
+          {t('compare.empty', locale)}
+        </h2>
+        <p className="text-muted-foreground text-center max-w-md mb-8">
+          {t('compare.emptyDesc', locale)}
+        </p>
+        <Button
+          onClick={onBrowse}
+          className="bg-[#D4AF37] hover:bg-[#B8960C] text-white rounded-full px-8 py-2.5 shadow-lg shadow-[#D4AF37]/25 transition-all hover:shadow-xl hover:shadow-[#D4AF37]/30 hover:scale-105"
+        >
+          <BookOpen className="h-4 w-4 mr-2" />
+          {t('compare.browseCatalog', locale)}
+        </Button>
+      </motion.div>
+    </div>
   );
 }
 
@@ -97,7 +127,12 @@ function StarRating({ rating }: { rating: number }) {
 
 function BestBadge({ locale }: { locale: 'id' | 'en' }) {
   return (
-    <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 h-5 ml-2">
+    <Badge
+      className="text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 h-5 ml-2 border-0 shadow-[0_0_12px_rgba(212,175,55,0.35)]"
+      style={{
+        background: 'linear-gradient(135deg, #D4AF37, #E8D48B, #D4AF37)',
+      }}
+    >
       <Award className="h-3 w-3 mr-1" />
       {t('compare.best', locale)}
     </Badge>
@@ -148,18 +183,25 @@ export default function ComparePage() {
 
   if (comparison.length === 0 && !loading) {
     return (
-      <div className="min-h-[60vh]">
-        <CompareEmptyState
-          locale={locale}
-          onBrowse={() => setPage('catalog')}
-        />
-      </div>
+      <CompareEmptyState
+        locale={locale}
+        onBrowse={() => setPage('catalog')}
+      />
     );
   }
 
   return (
     <div className="min-h-[60vh]">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        {/* Gold gradient decorative bar at top */}
+        <div
+          className="h-[3px] w-full rounded-full mb-8"
+          style={{
+            background:
+              'linear-gradient(90deg, transparent, #D4AF37, #E8D48B, #D4AF37, transparent)',
+          }}
+        />
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -169,9 +211,11 @@ export default function ComparePage() {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <Scale className="h-6 w-6 text-[#D4AF37]" />
-              <h1 className="text-2xl font-bold text-foreground">{t('compare.title', locale)}</h1>
+              <h1 className="text-2xl font-bold text-foreground border-l-[3px] border-[#D4AF37] pl-3">
+                {t('compare.title', locale)}
+              </h1>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground ml-9">
               {books.length} {t('compare.bookCount', locale)}
             </p>
           </div>
@@ -251,11 +295,11 @@ export default function ComparePage() {
                     transition={{ duration: 0.3, delay: index * 0.1 }}
                     className="rounded-2xl border border-border overflow-hidden bg-card"
                   >
-                    {/* Card Header */}
-                    <div className="relative bg-gradient-to-r from-[#D4AF37]/10 to-[#F5E6A3]/5 p-4 flex items-start gap-4">
+                    {/* Card Header — gold top border */}
+                    <div className="relative border-t-2 border-t-[#D4AF37] bg-gradient-to-r from-[#D4AF37]/10 to-[#F5E6A3]/5 p-4 flex items-start gap-4">
                       <button
                         onClick={() => handleRemove(book.id)}
-                        className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-muted-foreground hover:bg-red-100 hover:text-red-500 transition-colors"
+                        className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-muted-foreground hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] hover:shadow-[0_0_8px_rgba(212,175,55,0.2)] hover:border-[#D4AF37]/30 hover:border transition-all duration-200"
                         aria-label={t('compare.remove', locale)}
                       >
                         <X className="h-4 w-4" />
@@ -353,7 +397,7 @@ export default function ComparePage() {
               >
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableRow className="bg-[#D4AF37]/5 hover:bg-[#D4AF37]/5">
                       <TableHead className="w-[180px] text-muted-foreground font-semibold">
                         {/* Attribute label column */}
                       </TableHead>
@@ -362,7 +406,7 @@ export default function ComparePage() {
                           <div className="relative group">
                             <button
                               onClick={() => handleRemove(book.id)}
-                              className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-red-100 hover:text-red-500 hover:border-red-200 transition-all z-10"
+                              className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] hover:border-[#D4AF37]/40 hover:shadow-[0_0_8px_rgba(212,175,55,0.2)] transition-all z-10"
                               aria-label={t('compare.remove', locale)}
                             >
                               <X className="h-3 w-3" />
@@ -467,13 +511,13 @@ export default function ComparePage() {
               </motion.div>
             </div>
 
-            {/* Empty slot indicator */}
+            {/* Empty slot indicator — gold color text */}
             {books.length < 3 && !loading && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5 }}
-                className="mt-6 flex justify-center"
+                className="mt-6 flex flex-col items-center gap-1.5"
               >
                 <Button
                   variant="outline"
@@ -485,6 +529,9 @@ export default function ComparePage() {
                     ? `Tambah ${3 - books.length} buku lagi`
                     : `Add ${3 - books.length} more book${3 - books.length > 1 ? 's' : ''}`}
                 </Button>
+                <span className="text-xs text-[#D4AF37]/60">
+                  {3 - books.length} {t('compare.slots', locale)}
+                </span>
               </motion.div>
             )}
           </>
@@ -510,7 +557,7 @@ function CompareRow({
   last?: boolean;
 }) {
   return (
-    <TableRow className={`${!last ? 'border-b border-border' : ''}`}>
+    <TableRow className={`group ${!last ? 'border-b border-border' : ''} transition-all duration-200 hover:border-l-[#D4AF37] hover:shadow-[inset_3px_0_0_#D4AF37]`}>
       <TableCell className="font-semibold text-sm text-muted-foreground whitespace-nowrap py-3 px-4 bg-muted/20">
         {label}
       </TableCell>

@@ -1,0 +1,613 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useRef, useCallback } from 'react';
+     4→import { useTheme } from 'next-themes';
+     5→import { motion, AnimatePresence } from 'framer-motion';
+     6→import { Sun, Moon, ShoppingCart, Search, Menu, X, BookOpen, Heart, User, Globe, LogIn, LayoutDashboard, LogOut, TrendingUp, Clock, Star, SearchX, Loader2, ArrowRight, LayoutGrid, GitCompare, Library, Award } from 'lucide-react';
+     7→import NotificationBell from '@/components/NotificationBell';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Input } from '@/components/ui/input';
+    10→import { Badge } from '@/components/ui/badge';
+    11→import { useCartStore } from '@/lib/cart-store';
+    12→import { useAppStore, formatPrice } from '@/lib/store';
+    13→import { t } from '@/lib/i18n';
+    14→import type { Locale } from '@/lib/i18n';
+    15→
+    16→const navItems = [
+    17→  { labelKey: 'nav.home', page: 'home' as const },
+    18→  { labelKey: 'nav.catalog', page: 'catalog' as const },
+    19→  { labelKey: 'nav.categories', page: 'categories' as const },
+    20→  { labelKey: 'nav.promo', page: 'vouchers' as const },
+    21→  { labelKey: 'nav.blog', page: 'blog' as const },
+    22→  { labelKey: 'nav.faq', page: 'faq' as const },
+    23→];
+    24→
+    25→const SEARCH_HISTORY_KEY = 'noveluxe-search-history';
+    26→const MAX_HISTORY = 8;
+    27→
+    28→function getSearchHistory(): string[] {
+    29→  if (typeof window === 'undefined') return [];
+    30→  try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]'); }
+    31→  catch { return []; }
+    32→}
+    33→
+    34→function addSearchHistory(query: string) {
+    35→  if (!query.trim()) return;
+    36→  try {
+    37→    let history = getSearchHistory().filter((h) => h !== query.trim());
+    38→    history.unshift(query.trim());
+    39→    history = history.slice(0, MAX_HISTORY);
+    40→    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+    41→  } catch { /* ignore */ }
+    42→}
+    43→
+    44→function removeSearchHistoryItem(term: string) {
+    45→  try {
+    46→    const history = getSearchHistory().filter((h) => h !== term);
+    47→    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+    48→  } catch { /* ignore */ }
+    49→}
+    50→
+    51→function clearSearchHistory() {
+    52→  try { localStorage.removeItem(SEARCH_HISTORY_KEY); } catch { /* ignore */ }
+    53→}
+    54→
+    55→/** Highlight matching portions of text in gold */
+    56→function HighlightText({ text, query }: { text: string; query: string }) {
+    57→  if (!query.trim() || !text) return <>{text}</>;
+    58→  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    59→  if (idx === -1) return <>{text}</>;
+    60→  const before = text.slice(0, idx);
+    61→  const match = text.slice(idx, idx + query.length);
+    62→  const after = text.slice(idx + query.length);
+    63→  return (
+    64→    <>
+    65→      {before}
+    66→      <span className="text-[#D4AF37] font-semibold">{match}</span>
+    67→      {after}
+    68→    </>
+    69→  );
+    70→}
+    71→
+    72→/** Small star rating display */
+    73→function StarRating({ rating }: { rating: number }) {
+    74→  if (!rating || rating <= 0) return null;
+    75→  return (
+    76→    <div className="flex items-center gap-0.5">
+    77→      <Star className="h-3 w-3 fill-[#D4AF37] text-[#D4AF37]" />
+    78→      <span className="text-[11px] font-medium text-muted-foreground">{rating.toFixed(1)}</span>
+    79→    </div>
+    80→  );
+    81→}
+    82→
+    83→/** Category badge */
+    84→function CategoryBadge({ category, locale }: { category?: { name: string; slug: string } | null; locale: Locale }) {
+    85→  if (!category) return null;
+    86→  return (
+    87→    <span className="inline-flex items-center rounded-full bg-[#D4AF37]/10 px-2 py-0.5 text-[10px] font-medium text-[#D4AF37] border border-[#D4AF37]/20">
+    88→      {locale === 'en' && category.slug ? category.slug.charAt(0).toUpperCase() + category.slug.slice(1) : category.name}
+    89→    </span>
+    90→  );
+    91→}
+    92→
+    93→/** Book result row for search and trending */
+    94→function BookResultItem({
+    95→  book,
+    96→  locale,
+    97→  isActive,
+    98→  onClick,
+    99→}: {
+   100→  book: any;
+   101→  locale: Locale;
+   102→  isActive: boolean;
+   103→  onClick: () => void;
+   104→}) {
+   105→  return (
+   106→    <button
+   107→      onClick={onClick}
+   108→      className={`flex items-center gap-3 w-full px-3 py-2.5 text-left transition-all duration-150 group border-l-2 ${isActive ? 'bg-[#D4AF37]/10 border-l-[#D4AF37]' : 'border-l-transparent hover:bg-[#D4AF37]/5 hover:border-l-[#D4AF37]/40'}`}
+   109→    >
+   110→      {/* Cover thumbnail */}
+   111→      {book.coverImage ? (
+   112→        <img
+   113→          src={book.coverImage}
+   114→          alt={book.title}
+   115→          className="h-12 w-12 rounded-lg object-cover shrink-0 bg-muted"
+   116→        />
+   117→      ) : (
+   118→        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted shrink-0">
+   119→          <BookOpen className="h-5 w-5 text-muted-foreground/50" />
+   120→        </div>
+   121→      )}
+   122→
+   123→      {/* Info */}
+   124→      <div className="min-w-0 flex-1">
+   125→        <p className="text-sm font-semibold truncate leading-tight">
+   126→          <HighlightText text={book.title || ''} query={book._searchQuery || ''} />
+   127→        </p>
+   128→        <p className="text-xs text-muted-foreground truncate mt-0.5">
+   129→          <HighlightText text={book.author || ''} query={book._searchQuery || ''} />
+   130→        </p>
+   131→        <div className="flex items-center gap-2 mt-1">
+   132→          <CategoryBadge category={book.category} locale={locale} />
+   133→          <StarRating rating={book.rating} />
+   134→        </div>
+   135→      </div>
+   136→
+   137→      {/* Price */}
+   138→      {(book.discountPrice || book.price) ? (
+   139→        <span className="text-sm font-bold text-[#D4AF37] shrink-0">
+   140→          {formatPrice(book.discountPrice || book.price, locale)}
+   141→        </span>
+   142→      ) : null}
+   143→    </button>
+   144→  );
+   145→}
+   146→
+   147→export default function Header() {
+   148→  const { theme, setTheme } = useTheme();
+   149→  const [isScrolled, setIsScrolled] = useState(false);
+   150→  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+   151→  const [searchResults, setSearchResults] = useState<any[]>([]);
+   152→  const [isSearching, setIsSearching] = useState(false);
+   153→  const [highlightedIdx, setHighlightedIdx] = useState(-1);
+   154→  const [trendingBooks, setTrendingBooks] = useState<any[]>([]);
+   155→  const searchRef = useRef<HTMLInputElement>(null);
+   156→  const dropdownRef = useRef<HTMLDivElement>(null);
+   157→  const searchTimeout = useRef<NodeJS.Timeout>();
+   158→  const userMenuRef = useRef<HTMLDivElement>(null);
+   159→  const [historyKey, setHistoryKey] = useState(0);
+   160→  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+   161→
+   162→  const totalItems = useCartStore((s) => s.getTotalItems());
+   163→  const openCart = useCartStore((s) => s.openCart);
+   164→  const { page, locale, setLocale, user, isAuthenticated, setUser, setPage, wishlist, comparison, searchQuery, setSearchQuery, searchOpen, setSearchOpen } = useAppStore();
+   165→
+   166→  // Fetch trending books on first open
+   167→  useEffect(() => {
+   168→    if (searchOpen && trendingBooks.length === 0) {
+   169→      fetch('/api/books/trending')
+   170→        .then((r) => r.json())
+   171→        .then((data) => {
+   172→          if (Array.isArray(data)) setTrendingBooks(data.slice(0, 5));
+   173→        })
+   174→        .catch(() => {});
+   175→    }
+   176→  }, [searchOpen, trendingBooks.length]);
+   177→
+   178→  // Compute which section to show
+   179→  const searchHistory = getSearchHistory();
+   180→  const hasQuery = searchQuery.trim().length > 0;
+   181→  const showTrending = searchOpen && !hasQuery && searchHistory.length === 0;
+   182→  const showHistory = searchOpen && !hasQuery && searchHistory.length > 0;
+   183→  const showResults = hasQuery && searchResults.length > 0 && !isSearching;
+   184→  const showNoResults = hasQuery && !isSearching && searchResults.length === 0;
+   185→  const showLoading = hasQuery && isSearching;
+   186→
+   187→  // Total navigable items for keyboard
+   188→  const totalItems_kb = showResults
+   189→    ? searchResults.length
+   190→    : showHistory
+   191→      ? searchHistory.length
+   192→      : showTrending
+   193→        ? trendingBooks.length
+   194→        : 0;
+   195→
+   196→  // Scroll effects
+   197→  useEffect(() => {
+   198→    const handleScroll = () => setIsScrolled(window.scrollY > 20);
+   199→    window.addEventListener('scroll', handleScroll, { passive: true });
+   200→    return () => window.removeEventListener('scroll', handleScroll);
+   201→  }, []);
+   202→
+   203→  // Focus search on open
+   204→  useEffect(() => {
+   205→    if (searchOpen && searchRef.current) searchRef.current.focus();
+   206→  }, [searchOpen]);
+   207→
+   208→  // Click outside to close user menu
+   209→  useEffect(() => {
+   210→    function handleClickOutside(event: MouseEvent) {
+   211→      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+   212→        setIsUserMenuOpen(false);
+   213→      }
+   214→    }
+   215→    document.addEventListener('mousedown', handleClickOutside);
+   216→    return () => document.removeEventListener('mousedown', handleClickOutside);
+   217→  }, []);
+   218→
+   219→  // Debounced search
+   220→  const handleSearch = useCallback((query: string) => {
+   221→    setSearchQuery(query);
+   222→    setHighlightedIdx(-1);
+   223→    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+   224→    if (!query.trim()) { setSearchResults([]); setIsSearching(false); return; }
+   225→    setIsSearching(true);
+   226→    searchTimeout.current = setTimeout(async () => {
+   227→      try {
+   228→        const res = await fetch(`/api/books?search=${encodeURIComponent(query)}&limit=6`);
+   229→        const data = await res.json();
+   230→        const books = (data.books || []).map((b: any) => ({ ...b, _searchQuery: query }));
+   231→        setSearchResults(books);
+   232→      } catch { setSearchResults([]); }
+   233→      setIsSearching(false);
+   234→    }, 300);
+   235→  }, [setSearchQuery]);
+   236→
+   237→  const closeSearch = useCallback(() => {
+   238→    setSearchOpen(false);
+   239→    setSearchResults([]);
+   240→    setSearchQuery('');
+   241→    setHighlightedIdx(-1);
+   242→    setIsSearching(false);
+   243→  }, [setSearchOpen, setSearchQuery]);
+   244→
+   245→  const handleSelectResult = useCallback((query?: string) => {
+   246→    const q = query || searchQuery;
+   247→    if (q.trim()) addSearchHistory(q);
+   248→    setPage('catalog', { search: q.trim() });
+   249→    closeSearch();
+   250→  }, [searchQuery, setPage, closeSearch]);
+   251→
+   252→  const handleGoToBook = useCallback((book: any) => {
+   253→    if (book.slug) {
+   254→      if (searchQuery.trim()) addSearchHistory(searchQuery);
+   255→      setPage('book-detail', { slug: book.slug });
+   256→      closeSearch();
+   257→    }
+   258→  }, [searchQuery, setPage, closeSearch]);
+   259→
+   260→  // Keyboard navigation
+   261→  const handleKeyDown = (e: React.KeyboardEvent) => {
+   262→    if (e.key === 'ArrowDown') {
+   263→      e.preventDefault();
+   264→      setHighlightedIdx((prev) => Math.min(prev + 1, totalItems_kb - 1));
+   265→    } else if (e.key === 'ArrowUp') {
+   266→      e.preventDefault();
+   267→      setHighlightedIdx((prev) => Math.max(prev - 1, -1));
+   268→    } else if (e.key === 'Enter') {
+   269→      e.preventDefault();
+   270→      if (highlightedIdx >= 0 && highlightedIdx < totalItems_kb) {
+   271→        if (showResults && searchResults[highlightedIdx]) {
+   272→          handleGoToBook(searchResults[highlightedIdx]);
+   273→        } else if (showHistory && searchHistory[highlightedIdx]) {
+   274→          const term = searchHistory[highlightedIdx];
+   275→          setSearchQuery(term);
+   276→          handleSearch(term);
+   277→        } else if (showTrending && trendingBooks[highlightedIdx]) {
+   278→          handleGoToBook(trendingBooks[highlightedIdx]);
+   279→        }
+   280→      } else if (searchQuery.trim()) {
+   281→        handleSelectResult();
+   282→      }
+   283→    } else if (e.key === 'Escape') {
+   284→      closeSearch();
+   285→    }
+   286→  };
+   287→
+   288→  const handleNavClick = (p: typeof page, params?: Record<string, string>) => {
+   289→    setIsMobileMenuOpen(false);
+   290→    closeSearch();
+   291→    setPage(p, params);
+   292→  };
+   293→
+   294→  const toggleLocale = () => {
+   295→    setLocale(locale === 'id' ? 'en' : 'id');
+   296→  };
+   297→
+   298→  const handleLogout = () => {
+   299→    setUser(null);
+   300→    setIsUserMenuOpen(false);
+   301→    setPage('home');
+   302→  };
+   303→
+   304→  const handleRemoveHistoryItem = (term: string, e: React.MouseEvent) => {
+   305→    e.stopPropagation();
+   306→    removeSearchHistoryItem(term);
+   307→    setHistoryKey((k) => k + 1);
+   308→  };
+   309→
+   310→  const handleClearHistory = (e: React.MouseEvent) => {
+   311→    e.stopPropagation();
+   312→    clearSearchHistory();
+   313→    setHistoryKey((k) => k + 1);
+   314→  };
+   315→
+   316→  const handleHistoryClick = (term: string) => {
+   317→    setSearchQuery(term);
+   318→    handleSearch(term);
+   319→  };
+   320→
+   321→  const darkMode = theme === 'dark';
+   322→
+   323→  return (
+   324→    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled ? (darkMode ? 'bg-[#0A0A0A]/90' : 'bg-white/90') + ' backdrop-blur-[30px] border-b border-border shadow-sm' : 'bg-transparent'}`}>
+   325→      {isScrolled && <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#D4AF37]/40 to-transparent" />}
+   326→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   327→        <div className="flex h-16 items-center justify-between md:h-20">
+   328→          {/* Logo */}
+   329→          <button onClick={() => handleNavClick('home')} className="flex items-center gap-2.5 group" aria-label="Home">
+   330→            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D4AF37] text-white transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-[#D4AF37]/30">
+   331→              <BookOpen className="h-5 w-5" />
+   332→            </div>
+   333→            <span className="font-heading text-xl font-bold tracking-tight md:text-2xl transition-all duration-300 group-hover:drop-shadow-[0_0_15px_rgba(212,175,55,0.3)]">
+   334→              Novel<span className="text-[#D4AF37]">uxe</span>
+   335→            </span>
+   336→          </button>
+   337→
+   338→          {/* Desktop Nav */}
+   339→          <nav className="hidden lg:flex items-center gap-1" role="navigation" aria-label="Main navigation">
+   340→            {navItems.map((item) => (
+   341→              <button key={item.labelKey} onClick={() => handleNavClick(item.page, item.params)} className={`relative px-3.5 py-2 text-sm font-medium transition-colors rounded-md ${page === item.page ? 'text-[#D4AF37]' : 'text-muted-foreground hover:text-foreground'} hover:text-[#D4AF37]`}>
+   342→                {t(item.labelKey, locale)}
+   343→                {page === item.page && (
+   344→                  <motion.div layoutId="activeNav" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] rounded-full" transition={{ type: 'spring', stiffness: 380, damping: 30 }} />
+   345→                )}
+   346→              </button>
+   347→            ))}
+   348→          </nav>
+   349→
+   350→          {/* Actions */}
+   351→          <div className="flex items-center gap-1.5">
+   352→            {/* Search */}
+   353→            <div className="relative" ref={dropdownRef}>
+   354→              <Button variant="ghost" size="icon" onClick={() => { if (searchOpen) { closeSearch(); } else { setSearchOpen(true); } }} className={`h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] ${searchOpen ? 'text-[#D4AF37]' : ''}`} aria-label="Search">
+   355→                {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+   356→              </Button>
+   357→
+   358→              <AnimatePresence>
+   359→                {searchOpen && (
+   360→                  <motion.div
+   361→                    initial={{ opacity: 0, y: -8, scale: 0.97 }}
+   362→                    animate={{ opacity: 1, y: 0, scale: 1 }}
+   363→                    exit={{ opacity: 0, y: -8, scale: 0.97 }}
+   364→                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+   365→                    className="absolute right-0 top-12 w-[360px] sm:w-[420px]"
+   366→                  >
+   367→                    <div className="rounded-xl border border-border bg-background shadow-2xl shadow-black/10 overflow-hidden">
+   368→                      {/* Search Input */}
+   369→                      <div className="p-2">
+   370→                        <div className="relative">
+   371→                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   372→                          <Input
+   373→                            ref={searchRef}
+   374→                            value={searchQuery}
+   375→                            onChange={(e) => handleSearch(e.target.value)}
+   376→                            onKeyDown={handleKeyDown}
+   377→                            placeholder={t('nav.search', locale)}
+   378→                            className="h-10 pl-9 pr-3 border-0 bg-secondary/50 focus-visible:ring-0 focus-visible:ring-offset-0 [&]:focus-within:ring-1 [&]:focus-within:ring-[#D4AF37]/50 rounded-lg"
+   379→                          />
+   380→                          {isSearching && (
+   381→                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D4AF37] animate-spin" />
+   382→                          )}
+   383→                        </div>
+   384→                      </div>
+   385→
+   386→                      {/* Dropdown content */}
+   387→                      <div className="max-h-[380px] overflow-y-auto scrollbar-thin">
+   388→
+   389→                        {/* Search History - shown when no active query and history exists */}
+   390→                        {showHistory && (
+   391→                          <div className="px-3 pb-2" key={`hist-${historyKey}`}>
+   392→                            <div className="flex items-center justify-between mb-2 px-1">
+   393→                              <div className="flex items-center gap-1.5">
+   394→                                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+   395→                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+   396→                                  {t('search.recent', locale)}
+   397→                                </span>
+   398→                              </div>
+   399→                              <button
+   400→                                onClick={handleClearHistory}
+   401→                                className="text-[11px] font-medium text-muted-foreground hover:text-[#D4AF37] transition-colors"
+   402→                              >
+   403→                                {t('search.clearAll', locale)}
+   404→                              </button>
+   405→                            </div>
+   406→                            <div className="space-y-0.5">
+   407→                              {searchHistory.map((term, idx) => (
+   408→                                <div
+   409→                                  key={term}
+   410→                                  onClick={() => handleHistoryClick(term)}
+   411→                                  className={`flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg text-sm text-left transition-all duration-150 cursor-pointer border-l-2 ${highlightedIdx === idx ? 'bg-[#D4AF37]/10 border-l-[#D4AF37]' : 'border-l-transparent hover:bg-[#D4AF37]/5 hover:border-l-[#D4AF37]/40'}`}
+   412→                                >
+   413→                                  <Clock className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+   414→                                  <span className="flex-1 truncate text-sm">{term}</span>
+   415→                                  <button
+   416→                                    onClick={(e) => handleRemoveHistoryItem(term, e)}
+   417→                                    className="p-0.5 rounded-md hover:bg-muted transition-colors shrink-0"
+   418→                                    aria-label="Remove"
+   419→                                  >
+   420→                                    <X className="h-3 w-3 text-muted-foreground/60 hover:text-foreground" />
+   421→                                  </button>
+   422→                                </div>
+   423→                              ))}
+   424→                            </div>
+   425→                          </div>
+   426→                        )}
+   427→
+   428→                        {/* Trending Books - shown when no query and no history */}
+   429→                        {showTrending && (
+   430→                          <div className="px-1 pb-2">
+   431→                            <div className="flex items-center gap-1.5 mb-1 px-2 pt-1">
+   432→                              <TrendingUp className="h-3.5 w-3.5 text-[#D4AF37]" />
+   433→                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+   434→                                {t('search.trending', locale)}
+   435→                              </span>
+   436→                            </div>
+   437→                            <div>
+   438→                              {trendingBooks.map((book, idx) => (
+   439→                                <BookResultItem
+   440→                                  key={book.id}
+   441→                                  book={book}
+   442→                                  locale={locale}
+   443→                                  isActive={highlightedIdx === idx}
+   444→                                  onClick={() => handleGoToBook(book)}
+   445→                                />
+   446→                              ))}
+   447→                            </div>
+   448→                          </div>
+   449→                        )}
+   450→
+   451→                        {/* Search Results */}
+   452→                        {showResults && (
+   453→                          <div className="border-t border-border">
+   454→                            {/* Results for header */}
+   455→                            <div className="flex items-center gap-2 px-3 py-2 bg-secondary/30">
+   456→                              <LayoutGrid className="h-3.5 w-3.5 text-[#D4AF37]" />
+   457→                              <span className="text-xs font-medium text-muted-foreground">
+   458→                                {t('search.resultsFor', locale)} &ldquo;<span className="text-foreground font-semibold">{searchQuery}</span>&rdquo;
+   459→                              </span>
+   460→                            </div>
+   461→                            <div>
+   462→                              {searchResults.map((book: any, idx: number) => (
+   463→                                <BookResultItem
+   464→                                  key={book.id}
+   465→                                  book={book}
+   466→                                  locale={locale}
+   467→                                  isActive={highlightedIdx === idx}
+   468→                                  onClick={() => handleGoToBook(book)}
+   469→                                />
+   470→                              ))}
+   471→                            </div>
+   472→                            {/* View all results link */}
+   473→                            <button
+   474→                              onClick={() => handleSelectResult()}
+   475→                              className="flex items-center justify-center gap-2 w-full px-3 py-2.5 text-sm font-medium text-[#D4AF37] hover:bg-[#D4AF37]/5 transition-colors border-t border-border"
+   476→                            >
+   477→                              {t('search.viewAll', locale)}
+   478→                              <ArrowRight className="h-3.5 w-3.5" />
+   479→                            </button>
+   480→                          </div>
+   481→                        )}
+   482→
+   483→                        {/* Loading state */}
+   484→                        {showLoading && (
+   485→                          <div className="flex flex-col items-center justify-center py-8 gap-2">
+   486→                            <Loader2 className="h-5 w-5 text-[#D4AF37] animate-spin" />
+   487→                            <span className="text-xs text-muted-foreground">{t('search.searching', locale)}</span>
+   488→                          </div>
+   489→                        )}
+   490→
+   491→                        {/* Empty state */}
+   492→                        {showNoResults && (
+   493→                          <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+   494→                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+   495→                              <SearchX className="h-6 w-6 text-muted-foreground/50" />
+   496→                            </div>
+   497→                            <p className="text-sm font-semibold text-foreground mb-1">{t('search.noResults', locale)}</p>
+   498→                            <p className="text-xs text-muted-foreground max-w-[240px]">{t('search.noResultsDesc', locale)}</p>
+   499→                          </div>
+   500→                        )}
+   501→                      </div>
+   502→                    </div>
+   503→                  </motion.div>
+   504→                )}
+   505→              </AnimatePresence>
+   506→            </div>
+   507→
+   508→            {/* Notifications */}
+   509→            <NotificationBell />
+   510→
+   511→            {/* Locale Toggle */}
+   512→            <Button variant="ghost" size="icon" onClick={toggleLocale} className="h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Toggle language">
+   513→              <Globe className="h-4 w-4" />
+   514→            </Button>
+   515→
+   516→            {theme && (
+   517→              <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Toggle theme">
+   518→                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+   519→              </Button>
+   520→            )}
+   521→
+   522→            {/* Wishlist */}
+   523→            <Button variant="ghost" size="icon" onClick={() => handleNavClick('wishlist')} className="relative h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Wishlist">
+   524→              <Heart className="h-4 w-4" />
+   525→              {wishlist.length > 0 && <span className="absolute -right-0.5 -top-0.5 h-4 min-w-4 flex items-center justify-center rounded-full bg-[#D4AF37] px-1 text-[9px] font-bold text-white">{wishlist.length}</span>}
+   526→            </Button>
+   527→
+   528→            {/* Compare */}
+   529→            <Button variant="ghost" size="icon" onClick={() => handleNavClick('compare')} className="relative h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Compare">
+   530→              <GitCompare className="h-4 w-4" />
+   531→              {comparison.length > 0 && <span className="absolute -right-0.5 -top-0.5 h-4 min-w-4 flex items-center justify-center rounded-full bg-[#D4AF37] px-1 text-[9px] font-bold text-white">{comparison.length}</span>}
+   532→            </Button>
+   533→
+   534→            {/* Cart */}
+   535→            <Button variant="ghost" size="icon" onClick={openCart} className="relative h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Cart">
+   536→              <ShoppingCart className="h-4 w-4" />
+   537→              {totalItems > 0 && <Badge className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full bg-[#D4AF37] px-1.5 text-[10px] font-bold text-white border-0">{totalItems}</Badge>}
+   538→            </Button>
+   539→
+   540→            {/* User Menu */}
+   541→            {theme && (
+   542→              <div className="relative" ref={userMenuRef}>
+   543→                <Button variant="ghost" size="icon" onClick={() => isAuthenticated ? setIsUserMenuOpen(!isUserMenuOpen) : setPage('login')} className="h-9 w-9 hover:bg-[#D4AF37]/10 hover:text-[#D4AF37]" aria-label="Account">
+   544→                  <User className="h-4 w-4" />
+   545→                </Button>
+   546→                <AnimatePresence>
+   547→                  {isUserMenuOpen && isAuthenticated && (
+   548→                    <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }} transition={{ duration: 0.15 }} className="absolute right-0 top-12 w-56 rounded-xl border border-border bg-background shadow-xl shadow-black/10 overflow-hidden">
+   549→                      <div className="p-3 border-b border-border">
+   550→                        <p className="text-sm font-semibold truncate">{user?.name}</p>
+   551→                        <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+   552→                        {user?.points ? <p className="text-xs text-[#D4AF37] mt-1">{t('points.label', locale)}: {user.points}</p> : null}
+   553→                      </div>
+   554→                      <div className="p-1.5">
+   555→                        <button onClick={() => { setPage('dashboard'); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><User className="h-4 w-4" />{t('nav.profile', locale)}</button>
+   556→                        <button onClick={() => { setPage('dashboard', { tab: 'orders' }); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><ShoppingCart className="h-4 w-4" />{t('nav.orders', locale)}</button>
+   557→                        <button onClick={() => { setPage('reading-lists'); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><Library className="h-4 w-4" />{t('readingLists.title', locale)}</button>
+   558→                        <button onClick={() => { setPage('loyalty'); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><Award className="h-4 w-4" />{t('nav.loyalty', locale)}</button>
+   559→                        {user?.role === 'admin' && (
+   560→                          <button onClick={() => { setPage('admin'); setIsUserMenuOpen(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors text-left"><LayoutDashboard className="h-4 w-4" />{t('nav.admin', locale)}</button>
+   561→                        )}
+   562→                        <div className="my-1 border-t border-border" />
+   563→                        <button onClick={handleLogout} className="flex items-center gap-2.5 w-full px-3 py-2 text-sm rounded-lg hover:bg-destructive/10 hover:text-destructive transition-colors text-left"><LogOut className="h-4 w-4" />{t('nav.logout', locale)}</button>
+   564→                      </div>
+   565→                    </motion.div>
+   566→                  )}
+   567→                </AnimatePresence>
+   568→              </div>
+   569→            )}
+   570→
+   571→            {/* Mobile Menu Toggle */}
+   572→            <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="lg:hidden h-9 w-9" aria-label="Menu">
+   573→              {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+   574→            </Button>
+   575→          </div>
+   576→        </div>
+   577→      </div>
+   578→
+   579→      {/* Mobile Menu */}
+   580→      <AnimatePresence>
+   581→        {isMobileMenuOpen && (
+   582→          <motion.div
+   583→            initial={{ opacity: 0, y: -10 }}
+   584→            animate={{ opacity: 1, y: 0 }}
+   585→            exit={{ opacity: 0, y: -10 }}
+   586→            transition={{ duration: 0.2 }}
+   587→            className="lg:hidden border-t border-border bg-background/95 backdrop-blur-xl overflow-hidden"
+   588→          >
+   589→            <nav className="flex flex-col gap-0.5 p-3 max-h-[60vh] overflow-y-auto scrollbar-thin">
+   590→              {navItems.map((item) => (
+   591→                <button key={item.labelKey} onClick={() => handleNavClick(item.page, item.params)} className={`text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${page === item.page ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}>
+   592→                  {t(item.labelKey, locale)}
+   593→                </button>
+   594→              ))}
+   595→              <div className="my-2 border-t border-border" />
+   596→              {isAuthenticated ? (
+   597→                <>
+   598→                  <button onClick={() => { setPage('dashboard'); setIsMobileMenuOpen(false); }} className="text-left px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground">{t('nav.profile', locale)}</button>
+   599→                  <button onClick={() => { setPage('reading-lists'); setIsMobileMenuOpen(false); }} className="text-left px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground flex items-center gap-2"><Library className="h-4 w-4" />{t('readingLists.title', locale)}</button>
+   600→                  <button onClick={() => { setPage('loyalty'); setIsMobileMenuOpen(false); }} className="text-left px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground flex items-center gap-2"><Award className="h-4 w-4" />{t('nav.loyalty', locale)}</button>
+   601→                  <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="text-left px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground">{t('nav.logout', locale)}</button>
+   602→                </>
+   603→              ) : (
+   604→                <button onClick={() => { setPage('login'); setIsMobileMenuOpen(false); }} className="text-left px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground flex items-center gap-2"><LogIn className="h-4 w-4" />{t('nav.login', locale)}</button>
+   605→              )}
+   606→            </nav>
+   607→          </motion.div>
+   608→        )}
+   609→      </AnimatePresence>
+   610→    </header>
+   611→  );
+   612→}
+   613→

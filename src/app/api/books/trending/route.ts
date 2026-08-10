@@ -7,7 +7,7 @@ export async function GET() {
       where: { isBestSeller: true },
       orderBy: { soldCount: 'desc' },
       take: 5,
-      select: { id: true, title: true, slug: true, author: true, coverImage: true, rating: true, soldCount: true, discountPrice: true, price: true },
+      select: { id: true, title: true, slug: true, author: true, coverImage: true, rating: true, soldCount: true, discountPrice: true, price: true, category: { select: { id: true, name: true, slug: true } } },
     });
     if (books.length < 5) {
       const existingIds = books.map((b) => b.id);
@@ -15,7 +15,7 @@ export async function GET() {
         where: { id: { notIn: existingIds } },
         orderBy: { rating: 'desc' },
         take: 5 - books.length,
-        select: { id: true, title: true, slug: true, author: true, coverImage: true, rating: true, soldCount: true, discountPrice: true, price: true },
+        select: { id: true, title: true, slug: true, author: true, coverImage: true, rating: true, soldCount: true, discountPrice: true, price: true, category: { select: { id: true, name: true, slug: true } } },
       });
       books.push(...more);
     }

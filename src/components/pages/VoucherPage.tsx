@@ -72,6 +72,7 @@ function VoucherCard({
       : 0;
   const isExpiring = daysLeft <= 7 && daysLeft > 0;
   const isExpiringToday = daysLeft === 0;
+  const isHighUsage = usagePercent > 80;
 
   const handleClaim = useCallback(() => {
     navigator.clipboard.writeText(voucher.code).then(() => {
@@ -88,9 +89,9 @@ function VoucherCard({
       transition={{ duration: 0.4, delay: index * 0.07 }}
       className="group relative"
     >
-      {/* Ticket Card */}
+      {/* Ticket Card - enhanced hover: lift, gold shadow glow, slight scale */}
       <div
-        className={`relative overflow-hidden rounded-2xl border bg-card transition-all duration-300 hover:shadow-xl hover:shadow-[#D4AF37]/10 hover:-translate-y-1 ${
+        className={`relative overflow-hidden rounded-2xl border bg-card transition-all duration-300 hover:shadow-xl hover:shadow-[#D4AF37]/15 hover:-translate-y-1 hover:scale-[1.01] ${
           isExpiring
             ? 'border-[#D4AF37]/50 ring-1 ring-[#D4AF37]/20'
             : 'border-border'
@@ -198,14 +199,33 @@ function VoucherCard({
                     initial={{ width: 0 }}
                     animate={{ width: `${usagePercent}%` }}
                     transition={{ duration: 0.8, delay: index * 0.07 + 0.3 }}
-                    className={`h-full rounded-full ${
+                    className={`relative h-full rounded-full ${
                       usagePercent > 80
                         ? 'bg-red-400'
                         : usagePercent > 50
                         ? 'bg-amber-400'
                         : 'bg-[#D4AF37]'
                     }`}
-                  />
+                  >
+                    {/* Shimmer animation effect when usage is high (>80%) */}
+                    {isHighUsage && (
+                      <motion.div
+                        className="absolute inset-0 rounded-full"
+                        style={{
+                          background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%)',
+                          backgroundSize: '200% 100%',
+                        }}
+                        animate={{
+                          backgroundPosition: ['-200% 0', '200% 0'],
+                        }}
+                        transition={{
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: 'linear',
+                        }}
+                      />
+                    )}
+                  </motion.div>
                 </div>
               </div>
             )}
@@ -215,7 +235,7 @@ function VoucherCard({
               </p>
             )}
 
-            {/* Claim button */}
+            {/* Claim button - with checkmark animation when claimed */}
             <Button
               onClick={handleClaim}
               disabled={copied}
@@ -227,7 +247,14 @@ function VoucherCard({
             >
               {copied ? (
                 <>
-                  <Check className="h-4 w-4 mr-2" />
+                  <motion.span
+                    initial={{ scale: 0, rotate: -90 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                    className="inline-flex"
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                  </motion.span>
                   {t('voucher.claimed', locale)}
                 </>
               ) : (
@@ -365,6 +392,33 @@ export default function VoucherPage() {
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-b from-[#D4AF37]/5 via-[#D4AF37]/3 to-transparent pt-8 pb-6">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#D4AF37]/8 via-transparent to-transparent" />
+
+        {/* Floating gold sparkle decorations in hero section */}
+        <div className="absolute top-[20%] left-[12%] z-[2] pointer-events-none">
+          <motion.div
+            animate={{ y: [0, -6, 0], rotate: [0, 15, -15, 0] }}
+            transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
+          >
+            <Sparkles className="h-4 w-4 text-[#D4AF37]/30" />
+          </motion.div>
+        </div>
+        <div className="absolute top-[30%] right-[15%] z-[2] pointer-events-none">
+          <motion.div
+            animate={{ y: [0, -8, 0], rotate: [0, -10, 10, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.8 }}
+          >
+            <Sparkles className="h-5 w-5 text-[#E8D48B]/35" />
+          </motion.div>
+        </div>
+        <div className="absolute top-[55%] left-[20%] z-[2] pointer-events-none">
+          <motion.div
+            animate={{ y: [0, -5, 0], rotate: [0, 20, -20, 0] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 1.5 }}
+          >
+            <Sparkles className="h-3 w-3 text-[#D4AF37]/25" />
+          </motion.div>
+        </div>
+
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Breadcrumb */}
           <motion.div
@@ -480,6 +534,16 @@ export default function VoucherPage() {
               )}
             </AnimatePresence>
 
+            {/* Decorative gold divider between expiring soon and all vouchers */}
+            {expiringVouchers.length > 0 && regularVouchers.length > 0 && (
+              <div
+                className="h-[1px] w-full"
+                style={{
+                  background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.35), rgba(232,212,139,0.45), rgba(212,175,55,0.35), transparent)',
+                }}
+              />
+            )}
+
             {/* All Vouchers Section */}
             <motion.section
               initial={{ opacity: 0, y: 20 }}
@@ -490,7 +554,8 @@ export default function VoucherPage() {
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D4AF37]/10">
                   <Ticket className="h-5 w-5 text-[#D4AF37]" />
                 </div>
-                <div>
+                {/* Section heading with gold left border accent */}
+                <div className="border-l-[3px] border-[#D4AF37] pl-3">
                   <h2 className="text-lg sm:text-xl font-bold text-foreground">
                     {t('voucher.allVouchers', locale)}
                   </h2>

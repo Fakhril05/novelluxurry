@@ -1,0 +1,864 @@
+   207→    return () => window.removeEventListener('recently-viewed-updated', handler);
+   208→  }, [fetchRecentlyViewed]);
+   209→
+   210→  // ── Fetch data ──
+   211→  useEffect(() => {
+   212→    async function fetchData() {
+   213→      try {
+   214→        const [booksRes, catsRes, testRes, picksRes] = await Promise.all([
+   215→          fetch('/api/books?limit=16'),
+   216→          fetch('/api/categories'),
+   217→          fetch('/api/testimonials'),
+   218→          fetch('/api/books?minRating=4.8&sort=rating&limit=4'),
+   219→        ]);
+   220→        if (!booksRes.ok || !catsRes.ok || !testRes.ok) throw new Error('Fetch failed');
+   221→        const [booksData, catsData, testData, picksData] = await Promise.all([
+   222→          booksRes.json(),
+   223→          catsRes.json(),
+   224→          testRes.json(),
+   225→          picksRes.ok ? picksRes.json() : { books: [] },
+   226→        ]);
+   227→        setBooks(booksData.books || []);
+   228→        setCategories(catsData);
+   229→        setTestimonials(testData);
+   230→        setEditorPicks(picksData.books || []);
+   231→      } catch (err) {
+   232→        console.error('Error loading homepage data:', err);
+   233→      } finally {
+   234→        setLoading(false);
+   235→      }
+   236→    }
+   237→    fetchData();
+   238→    fetchRecentlyViewed();
+   239→  }, [fetchRecentlyViewed]);
+   240→
+   241→  // ── Auto-play testimonial carousel ──
+   242→  useEffect(() => {
+   243→    if (testimonials.length <= 1) return;
+   244→    const interval = setInterval(() => {
+   245→      setActiveIdx((prev) => (prev + 1) % testimonials.length);
+   246→    }, 5000);
+   247→    return () => clearInterval(interval);
+   248→  }, [testimonials.length]);
+   249→
+   250→  // ── Derived data ──
+   251→  const bestsellers = books.filter((b) => b.isBestSeller);
+   252→  const newArrivals = books.filter((b) => b.isNewArrival);
+   253→
+   254→  // ── Loading skeleton ──
+   255→  if (loading) {
+   256→    return (
+   257→      <div className="min-h-screen flex items-center justify-center">
+   258→        <div className="flex flex-col items-center gap-4">
+   259→          <div className="h-12 w-12 rounded-full border-4 border-[#D4AF37]/20 border-t-[#D4AF37] animate-spin" />
+   260→          <p className="text-muted-foreground text-sm">{t('general.loading', locale)}</p>
+   261→        </div>
+   262→      </div>
+   263→    );
+   264→  }
+   265→
+   266→  return (
+   267→    <main>
+   268→      {/* ────────────────────────────────────────────────────
+   269→          1. HERO SECTION
+   270→          ──────────────────────────────────────────────────── */}
+   271→      <section className="relative min-h-screen flex items-center overflow-hidden">
+   272→        {/* Background */}
+   273→        <div className="absolute inset-0 z-0">
+   274→          <img
+   275→            src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1920&h=1080&fit=crop"
+   276→            alt="Luxury library"
+   277→            className="h-full w-full object-cover"
+   278→          />
+   279→          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/30" />
+   280→          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+   281→        </div>
+   282→
+   283→        {/* Radial gradient glow behind text */}
+   284→        <div
+   285→          className="absolute inset-0 z-[1] pointer-events-none"
+   286→          style={{
+   287→            background:
+   288→              'radial-gradient(ellipse at 35% 40%, rgba(212,175,55,0.15) 0%, transparent 70%)',
+   289→          }}
+   290→        />
+   291→
+   292→        {/* Floating gold particles */}
+   293→        <div className="absolute top-[15%] left-[10%] z-[2] h-2 w-2 rounded-full bg-[#D4AF37]/40 animate-float-subtle" />
+   294→        <div className="absolute top-[25%] right-[20%] z-[2] h-1.5 w-1.5 rounded-full bg-[#D4AF37]/30 animate-float-subtle [animation-delay:0.5s]" />
+   295→        <div className="absolute top-[60%] left-[8%] z-[2] h-1 w-1 rounded-full bg-[#E8D48B]/50 animate-float-subtle [animation-delay:1s]" />
+   296→        <div className="absolute top-[70%] right-[15%] z-[2] h-2.5 w-2.5 rounded-full bg-[#D4AF37]/25 animate-float-subtle [animation-delay:1.5s]" />
+   297→        <div className="absolute top-[40%] right-[35%] z-[2] h-1.5 w-1.5 rounded-full bg-[#D4AF37]/35 animate-float-subtle [animation-delay:2s]" />
+   298→        <div className="absolute top-[80%] left-[25%] z-[2] h-1 w-1 rounded-full bg-[#E8D48B]/40 animate-float-subtle [animation-delay:0.8s]" />
+   299→
+   300→        {/* Content */}
+   301→        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pt-24 pb-16">
+   302→          <motion.div
+   303→            initial={{ opacity: 0, y: 30 }}
+   304→            animate={{ opacity: 1, y: 0 }}
+   305→            transition={{ duration: 0.7, delay: 0.2 }}
+   306→          >
+   307→            <div className="max-w-2xl rounded-2xl border border-[#D4AF37]/15 p-6 sm:p-8 bg-black/10 backdrop-blur-[2px]">
+   308→              {/* Gold pill */}
+   309→              <motion.div
+   310→                initial={{ opacity: 0, y: 20 }}
+   311→                animate={{ opacity: 1, y: 0 }}
+   312→                transition={{ duration: 0.5 }}
+   313→              >
+   314→                <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5 text-sm text-[#E8D48B]">
+   315→                  <Sparkles className="h-3.5 w-3.5" />
+   316→                  Noveluxe
+   317→                </div>
+   318→              </motion.div>
+   319→
+   320→              {/* Title */}
+   321→              <motion.h1
+   322→                initial={{ opacity: 0, y: 30 }}
+   323→                animate={{ opacity: 1, y: 0 }}
+   324→                transition={{ duration: 0.6, delay: 0.15 }}
+   325→                className="mt-6 font-heading text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl leading-[1.1]"
+   326→              >
+   327→                {t('hero.title', locale)}
+   328→              </motion.h1>
+   329→
+   330→              {/* Decorative gold line divider */}
+   331→              <div className="mt-5 w-16 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/60 to-transparent" />
+   332→
+   333→              {/* Subtitle */}
+   334→              <motion.p
+   335→                initial={{ opacity: 0, y: 30 }}
+   336→                animate={{ opacity: 1, y: 0 }}
+   337→                transition={{ duration: 0.6, delay: 0.3 }}
+   338→                className="mt-4 max-w-xl text-lg text-white/70 leading-relaxed"
+   339→              >
+   340→                {t('hero.subtitle', locale)}
+   341→              </motion.p>
+   342→
+   343→              {/* CTA buttons */}
+   344→              <motion.div
+   345→                initial={{ opacity: 0, y: 30 }}
+   346→                animate={{ opacity: 1, y: 0 }}
+   347→                transition={{ duration: 0.6, delay: 0.45 }}
+   348→                className="mt-8 flex flex-col sm:flex-row gap-4"
+   349→              >
+   350→                <Button
+   351→                  size="lg"
+   352→                  onClick={() => setPage('catalog')}
+   353→                  className="bg-[#D4AF37] hover:bg-[#B8960C] text-white h-12 px-8 text-base font-semibold shadow-[0_0_30px_rgba(212,175,55,0.4)] hover:shadow-[0_0_40px_rgba(212,175,55,0.55)] transition-all"
+   354→                >
+   355→                  {t('hero.cta1', locale)}
+   356→                  <ArrowRight className="ml-2 h-4 w-4" />
+   357→                </Button>
+   358→                <Button
+   359→                  variant="outline"
+   360→                  size="lg"
+   361→                  onClick={() => setPage('catalog')}
+   362→                  className="border-[#D4AF37]/50 text-[#E8D48B] hover:bg-[#D4AF37]/15 hover:border-[#D4AF37] hover:shadow-[0_0_20px_rgba(212,175,55,0.25)] h-12 px-8 text-base transition-all"
+   363→                >
+   364→                  {t('hero.cta2', locale)}
+   365→                </Button>
+   366→              </motion.div>
+   367→
+   368→              {/* Animated Stats */}
+   369→              <motion.div
+   370→                initial={{ opacity: 0, y: 20 }}
+   371→                animate={{ opacity: 1, y: 0 }}
+   372→                transition={{ duration: 0.6, delay: 0.55 }}
+   373→                className="mt-8 flex items-center gap-8 sm:gap-10"
+   374→              >
+   375→                <div className="flex items-center gap-3">
+   376→                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/20">
+   377→                    <Users className="h-5 w-5 text-[#D4AF37]" />
+   378→                  </div>
+   379→                  <div>
+   380→                    <p className="text-xl font-bold text-white">10K+</p>
+   381→                    <p className="text-[11px] text-white/50 uppercase tracking-wider">{locale === 'id' ? 'Pembaca' : 'Readers'}</p>
+   382→                  </div>
+   383→                </div>
+   384→                <div className="h-10 w-px bg-white/15" />
+   385→                <div className="flex items-center gap-3">
+   386→                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/20">
+   387→                    <BookOpen className="h-5 w-5 text-[#D4AF37]" />
+   388→                  </div>
+   389→                  <div>
+   390→                    <p className="text-xl font-bold text-white">500+</p>
+   391→                    <p className="text-[11px] text-white/50 uppercase tracking-wider">{locale === 'id' ? 'Judul' : 'Titles'}</p>
+   392→                  </div>
+   393→                </div>
+   394→                <div className="h-10 w-px bg-white/15" />
+   395→                <div className="flex items-center gap-3">
+   396→                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/20">
+   397→                    <Star className="h-5 w-5 text-[#D4AF37] fill-[#D4AF37]" />
+   398→                  </div>
+   399→                  <div>
+   400→                    <p className="text-xl font-bold text-white">4.9</p>
+   401→                    <p className="text-[11px] text-white/50 uppercase tracking-wider">{locale === 'id' ? 'Rating' : 'Rating'}</p>
+   402→                  </div>
+   403→                </div>
+   404→              </motion.div>
+   405→            </div>
+   406→          </motion.div>
+   407→        </div>
+   408→      </section>
+   409→
+   410→      {/* ────────────────────────────────────────────────────
+   411→          2. CATEGORIES SECTION
+   412→          ──────────────────────────────────────────────────── */}
+   413→      <CategoriesSection categories={categories} locale={locale} />
+   414→
+   415→      {/* ────────────────────────────────────────────────────
+   416→          2.5 EDITOR'S PICK SECTION
+   417→          ──────────────────────────────────────────────────── */}
+   418→      {editorPicks.length > 0 && (
+   419→        <EditorsPickSection books={editorPicks} locale={locale} />
+   420→      )}
+   421→
+   422→      {/* ────────────────────────────────────────────────────
+   423→          3. BESTSELLERS SECTION
+   424→          ──────────────────────────────────────────────────── */}
+   425→      <HorizontalBookRow
+   426→        books={bestsellers}
+   427→        title={t('bestseller.title', locale)}
+   428→        subtitle={t('bestseller.subtitle', locale)}
+   429→        viewAllLabel={t('bestseller.viewAll', locale)}
+   430→        onViewAll={() => setPage('catalog', { sort: 'bestseller' })}
+   431→      />
+   432→
+   433→      {/* ────────────────────────────────────────────────────
+   434→          4. NEW ARRIVALS SECTION
+   435→          ──────────────────────────────────────────────────── */}
+   436→      <HorizontalBookRow
+   437→        books={newArrivals}
+   438→        title={t('newArrival.title', locale)}
+   439→        subtitle={t('newArrival.subtitle', locale)}
+   440→        viewAllLabel={t('general.viewAll', locale)}
+   441→        onViewAll={() => setPage('catalog', { sort: 'newest' })}
+   442→      />
+   443→
+   444→      {/* Recently Viewed */}
+   445→      {recentlyViewed.length > 0 && (
+   446→        <HorizontalBookRow
+   447→          books={recentlyViewed}
+   448→          title={locale === "id" ? "Terakhir Dilihat" : "Recently Viewed"}
+   449→          subtitle={locale === "id" ? "Buku yang baru saja kamu lihat" : "Books you recently viewed"}
+   450→          viewAllLabel={t("general.viewAll", locale)}
+   451→          onViewAll={() => setPage("catalog")}
+   452→        />
+   453→      )}
+   454→
+   455→      {/* ────────────────────────────────────────────────────
+   456→          5. PROMO BANNER
+   457→          ──────────────────────────────────────────────────── */}
+   458→      <PromoBanner locale={locale} />
+   459→
+   460→      {/* ────────────────────────────────────────────────────
+   461→          6. TESTIMONIALS SECTION
+   462→          ──────────────────────────────────────────────────── */}
+   463→      <TestimonialsSection
+   464→        testimonials={testimonials}
+   465→        activeIdx={activeIdx}
+   466→        setActiveIdx={setActiveIdx}
+   467→        locale={locale}
+   468→      />
+   469→    </main>
+   470→  );
+   471→}
+   472→
+   473→/* ═══════════════════════════════════════════════════════════
+   474→   CATEGORIES SECTION COMPONENT
+   475→   ═══════════════════════════════════════════════════════════ */
+   476→function CategoriesSection({
+   477→  categories,
+   478→  locale,
+   479→}: {
+   480→  categories: Category[];
+   481→  locale: 'id' | 'en';
+   482→}) {
+   483→  const { setPage } = useAppStore();
+   484→  const ref = useRef<HTMLDivElement>(null);
+   485→  const inView = useInView(ref, { once: true, margin: '-100px' });
+   486→
+   487→  if (categories.length === 0) return null;
+   488→
+   489→  return (
+   490→    <section ref={ref} className="py-16 sm:py-20 bg-secondary/40">
+   491→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   492→        <SectionHeader
+   493→          title={t('categories.title', locale)}
+   494→          subtitle={t('categories.subtitle', locale)}
+   495→        />
+   496→
+   497→        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
+   498→          {categories.map((cat, i) => (
+   499→            <motion.button
+   500→              key={cat.id}
+   501→              initial="hidden"
+   502→              animate={inView ? 'visible' : 'hidden'}
+   503→              variants={fadeUp}
+   504→              custom={i}
+   505→              onClick={() => setPage('catalog', { genre: cat.slug })}
+   506→              className="group relative overflow-hidden rounded-2xl border border-border bg-card text-left transition-all duration-300 hover:border-[#D4AF37]/40 hover:shadow-xl hover:shadow-[#D4AF37]/10 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+   507→              aria-label={`Browse ${cat.name}`}
+   508→            >
+   509→              {/* Category image */}
+   510→              <div className="relative aspect-[4/3] overflow-hidden">
+   511→                <img
+   512→                  src={cat.image || '/images/category-placeholder.jpg'}
+   513→                  alt={cat.name}
+   514→                  loading="lazy"
+   515→                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+   516→                />
+   517→                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+   518→                <div className="absolute inset-0 bg-[#D4AF37]/0 group-hover:bg-[#D4AF37]/10 transition-colors duration-300" />
+   519→              </div>
+   520→
+   521→              {/* Text overlay */}
+   522→              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
+   523→                <h3 className="font-heading text-sm sm:text-base font-bold text-white leading-tight">
+   524→                  {locale === 'en' && cat.nameEn ? cat.nameEn : cat.name}
+   525→                </h3>
+   526→                <p className="mt-1 text-xs text-white/70">
+   527→                  {cat._count?.books || 0} {locale === 'id' ? 'buku' : 'books'}
+   528→                </p>
+   529→              </div>
+   530→
+   531→              {/* Gold accent line */}
+   532→              <div className="absolute top-0 left-0 w-full h-0.5 bg-[#D4AF37] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
+   533→            </motion.button>
+   534→          ))}
+   535→        </div>
+   536→      </div>
+   537→    </section>
+   538→  );
+   539→}
+   540→
+   541→/* ═══════════════════════════════════════════════════════════
+   542→   EDITOR'S PICK SECTION COMPONENT
+   543→   ═══════════════════════════════════════════════════════════ */
+   544→const EDITOR_QUOTES = [
+   545→  'editorsPick.quote1',
+   546→  'editorsPick.quote2',
+   547→  'editorsPick.quote3',
+   548→  'editorsPick.quote4',
+   549→];
+   550→
+   551→function EditorsPickSection({
+   552→  books,
+   553→  locale,
+   554→}: {
+   555→  books: Book[];
+   556→  locale: 'id' | 'en';
+   557→}) {
+   558→  const { setPage } = useAppStore();
+   559→  const ref = useRef<HTMLDivElement>(null);
+   560→  const inView = useInView(ref, { once: true, margin: '-80px' });
+   561→
+   562→  const mainPick = books[0];
+   563→  const sidePicks = books.slice(1, 4);
+   564→
+   565→  if (!mainPick) return null;
+   566→
+   567→  return (
+   568→    <section ref={ref} className="py-16 sm:py-20 relative overflow-hidden">
+   569→      {/* Subtle gold background glow */}
+   570→      <div
+   571→        className="absolute inset-0 pointer-events-none"
+   572→        style={{
+   573→          background:
+   574→            'radial-gradient(ellipse at 50% 50%, rgba(212,175,55,0.04) 0%, transparent 70%)',
+   575→        }}
+   576→      />
+   577→
+   578→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
+   579→        {/* Section header */}
+   580→        <motion.div
+   581→          initial="hidden"
+   582→          animate={inView ? 'visible' : 'hidden'}
+   583→          variants={fadeUp}
+   584→          custom={0}
+   585→          className="text-center mb-12"
+   586→        >
+   587→          <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-4 py-1.5 text-sm text-[#D4AF37] mb-4">
+   588→            <Crown className="h-3.5 w-3.5" />
+   589→            {t('editorsPick.mainPick', locale)}
+   590→          </div>
+   591→          <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
+   592→            {t('editorsPick.title', locale)}
+   593→          </h2>
+   594→          <p className="mt-2 text-muted-foreground text-sm sm:text-base">
+   595→            {t('editorsPick.subtitle', locale)}
+   596→          </p>
+   597→        </motion.div>
+   598→
+   599→        {/* Layout: main pick (left) + side picks (right column) */}
+   600→        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+   601→          {/* Main Pick Card */}
+   602→          <motion.div
+   603→            initial="hidden"
+   604→            animate={inView ? 'visible' : 'hidden'}
+   605→            variants={fadeUp}
+   606→            custom={1}
+   607→            className="lg:col-span-3"
+   608→          >
+   609→            <div
+   610→              className="group relative overflow-hidden rounded-2xl border-2 border-[#D4AF37]/20 bg-card cursor-pointer transition-all duration-500 hover:border-[#D4AF37]/50 hover:shadow-2xl hover:shadow-[#D4AF37]/10 hover:-translate-y-1"
+   611→              onClick={() => setPage('book-detail', { slug: mainPick.slug })}
+   612→              role="button"
+   613→              tabIndex={0}
+   614→              onKeyDown={(e) => {
+   615→                if (e.key === 'Enter' || e.key === ' ') {
+   616→                  e.preventDefault();
+   617→                  setPage('book-detail', { slug: mainPick.slug });
+   618→                }
+   619→              }}
+   620→              aria-label={`View details for ${mainPick.title}`}
+   621→            >
+   622→              {/* Gold shimmer overlay on hover */}
+   623→              <div className="absolute inset-0 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"
+   624→                style={{
+   625→                  background:
+   626→                    'linear-gradient(105deg, transparent 40%, rgba(212,175,55,0.06) 45%, rgba(212,175,55,0.12) 50%, rgba(212,175,55,0.06) 55%, transparent 60%)',
+   627→                  backgroundSize: '200% 100%',
+   628→                  animation: 'shimmer 1.5s ease-in-out',
+   629→                }}
+   630→              />
+   631→
+   632→              <div className="grid grid-cols-1 sm:grid-cols-2">
+   633→                {/* Cover image */}
+   634→                <div className="relative aspect-[2/3] sm:aspect-auto overflow-hidden">
+   635→                  <img
+   636→                    src={mainPick.coverImage}
+   637→                    alt={mainPick.title}
+   638→                    loading="lazy"
+   639→                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+   640→                  />
+   641→                  <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/20 hidden sm:block" />
+   642→                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent sm:hidden" />
+   643→
+   644→                  {/* Award badge */}
+   645→                  <div className="absolute top-4 left-4 z-10">
+   646→                    <div className="flex items-center gap-1.5 rounded-full bg-[#D4AF37] px-3 py-1.5 shadow-lg shadow-[#D4AF37]/30">
+   647→                      <Award className="h-4 w-4 text-white" />
+   648→                      <span className="text-[11px] font-bold text-white uppercase tracking-wider">
+   649→                        #1 {t('editorsPick.mainPick', locale)}
+   650→                      </span>
+   651→                    </div>
+   652→                  </div>
+   653→                </div>
+   654→
+   655→                {/* Info area */}
+   656→                <div className="p-6 sm:p-8 flex flex-col justify-between">
+   657→                  {mainPick.category && (
+   658→                    <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#D4AF37] mb-2">
+   659→                      {mainPick.category.name}
+   660→                    </p>
+   661→                  )}
+   662→                  <h3 className="font-heading text-xl sm:text-2xl font-bold leading-snug text-foreground group-hover:text-[#D4AF37] transition-colors duration-300">
+   663→                    {mainPick.title}
+   664→                  </h3>
+   665→                  <p className="text-sm text-muted-foreground mt-1">{mainPick.author}</p>
+   666→
+   667→                  {/* Stars */}
+   668→                  <div className="flex items-center gap-1.5 mt-3">
+   669→                    {Array.from({ length: 5 }).map((_, i) => (
+   670→                      <Star
+   671→                        key={i}
+   672→                        className={`h-4 w-4 ${
+   673→                          i < Math.floor(mainPick.rating)
+   674→                            ? 'fill-[#D4AF37] text-[#D4AF37]'
+   675→                            : 'text-muted-foreground/25'
+   676→                        }`}
+   677→                      />
+   678→                    ))}
+   679→                    <span className="text-sm font-medium text-foreground">
+   680→                      {mainPick.rating}
+   681→                    </span>
+   682→                  </div>
+   683→
+   684→                  {/* Editor's quote */}
+   685→                  <div className="mt-4 sm:mt-6">
+   686→                    <div className="relative">
+   687→                      <Quote className="absolute -top-1 -left-1 h-5 w-5 text-[#D4AF37]/20" />
+   688→                      <p className="pl-5 text-sm text-muted-foreground leading-relaxed italic">
+   689→                        &ldquo;{t(EDITOR_QUOTES[0], locale)}&rdquo;
+   690→                      </p>
+   691→                    </div>
+   692→                  </div>
+   693→
+   694→                  {/* Price & CTA */}
+   695→                  <div className="mt-6 flex items-center gap-3">
+   696→                    <span className="text-xl font-bold text-foreground">
+   697→                      {formatPrice(mainPick.discountPrice || mainPick.price, locale)}
+   698→                    </span>
+   699→                    {mainPick.discountPrice && (
+   700→                      <span className="text-sm text-muted-foreground/60 line-through">
+   701→                        {formatPrice(mainPick.price, locale)}
+   702→                      </span>
+   703→                    )}
+   704→                  </div>
+   705→
+   706→                  <div className="mt-4">
+   707→                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#D4AF37] group-hover:gap-2.5 transition-all duration-300">
+   708→                      {t('editorsPick.viewDetail', locale)}
+   709→                      <ArrowRight className="h-4 w-4" />
+   710→                    </span>
+   711→                  </div>
+   712→                </div>
+   713→              </div>
+   714→            </div>
+   715→          </motion.div>
+   716→
+   717→          {/* Side Picks Column */}
+   718→          <div className="lg:col-span-2 flex flex-col gap-4">
+   719→            {sidePicks.map((book, i) => (
+   720→              <motion.div
+   721→                key={book.id}
+   722→                initial="hidden"
+   723→                animate={inView ? 'visible' : 'hidden'}
+   724→                variants={fadeUp}
+   725→                custom={i + 2}
+   726→              >
+   727→                <div
+   728→                  className="group relative flex gap-4 p-4 rounded-xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-[#D4AF37]/40 hover:shadow-lg hover:shadow-[#D4AF37]/5"
+   729→                  onClick={() => setPage('book-detail', { slug: book.slug })}
+   730→                  role="button"
+   731→                  tabIndex={0}
+   732→                  onKeyDown={(e) => {
+   733→                    if (e.key === 'Enter' || e.key === ' ') {
+   734→                      e.preventDefault();
+   735→                      setPage('book-detail', { slug: book.slug });
+   736→                    }
+   737→                  }}
+   738→                  aria-label={`View details for ${book.title}`}
+   739→                >
+   740→                  {/* Rank badge */}
+   741→                  <div className="absolute -top-2 -left-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#D4AF37] text-white text-xs font-bold shadow-md shadow-[#D4AF37]/30">
+   742→                    #{i + 2}
+   743→                  </div>
+   744→
+   745→                  {/* Cover */}
+   746→                  <div className="relative w-16 h-24 sm:w-20 sm:h-28 rounded-lg overflow-hidden shrink-0">
+   747→                    <img
+   748→                      src={book.coverImage}
+   749→                      alt={book.title}
+   750→                      loading="lazy"
+   751→                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+   752→                    />
+   753→                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+   754→                  </div>
+   755→
+   756→                  {/* Info */}
+   757→                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+   758→                    <div>
+   759→                      <h4 className="font-heading text-sm sm:text-base font-bold leading-snug line-clamp-2 text-foreground group-hover:text-[#D4AF37] transition-colors duration-300">
+   760→                        {book.title}
+   761→                      </h4>
+   762→                      <p className="text-xs text-muted-foreground mt-0.5">
+   763→                        {book.author}
+   764→                      </p>
+   765→                    </div>
+   766→
+   767→                    {/* Editor quote (truncated) */}
+   768→                    <p className="text-[11px] text-muted-foreground/70 line-clamp-2 mt-1 italic">
+   769→                      &ldquo;{t(EDITOR_QUOTES[i + 1], locale)}&rdquo;
+   770→                    </p>
+   771→
+   772→                    <div className="flex items-center gap-1.5 mt-1.5">
+   773→                      <div className="flex items-center">
+   774→                        {Array.from({ length: 5 }).map((_, j) => (
+   775→                          <Star
+   776→                            key={j}
+   777→                            className={`h-3 w-3 ${
+   778→                              j < Math.floor(book.rating)
+   779→                                ? 'fill-[#D4AF37] text-[#D4AF37]'
+   780→                                : 'text-muted-foreground/25'
+   781→                            }`}
+   782→                          />
+   783→                        ))}
+   784→                      </div>
+   785→                      <span className="text-xs text-muted-foreground">
+   786→                        {book.rating}
+   787→                      </span>
+   788→                      <span className="text-xs font-bold text-foreground ml-auto">
+   789→                        {formatPrice(book.discountPrice || book.price, locale)}
+   790→                      </span>
+   791→                    </div>
+   792→                  </div>
+   793→                </div>
+   794→              </motion.div>
+   795→            ))}
+   796→          </div>
+   797→        </div>
+   798→      </div>
+   799→    </section>
+   800→  );
+   801→}
+   802→
+   803→/* ═══════════════════════════════════════════════════════════
+   804→   PROMO BANNER COMPONENT
+   805→   ═══════════════════════════════════════════════════════════ */
+   806→function PromoBanner({ locale }: { locale: 'id' | 'en' }) {
+   807→  const { setPage } = useAppStore();
+   808→  const ref = useRef<HTMLDivElement>(null);
+   809→  const inView = useInView(ref, { once: true, margin: '-80px' });
+   810→
+   811→  const handleCopyCode = () => {
+   812→    navigator.clipboard.writeText('WELCOME10');
+   813→    toast.success(locale === 'id' ? 'Kode berhasil disalin!' : 'Code copied!');
+   814→  };
+   815→
+   816→  return (
+   817→    <section ref={ref} className="py-16 sm:py-20">
+   818→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   819→        {/* Gradient border wrapper with glow */}
+   820→        <div className="relative rounded-[1.6rem] p-[2px] bg-gradient-to-br from-[#D4AF37] via-[#E8D48B] to-[#B8960C] shadow-[0_0_50px_rgba(212,175,55,0.3)]">
+   821→          {/* Glass effect outer ring */}
+   822→          <div className="absolute -inset-4 rounded-[2.2rem] bg-gradient-to-br from-[#D4AF37]/10 via-transparent to-[#D4AF37]/5 blur-xl pointer-events-none" />
+   823→        <motion.div
+   824→          initial="hidden"
+   825→          animate={inView ? 'visible' : 'hidden'}
+   826→          variants={fadeIn}
+   827→          custom={0}
+   828→          className="relative overflow-hidden rounded-[calc(1.6rem-2px)]"
+   829→        >
+   830→          {/* Gold gradient background */}
+   831→          <div className="absolute inset-0 bg-gradient-to-br from-[#D4AF37] via-[#E8D48B] to-[#B8960C]" />
+   832→          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-60" />
+   833→
+   834→          <div className="relative z-10 px-6 py-12 sm:px-12 sm:py-16 md:px-16 md:py-20 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+   835→            {/* Left - Icon & Text */}
+   836→            <div className="flex-1 text-center md:text-left">
+   837→              <div className="inline-flex items-center gap-2 rounded-full bg-black/15 px-3 py-1 mb-4">
+   838→                <Gift className="h-4 w-4 text-white" />
+   839→                <span className="text-xs font-semibold text-white uppercase tracking-wider">
+   840→                  {t('promo.title', locale)}
+   841→                </span>
+   842→              </div>
+   843→              <h2 className="font-heading text-3xl sm:text-4xl font-bold text-white leading-tight">
+   844→                {t('promo.subtitle', locale)}
+   845→              </h2>
+   846→              <p className="mt-3 text-white/80 text-sm sm:text-base max-w-md mx-auto md:mx-0">
+   847→                {t('promo.desc', locale)}
+   848→              </p>
+   849→
+   850→              <div className="mt-6 flex flex-col sm:flex-row items-center gap-4 justify-center md:justify-start">
+   851→                <Button
+   852→                  size="lg"
+   853→                  onClick={() => setPage('catalog')}
+   854→                  className="bg-black text-white hover:bg-black/80 h-12 px-8 text-base font-semibold transition-all"
+   855→                >
+   856→                  {t('hero.cta1', locale)}
+   857→                  <ArrowRight className="ml-2 h-4 w-4" />
+   858→                </Button>
+   859→
+   860→                {/* Promo code */}
+   861→                <button
+   862→                  onClick={handleCopyCode}
+   863→                  className="flex items-center gap-2 rounded-xl border-2 border-dashed border-white/50 bg-black/10 px-5 py-3 transition-all hover:border-white/80 hover:bg-black/20 group cursor-pointer"
+   864→                >
+   865→                  <Tag className="h-4 w-4 text-white/80" />
+   866→                  <span className="text-base sm:text-lg font-mono font-bold text-white tracking-wider">
+   867→                    WELCOME10
+   868→                  </span>
+   869→                  <span className="text-[10px] text-white/60 uppercase tracking-wider group-hover:text-white/80 transition-colors">
+   870→                    {locale === 'id' ? 'Salin' : 'Copy'}
+   871→                  </span>
+   872→                </button>
+   873→              </div>
+   874→            </div>
+   875→
+   876→            {/* Right - Decorative element */}
+   877→            <div className="hidden md:flex items-center justify-center shrink-0">
+   878→              <div className="relative">
+   879→                <div className="w-40 h-40 rounded-full bg-white/10 flex items-center justify-center animate-pulse-gold">
+   880→                  <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center">
+   881→                    <div className="text-center">
+   882→                      <p className="text-5xl font-bold text-white">10%</p>
+   883→                      <p className="text-xs text-white/80 font-semibold uppercase tracking-wider mt-1">
+   884→                        {t('promo.code', locale)}
+   885→                      </p>
+   886→                    </div>
+   887→                  </div>
+   888→                </div>
+   889→                {/* Decorative rings */}
+   890→                <div className="absolute -top-4 -right-4 h-8 w-8 rounded-full bg-white/10" />
+   891→                <div className="absolute -bottom-2 -left-2 h-6 w-6 rounded-full bg-white/10" />
+   892→                <div className="absolute top-1/2 -right-8 h-4 w-4 rounded-full bg-white/10" />
+   893→              </div>
+   894→            </div>
+   895→          </div>
+   896→        </motion.div>
+   897→        </div>
+   898→      </div>
+   899→    </section>
+   900→  );
+   901→}
+   902→
+   903→/* ═══════════════════════════════════════════════════════════
+   904→   TESTIMONIALS SECTION COMPONENT
+   905→   ═══════════════════════════════════════════════════════════ */
+   906→function TestimonialsSection({
+   907→  testimonials,
+   908→  activeIdx,
+   909→  setActiveIdx,
+   910→  locale,
+   911→}: {
+   912→  testimonials: Testimonial[];
+   913→  activeIdx: number;
+   914→  setActiveIdx: (idx: number) => void;
+   915→  locale: 'id' | 'en';
+   916→}) {
+   917→  const ref = useRef<HTMLDivElement>(null);
+   918→  const inView = useInView(ref, { once: true, margin: '-80px' });
+   919→
+   920→  if (testimonials.length === 0) return null;
+   921→
+   922→  return (
+   923→    <section ref={ref} className="py-16 sm:py-20 bg-secondary/40">
+   924→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   925→        {/* Header */}
+   926→        <motion.div
+   927→          initial="hidden"
+   928→          animate={inView ? 'visible' : 'hidden'}
+   929→          variants={fadeUp}
+   930→          custom={0}
+   931→          className="text-center mb-12"
+   932→        >
+   933→          <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
+   934→            {t('testimonial.title', locale)}
+   935→          </h2>
+   936→          <p className="mt-2 text-muted-foreground text-sm sm:text-base">
+   937→            {t('testimonial.subtitle', locale)}
+   938→          </p>
+   939→        </motion.div>
+   940→
+   941→        {/* Desktop: Carousel with shadcn */}
+   942→        <div className="hidden md:block">
+   943→          <motion.div
+   944→            initial="hidden"
+   945→            animate={inView ? 'visible' : 'hidden'}
+   946→            variants={fadeIn}
+   947→            custom={1}
+   948→            className="relative"
+   949→          >
+   950→            <Carousel
+   951→              opts={{
+   952→                align: 'start',
+   953→                loop: true,
+   954→              }}
+   955→              className="w-full"
+   956→            >
+   957→              <CarouselContent className="-ml-4">
+   958→                {testimonials.map((test) => (
+   959→                  <CarouselItem key={test.id} className="pl-4 md:basis-1/2 lg:basis-1/3">
+   960→                    <TestimonialCard testimonial={test} locale={locale} />
+   961→                  </CarouselItem>
+   962→                ))}
+   963→              </CarouselContent>
+   964→              <CarouselPrevious className="-left-14 bg-background border-border hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37]" />
+   965→              <CarouselNext className="-right-14 bg-background border-border hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37]" />
+   966→            </Carousel>
+   967→          </motion.div>
+   968→        </div>
+   969→
+   970→        {/* Mobile: Single card with dots */}
+   971→        <div className="md:hidden">
+   972→          <motion.div
+   973→            initial="hidden"
+   974→            animate={inView ? 'visible' : 'hidden'}
+   975→            variants={fadeIn}
+   976→            custom={1}
+   977→          >
+   978→            <div className="relative overflow-hidden">
+   979→              <div
+   980→                className="flex transition-transform duration-500 ease-in-out"
+   981→                style={{ transform: `translateX(-${activeIdx * 100}%)` }}
+   982→              >
+   983→                {testimonials.map((test) => (
+   984→                  <div key={test.id} className="w-full shrink-0 px-1">
+   985→                    <TestimonialCard testimonial={test} locale={locale} />
+   986→                  </div>
+   987→                ))}
+   988→              </div>
+   989→            </div>
+   990→
+   991→            {/* Dots */}
+   992→            <div className="flex items-center justify-center gap-2 mt-6">
+   993→              {testimonials.map((_, i) => (
+   994→                <button
+   995→                  key={i}
+   996→                  onClick={() => setActiveIdx(i)}
+   997→                  className={`h-2.5 rounded-full transition-all duration-300 ${
+   998→                    i === activeIdx
+   999→                      ? 'w-8 bg-[#D4AF37]'
+  1000→                      : 'w-2.5 bg-[#D4AF37]/30 hover:bg-[#D4AF37]/50'
+  1001→                  }`}
+  1002→                  aria-label={`Go to testimonial ${i + 1}`}
+  1003→                />
+  1004→              ))}
+  1005→            </div>
+  1006→          </motion.div>
+  1007→        </div>
+  1008→      </div>
+  1009→    </section>
+  1010→  );
+  1011→}
+  1012→
+  1013→/* ═══════════════════════════════════════════════════════════
+  1014→   SINGLE TESTIMONIAL CARD
+  1015→   ═══════════════════════════════════════════════════════════ */
+  1016→function TestimonialCard({
+  1017→  testimonial,
+  1018→  locale,
+  1019→}: {
+  1020→  testimonial: Testimonial;
+  1021→  locale: 'id' | 'en';
+  1022→}) {
+  1023→  return (
+  1024→    <div className="h-full rounded-2xl border border-border bg-card p-6 sm:p-8 transition-all duration-300 hover:border-[#D4AF37]/30 hover:shadow-lg hover:shadow-[#D4AF37]/5">
+  1025→      {/* Quote icon */}
+  1026→      <Quote className="h-8 w-8 text-[#D4AF37]/20 mb-4" />
+  1027→
+  1028→      {/* Stars */}
+  1029→      <div className="flex items-center gap-0.5 mb-4">
+  1030→        {Array.from({ length: 5 }).map((_, i) => (
+  1031→          <Star
+  1032→            key={i}
+  1033→            className={`h-4 w-4 ${
+  1034→              i < testimonial.rating
+  1035→                ? 'fill-[#D4AF37] text-[#D4AF37]'
+  1036→                : 'text-muted-foreground/25'
+  1037→            }`}
+  1038→          />
+  1039→        ))}
+  1040→      </div>
+  1041→
+  1042→      {/* Comment */}
+  1043→      <p className="text-sm sm:text-base text-foreground/80 leading-relaxed line-clamp-4 mb-6">
+  1044→        &ldquo;{testimonial.comment}&rdquo;
+  1045→      </p>
+  1046→
+  1047→      {/* Author */}
+  1048→      <div className="flex items-center gap-3">
+  1049→        <Avatar className="h-10 w-10 border-2 border-[#D4AF37]/20">
+  1050→          <AvatarImage src={testimonial.avatar || undefined} alt={testimonial.name} />
+  1051→          <AvatarFallback className="bg-[#D4AF37]/10 text-[#D4AF37] text-sm font-bold">
+  1052→            {testimonial.name
+  1053→              .split(' ')
+  1054→              .map((n) => n[0])
+  1055→              .join('')
+  1056→              .slice(0, 2)
+  1057→              .toUpperCase()}
+  1058→          </AvatarFallback>
+  1059→        </Avatar>
+  1060→        <div>
+  1061→          <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
+  1062→          <p className="text-xs text-muted-foreground">
+  1063→            {locale === 'id' ? 'Pembaca Noveluxe' : 'Noveluxe Reader'}
+  1064→          </p>
+  1065→        </div>
+  1066→      </div>
+  1067→    </div>
+  1068→  );
+  1069→}
+  1070→

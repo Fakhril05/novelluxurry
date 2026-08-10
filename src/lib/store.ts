@@ -115,6 +115,10 @@ interface AppState {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
 
+  // Recently Viewed
+  recentlyViewed: string[];
+  addRecentlyViewed: (bookId: string) => void;
+
   // Reading Lists
   readingLists: ReadingList[];
   createReadingList: (name: string) => void;
@@ -250,6 +254,15 @@ export const useAppStore = create<AppState>()(
       searchOpen: false,
       setSearchOpen: (open) => set({ searchOpen: open }),
 
+      // Recently Viewed
+      recentlyViewed: [],
+      addRecentlyViewed: (bookId) => {
+        const { recentlyViewed } = get();
+        const filtered = recentlyViewed.filter((id) => id !== bookId);
+        const updated = [bookId, ...filtered].slice(0, 10);
+        set({ recentlyViewed: updated });
+      },
+
       // Reading Lists
       readingLists: [],
       createReadingList: (name) => {
@@ -302,6 +315,7 @@ export const useAppStore = create<AppState>()(
         wishlist: state.wishlist,
         comparison: state.comparison,
         readingLists: state.readingLists,
+        recentlyViewed: state.recentlyViewed,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
