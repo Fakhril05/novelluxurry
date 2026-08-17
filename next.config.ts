@@ -8,7 +8,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: [
     "preview-chat-a8ca4818-5be5-47db-9059-14969c87d8f4.space-z.ai",
   ],
+  outputFileTracingIncludes: {
+    "/api/**/*": ["./db/custom.db"],
+  },
 };
 
 export default nextConfig;
-// vercel deployment fix
