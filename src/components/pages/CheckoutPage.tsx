@@ -27,7 +27,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCartStore } from '@/lib/cart-store';
-import { useAppStore, formatPrice } from '@/lib/store';
+import { useAppStore, formatPrice, formatRupiah } from '@/lib/store';
 import { t } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 
@@ -35,11 +35,21 @@ const GOLD = '#D4AF37';
 const GOLD_DARK = '#B8960C';
 const GOLD_LIGHT = '#F0D060';
 
-const EXPEDITIONS = [
-  { id: 'jne-regular', name: 'JNE Regular', price: 15000, icon: Truck, eta: '3-5 hari', etaEn: '3-5 days' },
-  { id: 'jne-express', name: 'JNE Express', price: 25000, icon: Truck, eta: '1-2 hari', etaEn: '1-2 days' },
-  { id: 'jne-sameday', name: 'JNE Same Day', price: 50000, icon: Truck, eta: 'Hari ini', etaEn: 'Today' },
+const DEFAULT_EXPEDITIONS = [
+  { id: 'jne-regular', name: 'JNE Regular', basePrice: 15000, icon: Truck, eta: '3-5 hari', etaEn: '3-5 days' },
+  { id: 'jne-express', name: 'JNE Express', basePrice: 25000, icon: Truck, eta: '1-2 hari', etaEn: '1-2 days' },
+  { id: 'jne-sameday', name: 'JNE Same Day', basePrice: 50000, icon: Truck, eta: 'Hari ini', etaEn: 'Today' },
 ];
+
+// Dynamic expedition list — prices updated based on destination city
+interface ExpeditionOption {
+  id: string;
+  name: string;
+  price: number;
+  icon: typeof Truck;
+  eta: string;
+  etaEn: string;
+}
 
 const PAYMENT_METHODS = [
   { id: 'bank-transfer', name: 'Transfer Bank', nameEn: 'Bank Transfer', icon: Building, desc: 'BCA, BNI, Mandiri, BRI' },
@@ -81,14 +91,74 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  // Dynamic shipping
+  const [expeditions, setExpeditions] = useState<ExpeditionOption[]>(
+    DEFAULT_EXPEDITIONS.map((e) => ({ ...e, price: e.basePrice }))
+  );
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [shippingOrigin] = useState('Bandung');
+  const [dynamicCity, setDynamicCity] = useState('');
+  const cityDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const addressRef = useRef<HTMLDivElement>(null);
   const shippingRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLDivElement>(null);
 
   const subtotal = getTotalPrice();
   const savings = getDiscountSavings();
-  const shippingCost = EXPEDITIONS.find((e) => e.id === expedition)?.price ?? 0;
-  const total = Math.max(0, subtotal - voucherDiscount + shippingCost);
+  const shippingCost = expeditions.find((e) => e.id === expedition)?.price ?? 0;
+  // Convert everything to full Rupiah for correct addition
+  const subtotalRupiah = Math.round(subtotal * 1000);
+  const savingsRupiah = Math.round(savings * 1000);
+  const voucherDiscountRupiah = Math.round(voucherDiscount * 1000);
+  const totalRupiah = Math.max(0, subtotalRupiah - savingsRupiah - voucherDiscountRupiah + shippingCost);
+  // Keep legacy `total` in DB-thousands format for API submission
+  const total = totalRupiah / 1000;
+
+  // Fetch dynamic shipping rates when city changes
+  useEffect(() => {
+    if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+    const city = form.city.trim();
+    if (!city || city.length < 2) {
+      setExpeditions(DEFAULT_EXPEDITIONS.map((e) => ({ ...e, price: e.basePrice })));
+      setDynamicCity('');
+      return;
+    }
+    cityDebounceRef.current = setTimeout(async () => {
+      setShippingLoading(true);
+      try {
+        const res = await fetch('/api/shipping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ destination: city, postalCode: form.postalCode }),
+        });
+        const data = await res.json();
+        if (data.success && data.rates) {
+          const updated = DEFAULT_EXPEDITIONS.map((e) => {
+            const rate = data.rates.find((r: { service: string; cost: number }) => r.service === e.id);
+            return {
+              ...e,
+              price: rate ? rate.cost : e.basePrice,
+            };
+          });
+          setExpeditions(updated);
+          setDynamicCity(city);
+          // If selected expedition became unavailable, fallback to regular
+          const current = updated.find((e) => e.id === expedition);
+          if (current && current.price === 0) {
+            setExpedition('jne-regular');
+          }
+        }
+      } catch {
+        // On API failure, keep current (default) prices
+      } finally {
+        setShippingLoading(false);
+      }
+    }, 500);
+    return () => {
+      if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+    };
+  }, [form.city, form.postalCode]);
 
   // Pre-fill from user data
   useEffect(() => {
@@ -173,6 +243,9 @@ export default function CheckoutPage() {
 
     setSubmitting(true);
     try {
+      // Convert shipping & total to DB "thousands" format for consistent storage
+      const shippingCostDB = Math.round(shippingCost / 1000);
+      const totalDB = total; // already in DB-thousands format (totalRupiah / 1000)
       const orderData = {
         items: items.map((item) => ({
           bookId: item.book.id,
@@ -187,14 +260,14 @@ export default function CheckoutPage() {
         shippingCity: form.city,
         shippingCode: form.postalCode,
         expedition,
-        shippingCost,
+        shippingCost: shippingCostDB,
         paymentMethod: payment,
         userId: user?.id || null,
         voucherCode: voucherApplied ? voucherCode.toUpperCase() : null,
         voucherDisc: voucherDiscount,
         subtotal,
         discount: savings + voucherDiscount,
-        total,
+        total: totalDB,
       };
 
       const res = await fetch('/api/orders', {
@@ -256,7 +329,7 @@ export default function CheckoutPage() {
     }
   };
 
-  const selectedExpedition = EXPEDITIONS.find((e) => e.id === expedition);
+  const selectedExpedition = expeditions.find((e) => e.id === expedition);
 
   // Gold focus input class
   const goldInputClass = `h-10 focus-visible:ring-[${GOLD}]/40 focus-visible:border-[${GOLD}]/50 transition-all`;
@@ -513,21 +586,30 @@ export default function CheckoutPage() {
                   <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT}, ${GOLD})` }} />
                   <CardContent className="p-5 sm:p-6">
                     {/* Gold left border section heading */}
-                    <div className="mb-5 flex items-center gap-3">
-                      <div className="h-8 w-1 rounded-full" style={{ background: `linear-gradient(180deg, ${GOLD}, ${GOLD_LIGHT})` }} />
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className="flex h-8 w-8 items-center justify-center rounded-full"
-                          style={{ backgroundColor: `${GOLD}15` }}
-                        >
-                          <Truck className="h-4 w-4" style={{ color: GOLD }} />
+                    <div className="mb-5 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-1 rounded-full" style={{ background: `linear-gradient(180deg, ${GOLD}, ${GOLD_LIGHT})` }} />
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="flex h-8 w-8 items-center justify-center rounded-full"
+                            style={{ backgroundColor: `${GOLD}15` }}
+                          >
+                            <Truck className="h-4 w-4" style={{ color: GOLD }} />
+                          </div>
+                          <h2 className="font-heading text-lg font-semibold">{t('checkout.expedition', lang)}</h2>
                         </div>
-                        <h2 className="font-heading text-lg font-semibold">{t('checkout.expedition', lang)}</h2>
                       </div>
+                      {dynamicCity && (
+                        <span className="text-xs text-muted-foreground">
+                          {shippingOrigin} → {dynamicCity}
+                        </span>
+                      )}
                     </div>
                     <RadioGroup value={expedition} onValueChange={setExpedition} className="grid gap-3">
-                      {EXPEDITIONS.map((exp) => {
+                      {expeditions.map((exp) => {
                         const isSelected = expedition === exp.id;
+                        const unavailable = exp.price === 0 && dynamicCity;
+                        if (unavailable) return null;
                         return (
                           <Label
                             key={exp.id}
@@ -581,7 +663,11 @@ export default function CheckoutPage() {
                               className="text-sm font-bold shrink-0"
                               style={isSelected ? { color: GOLD } : undefined}
                             >
-                              {formatPrice(exp.price, lang)}
+                              {shippingLoading ? (
+                                <span className="inline-block h-3.5 w-16 animate-pulse rounded bg-muted" />
+                              ) : (
+                                formatRupiah(exp.price, lang)
+                              )}
                             </p>
                           </Label>
                         );
@@ -780,7 +866,7 @@ export default function CheckoutPage() {
                         </div>
                       </div>
                       <p className="font-bold" style={{ color: GOLD }}>
-                        {formatPrice(shippingCost, lang)}
+                        {formatRupiah(shippingCost, lang)}
                       </p>
                     </div>
 
@@ -907,7 +993,7 @@ export default function CheckoutPage() {
                         <Check className="h-5 w-5" />
                         {t('checkout.placeOrder', lang)}
                         <span className="ml-1 text-sm font-normal opacity-80">
-                          — {formatPrice(total, lang)}
+                          — {formatRupiah(totalRupiah, lang)}
                         </span>
                       </span>
                     )}
@@ -1060,7 +1146,7 @@ export default function CheckoutPage() {
                   )}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{t('cart.shipping', lang)}</span>
-                    <span className="font-medium">{formatPrice(shippingCost, lang)}</span>
+                    <span className="font-medium">{formatRupiah(shippingCost, lang)}</span>
                   </div>
 
                   <Separator style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.3), transparent)' }} />
@@ -1072,7 +1158,7 @@ export default function CheckoutPage() {
                   >
                     <span className="font-semibold">{t('cart.total', lang)}</span>
                     <span className="text-xl font-bold" style={{ color: GOLD }}>
-                      {formatPrice(total, lang)}
+                      {formatRupiah(totalRupiah, lang)}
                     </span>
                   </div>
                 </div>

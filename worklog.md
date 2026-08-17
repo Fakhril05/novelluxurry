@@ -1520,3 +1520,33 @@ Added a "Buku Untukmu" (Recommended for You) section to the HomePage with a new 
 8. Consider PWA (Progressive Web App) support with offline reading
 9. Add book reading progress sync to DB
 10. Add product reviews from authenticated users (POST /api/books/[slug]/reviews) — DONE this round
+
+---
+Task ID: 14
+Agent: Main
+Task: Fix checkout shipping cost format bug and implement dynamic shipping from Bandung
+
+Work Log:
+- Diagnosed root cause: `formatPrice()` multiplies ALL values by 1000 (DB stores prices as thousands), but shipping costs are already in full Rupiah → `formatPrice(15000)` = 15,000,000 → "Rp 15.000.000"
+- Added `formatRupiah()` function to `src/lib/store.ts` that formats full-Rupiah values WITHOUT the *1000 conversion
+- Fixed `CheckoutPage.tsx` total calculation to work in full Rupiah: `totalRupiah = subtotal*1000 - savings*1000 - voucherDiscount*1000 + shippingCost`
+- Changed all shipping/total display calls from `formatPrice()` to `formatRupiah()`
+- Order API submission now converts shipping/total back to DB "thousands" format for consistent storage (no changes needed to UserDashboard/OrderTrackingPage)
+- Created `/api/shipping/route.ts` with mock city rates for 40+ Indonesian cities + RajaOngkir/Biteship placeholder functions
+- Added dynamic shipping in CheckoutPage: 500ms debounced city input → POST /api/shipping → update expedition prices
+- Added "Bandung → {city}" route indicator in expedition section heading
+- Same Day option auto-hides for cities where it's unavailable (cost=0)
+- Auto-fallback to Regular if selected expedition becomes unavailable
+
+Stage Summary:
+- **Bug FIXED**: Shipping now shows Rp 12.000 (Jakarta) / Rp 35.000 (Surabaya) instead of Rp 15.000.000
+- **Total CORRECT**: Subtotal - Diskon + Ongkir = correct calculation (e.g. 129.980 - 30.000 + 12.000 = 111.980)
+- **Dynamic shipping WORKING**: City input triggers API call, prices update automatically
+- **API placeholder READY**: Uncomment `fetchRajaOngkir()` in `/api/shipping/route.ts` and set `RAJAONGKIR_API_KEY` in `.env.local`
+- Lint: 0 errors, 0 warnings
+- QA verified via agent-browser: Jakarta (3 options, Rp12k/20k/45k) and Surabaya (2 options, Rp35k/55k, Same Day hidden)
+
+Files modified:
+- `src/lib/store.ts` — added `formatRupiah()`
+- `src/components/pages/CheckoutPage.tsx` — fixed format, calculation, added dynamic shipping
+- `src/app/api/shipping/route.ts` — NEW: shipping rate API with mock data + RajaOngkir placeholder

@@ -1,0 +1,1038 @@
+    50→];
+    51→
+    52→const STEPS = [
+    53→  { key: 'address', labelId: 'checkout.stepAddress', icon: MapPin },
+    54→  { key: 'shipping', labelId: 'checkout.stepShipping', icon: Truck },
+    55→  { key: 'confirm', labelId: 'checkout.stepConfirm', icon: Check },
+    56→];
+    57→
+    58→export default function CheckoutPage() {
+    59→  const { items, getTotalPrice, getDiscountSavings, clearCart } = useCartStore();
+    60→  const { locale, setPage, user, isAuthenticated } = useAppStore();
+    61→  const lang = (locale ?? 'id') as Locale;
+    62→
+    63→  // Step state
+    64→  const [currentStep, setCurrentStep] = useState(0);
+    65→
+    66→  // Form state
+    67→  const [form, setForm] = useState({
+    68→    name: '',
+    69→    phone: '',
+    70→    address: '',
+    71→    city: '',
+    72→    postalCode: '',
+    73→  });
+    74→  const [expedition, setExpedition] = useState('jne-regular');
+    75→  const [payment, setPayment] = useState('bank-transfer');
+    76→  const [voucherCode, setVoucherCode] = useState('');
+    77→  const [voucherLoading, setVoucherLoading] = useState(false);
+    78→  const [voucherDiscount, setVoucherDiscount] = useState(0);
+    79→  const [voucherApplied, setVoucherApplied] = useState(false);
+    80→  const [voucherError, setVoucherError] = useState('');
+    81→  const [submitting, setSubmitting] = useState(false);
+    82→  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+    83→
+    84→  const addressRef = useRef<HTMLDivElement>(null);
+    85→  const shippingRef = useRef<HTMLDivElement>(null);
+    86→  const confirmRef = useRef<HTMLDivElement>(null);
+    87→
+    88→  const subtotal = getTotalPrice();
+    89→  const savings = getDiscountSavings();
+    90→  const shippingCost = EXPEDITIONS.find((e) => e.id === expedition)?.price ?? 0;
+    91→  const total = Math.max(0, subtotal - voucherDiscount + shippingCost);
+    92→
+    93→  // Pre-fill from user data
+    94→  useEffect(() => {
+    95→    if (isAuthenticated && user) {
+    96→      setForm((prev) => ({
+    97→        ...prev,
+    98→        name: user.name || '',
+    99→        phone: user.phone || '',
+   100→        address: user.address || '',
+   101→        city: user.city || '',
+   102→        postalCode: user.postalCode || '',
+   103→      }));
+   104→    }
+   105→  }, [isAuthenticated, user]);
+   106→
+   107→  const handleApplyVoucher = async () => {
+   108→    if (!voucherCode.trim()) return;
+   109→    setVoucherLoading(true);
+   110→    setVoucherError('');
+   111→    try {
+   112→      const res = await fetch('/api/vouchers/validate', {
+   113→        method: 'POST',
+   114→        headers: { 'Content-Type': 'application/json' },
+   115→        body: JSON.stringify({ code: voucherCode.trim().toUpperCase(), total: subtotal }),
+   116→      });
+   117→      const data = await res.json();
+   118→      if (data.success && data.discount > 0) {
+   119→        setVoucherDiscount(data.discount);
+   120→        setVoucherApplied(true);
+   121→        setVoucherError('');
+   122→        toast.success(
+   123→          lang === 'id'
+   124→            ? `Voucher berhasil! Hemat ${formatPrice(data.discount, lang)}`
+   125→            : `Voucher applied! Save ${formatPrice(data.discount, lang)}`
+   126→        );
+   127→      } else {
+   128→        setVoucherDiscount(0);
+   129→        setVoucherApplied(false);
+   130→        setVoucherError(data.message || (lang === 'id' ? 'Voucher tidak valid' : 'Invalid voucher'));
+   131→      }
+   132→    } catch {
+   133→      setVoucherError(lang === 'id' ? 'Gagal menerapkan voucher' : 'Failed to apply voucher');
+   134→    } finally {
+   135→      setVoucherLoading(false);
+   136→    }
+   137→  };
+   138→
+   139→  const validateForm = (): boolean => {
+   140→    const errors: Record<string, string> = {};
+   141→    if (!form.name.trim()) errors.name = lang === 'id' ? 'Nama wajib diisi' : 'Name is required';
+   142→    if (!form.phone.trim()) errors.phone = lang === 'id' ? 'Nomor telepon wajib diisi' : 'Phone is required';
+   143→    if (!form.address.trim()) errors.address = lang === 'id' ? 'Alamat wajib diisi' : 'Address is required';
+   144→    if (!form.city.trim()) errors.city = lang === 'id' ? 'Kota wajib diisi' : 'City is required';
+   145→    if (!form.postalCode.trim()) errors.postalCode = lang === 'id' ? 'Kode pos wajib diisi' : 'Postal code is required';
+   146→    setFormErrors(errors);
+   147→    return Object.keys(errors).length === 0;
+   148→  };
+   149→
+   150→  const goToStep = (step: number) => {
+   151→    if (step === 1 && currentStep === 0) {
+   152→      if (!validateForm()) {
+   153→        toast.error(lang === 'id' ? 'Lengkapi data pengiriman' : 'Please complete shipping information');
+   154→        return;
+   155→      }
+   156→    }
+   157→    setCurrentStep(step);
+   158→    const refs = [addressRef, shippingRef, confirmRef];
+   159→    setTimeout(() => {
+   160→      refs[step]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+   161→    }, 100);
+   162→  };
+   163→
+   164→  const handleSubmit = async () => {
+   165→    if (items.length === 0) {
+   166→      toast.error(lang === 'id' ? 'Keranjang kosong' : 'Cart is empty');
+   167→      return;
+   168→    }
+   169→    if (!validateForm()) {
+   170→      toast.error(lang === 'id' ? 'Lengkapi data pengiriman' : 'Please complete shipping information');
+   171→      return;
+   172→    }
+   173→
+   174→    setSubmitting(true);
+   175→    try {
+   176→      const orderData = {
+   177→        items: items.map((item) => ({
+   178→          bookId: item.book.id,
+   179→          title: item.book.title,
+   180→          quantity: item.quantity,
+   181→          price: item.book.discountPrice ?? item.book.price,
+   182→          format: item.book.format,
+   183→        })),
+   184→        shippingName: form.name,
+   185→        shippingPhone: form.phone,
+   186→        shippingAddr: form.address,
+   187→        shippingCity: form.city,
+   188→        shippingCode: form.postalCode,
+   189→        expedition,
+   190→        shippingCost,
+   191→        paymentMethod: payment,
+   192→        userId: user?.id || null,
+   193→        voucherCode: voucherApplied ? voucherCode.toUpperCase() : null,
+   194→        voucherDisc: voucherDiscount,
+   195→        subtotal,
+   196→        discount: savings + voucherDiscount,
+   197→        total,
+   198→      };
+   199→
+   200→      const res = await fetch('/api/orders', {
+   201→        method: 'POST',
+   202→        headers: { 'Content-Type': 'application/json' },
+   203→        body: JSON.stringify(orderData),
+   204→      });
+   205→
+   206→      const data = await res.json();
+   207→
+   208→      if (data.success) {
+   209→        toast.success(
+   210→          lang === 'id' ? 'Pesanan berhasil dibuat!' : 'Order placed successfully!',
+   211→          { description: data.orderNumber || '' }
+   212→        );
+   213→        clearCart();
+   214→        setPage('order-success', { orderNumber: data.orderNumber });
+   215→      } else {
+   216→        toast.error(data.message || (lang === 'id' ? 'Gagal membuat pesanan' : 'Failed to place order'));
+   217→      }
+   218→    } catch {
+   219→      toast.error(lang === 'id' ? 'Terjadi kesalahan' : 'An error occurred');
+   220→    } finally {
+   221→      setSubmitting(false);
+   222→    }
+   223→  };
+   224→
+   225→  if (items.length === 0) {
+   226→    return (
+   227→      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4">
+   228→        <motion.div
+   229→          initial={{ scale: 0.8, opacity: 0 }}
+   230→          animate={{ scale: 1, opacity: 1 }}
+   231→          className="flex h-24 w-24 items-center justify-center rounded-full"
+   232→          style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))', border: '1px solid rgba(212,175,55,0.2)' }}
+   233→        >
+   234→          <Package className="h-12 w-12 text-[#D4AF37]/50" />
+   235→        </motion.div>
+   236→        <p className="text-muted-foreground font-medium">{t('cart.empty', lang)}</p>
+   237→        <Button
+   238→          variant="outline"
+   239→          onClick={() => setPage('catalog')}
+   240→          className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] transition-all"
+   241→        >
+   242→          {t('cart.continue', lang)}
+   243→        </Button>
+   244→      </div>
+   245→    );
+   246→  }
+   247→
+   248→  const updateField = (field: string, value: string) => {
+   249→    setForm((prev) => ({ ...prev, [field]: value }));
+   250→    if (formErrors[field]) {
+   251→      setFormErrors((prev) => {
+   252→        const next = { ...prev };
+   253→        delete next[field];
+   254→        return next;
+   255→      });
+   256→    }
+   257→  };
+   258→
+   259→  const selectedExpedition = EXPEDITIONS.find((e) => e.id === expedition);
+   260→
+   261→  // Gold focus input class
+   262→  const goldInputClass = `h-10 focus-visible:ring-[${GOLD}]/40 focus-visible:border-[${GOLD}]/50 transition-all`;
+   263→
+   264→  return (
+   265→    <div className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+   266→      {/* Subtle gold radial gradient background */}
+   267→      <div
+   268→        className="pointer-events-none absolute inset-0 -z-10"
+   269→        style={{ background: 'radial-gradient(ellipse 800px 500px at 20% 10%, rgba(212,175,55,0.03) 0%, transparent 70%), radial-gradient(ellipse 600px 400px at 80% 80%, rgba(212,175,55,0.02) 0%, transparent 70%)' }}
+   270→      />
+   271→
+   272→      {/* Back Button + Title */}
+   273→      <motion.div
+   274→        initial={{ opacity: 0, y: -10 }}
+   275→        animate={{ opacity: 1, y: 0 }}
+   276→        className="mb-6"
+   277→      >
+   278→        <button
+   279→          onClick={() => setPage('catalog')}
+   280→          className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-[#D4AF37]"
+   281→        >
+   282→          <ArrowLeft className="h-4 w-4" />
+   283→          {t('general.back', lang)}
+   284→        </button>
+   285→        <h1 className="font-heading text-2xl font-bold sm:text-3xl">{t('checkout.title', lang)}</h1>
+   286→      </motion.div>
+   287→
+   288→      {/* ─── Progress Stepper ─── */}
+   289→      <motion.div
+   290→        initial={{ opacity: 0, y: -5 }}
+   291→        animate={{ opacity: 1, y: 0 }}
+   292→        transition={{ delay: 0.05 }}
+   293→        className="mb-10"
+   294→      >
+   295→        <div className="relative mx-auto max-w-2xl">
+   296→          {/* Progress bar background */}
+   297→          <div className="absolute top-5 left-0 right-0 h-0.5 bg-border" />
+   298→          {/* Animated gold gradient progress bar fill */}
+   299→          <motion.div
+   300→            className="absolute top-5 left-0 h-0.5"
+   301→            style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT})` }}
+   302→            animate={{
+   303→              width: `calc(${(currentStep / (STEPS.length - 1)) * 100}% - ${(currentStep / (STEPS.length - 1)) * 40}px)`,
+   304→            }}
+   305→            transition={{ duration: 0.5, ease: 'easeOut' }}
+   306→          />
+   307→
+   308→          <div className="relative flex items-center justify-between">
+   309→            {STEPS.map((step, idx) => {
+   310→              const Icon = step.icon;
+   311→              const isCompleted = idx < currentStep;
+   312→              const isActive = idx === currentStep;
+   313→              return (
+   314→                <button
+   315→                  key={step.key}
+   316→                  onClick={() => {
+   317→                    if (idx <= currentStep) goToStep(idx);
+   318→                  }}
+   319→                  className="group flex flex-col items-center gap-2"
+   320→                  type="button"
+   321→                >
+   322→                  <motion.div
+   323→                    className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300 sm:h-11 sm:w-11 ${
+   324→                      isCompleted
+   325→                        ? ''
+   326→                        : isActive
+   327→                          ? ''
+   328→                          : 'border-muted-foreground/25 bg-background text-muted-foreground/50'
+   329→                    }`}
+   330→                    style={
+   331→                      isCompleted
+   332→                        ? { borderColor: GOLD, background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#fff', boxShadow: `0 4px 12px -2px ${GOLD}40` }
+   333→                        : isActive
+   334→                          ? { borderColor: GOLD, backgroundColor: `${GOLD}15`, color: GOLD, boxShadow: `0 0 0 4px ${GOLD}15` }
+   335→                          : undefined
+   336→                    }
+   337→                    whileHover={idx <= currentStep ? { scale: 1.05 } : undefined}
+   338→                    whileTap={idx <= currentStep ? { scale: 0.95 } : undefined}
+   339→                  >
+   340→                    {isCompleted ? (
+   341→                      <Check className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={3} />
+   342→                    ) : (
+   343→                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+   344→                    )}
+   345→                  </motion.div>
+   346→                  <span
+   347→                    className={`text-xs font-medium transition-colors sm:text-sm ${
+   348→                      isCompleted || isActive
+   349→                        ? 'text-foreground'
+   350→                        : 'text-muted-foreground/50'
+   351→                    }`}
+   352→                  >
+   353→                    {t(step.labelId, lang)}
+   354→                  </span>
+   355→                </button>
+   356→              );
+   357→            })}
+   358→          </div>
+   359→        </div>
+   360→      </motion.div>
+   361→
+   362→      {/* ─── Two-Column Layout ─── */}
+   363→      <div className="grid gap-8 lg:grid-cols-3">
+   364→        {/* Left Column - Forms */}
+   365→        <div className="flex flex-col gap-6 lg:col-span-2">
+   366→          {/* Step 0: Shipping Address */}
+   367→          <AnimatePresence mode="wait">
+   368→            {currentStep === 0 && (
+   369→              <motion.div
+   370→                key="step-address"
+   371→                ref={addressRef}
+   372→                initial={{ opacity: 0, x: -20 }}
+   373→                animate={{ opacity: 1, x: 0 }}
+   374→                exit={{ opacity: 0, x: 20 }}
+   375→                transition={{ duration: 0.3 }}
+   376→              >
+   377→                <Card className="overflow-hidden" style={{ boxShadow: '0 4px 24px -4px rgba(212,175,55,0.08)' }}>
+   378→                  {/* Gold gradient top border */}
+   379→                  <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT}, ${GOLD})` }} />
+   380→                  <CardContent className="p-5 sm:p-6">
+   381→                    {/* Gold left border section heading */}
+   382→                    <div className="mb-6 flex items-center gap-3">
+   383→                      <div className="h-8 w-1 rounded-full" style={{ background: `linear-gradient(180deg, ${GOLD}, ${GOLD_LIGHT})` }} />
+   384→                      <div className="flex items-center gap-2.5">
+   385→                        <div
+   386→                          className="flex h-8 w-8 items-center justify-center rounded-full"
+   387→                          style={{ backgroundColor: `${GOLD}15` }}
+   388→                        >
+   389→                          <MapPin className="h-4 w-4" style={{ color: GOLD }} />
+   390→                        </div>
+   391→                        <h2 className="font-heading text-lg font-semibold">{t('checkout.address', lang)}</h2>
+   392→                      </div>
+   393→                    </div>
+   394→                    <div className="grid gap-4 sm:grid-cols-2">
+   395→                      <div className="space-y-1.5">
+   396→                        <Label htmlFor="name" className="text-sm font-medium">
+   397→                          {t('checkout.name', lang)} <span className="text-red-500">*</span>
+   398→                        </Label>
+   399→                        <Input
+   400→                          id="name"
+   401→                          value={form.name}
+   402→                          onChange={(e) => updateField('name', e.target.value)}
+   403→                          placeholder={lang === 'id' ? 'Masukkan nama lengkap' : 'Enter full name'}
+   404→                          className={`${goldInputClass} ${formErrors.name ? 'border-red-500' : ''}`}
+   405→                        />
+   406→                        {formErrors.name && (
+   407→                          <p className="text-xs text-red-500">{formErrors.name}</p>
+   408→                        )}
+   409→                      </div>
+   410→                      <div className="space-y-1.5">
+   411→                        <Label htmlFor="phone" className="text-sm font-medium">
+   412→                          {t('checkout.phone', lang)} <span className="text-red-500">*</span>
+   413→                        </Label>
+   414→                        <Input
+   415→                          id="phone"
+   416→                          value={form.phone}
+   417→                          onChange={(e) => updateField('phone', e.target.value)}
+   418→                          placeholder="08xxxxxxxxxx"
+   419→                          className={`${goldInputClass} ${formErrors.phone ? 'border-red-500' : ''}`}
+   420→                        />
+   421→                        {formErrors.phone && (
+   422→                          <p className="text-xs text-red-500">{formErrors.phone}</p>
+   423→                        )}
+   424→                      </div>
+   425→                      <div className="space-y-1.5 sm:col-span-2">
+   426→                        <Label htmlFor="address" className="text-sm font-medium">
+   427→                          {t('checkout.addressField', lang)} <span className="text-red-500">*</span>
+   428→                        </Label>
+   429→                        <Input
+   430→                          id="address"
+   431→                          value={form.address}
+   432→                          onChange={(e) => updateField('address', e.target.value)}
+   433→                          placeholder={lang === 'id' ? 'Jl. Contoh No. 123, RT/RW, Kelurahan, Kecamatan' : 'Street, Ward, District'}
+   434→                          className={`${goldInputClass} ${formErrors.address ? 'border-red-500' : ''}`}
+   435→                        />
+   436→                        {formErrors.address && (
+   437→                          <p className="text-xs text-red-500">{formErrors.address}</p>
+   438→                        )}
+   439→                      </div>
+   440→                      <div className="space-y-1.5">
+   441→                        <Label htmlFor="city" className="text-sm font-medium">
+   442→                          {t('checkout.city', lang)} <span className="text-red-500">*</span>
+   443→                        </Label>
+   444→                        <Input
+   445→                          id="city"
+   446→                          value={form.city}
+   447→                          onChange={(e) => updateField('city', e.target.value)}
+   448→                          placeholder={lang === 'id' ? 'Jakarta Selatan' : 'South Jakarta'}
+   449→                          className={`${goldInputClass} ${formErrors.city ? 'border-red-500' : ''}`}
+   450→                        />
+   451→                        {formErrors.city && (
+   452→                          <p className="text-xs text-red-500">{formErrors.city}</p>
+   453→                        )}
+   454→                      </div>
+   455→                      <div className="space-y-1.5">
+   456→                        <Label htmlFor="postal" className="text-sm font-medium">
+   457→                          {t('checkout.postal', lang)} <span className="text-red-500">*</span>
+   458→                        </Label>
+   459→                        <Input
+   460→                          id="postal"
+   461→                          value={form.postalCode}
+   462→                          onChange={(e) => updateField('postalCode', e.target.value)}
+   463→                          placeholder="12345"
+   464→                          className={`${goldInputClass} ${formErrors.postalCode ? 'border-red-500' : ''}`}
+   465→                        />
+   466→                        {formErrors.postalCode && (
+   467→                          <p className="text-xs text-red-500">{formErrors.postalCode}</p>
+   468→                        )}
+   469→                      </div>
+   470→                    </div>
+   471→                    {/* Gold section divider */}
+   472→                    <Separator className="my-6" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)' }} />
+   473→                    <div className="flex justify-end">
+   474→                      <Button
+   475→                        onClick={() => goToStep(1)}
+   476→                        className="h-11 px-6 font-semibold text-white transition-all hover:shadow-lg hover:shadow-[#D4AF37]/20"
+   477→                        style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})` }}
+   478→                      >
+   479→                        {t('general.next', lang)}
+   480→                        <ChevronRight className="ml-1 h-4 w-4" />
+   481→                      </Button>
+   482→                    </div>
+   483→                  </CardContent>
+   484→                </Card>
+   485→              </motion.div>
+   486→            )}
+   487→          </AnimatePresence>
+   488→
+   489→          {/* Step 1: Expedition & Payment */}
+   490→          <AnimatePresence mode="wait">
+   491→            {currentStep === 1 && (
+   492→              <motion.div
+   493→                key="step-shipping"
+   494→                ref={shippingRef}
+   495→                initial={{ opacity: 0, x: 20 }}
+   496→                animate={{ opacity: 1, x: 0 }}
+   497→                exit={{ opacity: 0, x: -20 }}
+   498→                transition={{ duration: 0.3 }}
+   499→                className="space-y-6"
+   500→              >
+   501→                {/* Back button */}
+   502→                <button
+   503→                  onClick={() => goToStep(0)}
+   504→                  className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-[#D4AF37]"
+   505→                  type="button"
+   506→                >
+   507→                  <ArrowLeft className="h-4 w-4" />
+   508→                  {t('general.back', lang)}
+   509→                </button>
+   510→
+   511→                {/* Expedition */}
+   512→                <Card className="overflow-hidden" style={{ boxShadow: '0 4px 24px -4px rgba(212,175,55,0.08)' }}>
+   513→                  <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT}, ${GOLD})` }} />
+   514→                  <CardContent className="p-5 sm:p-6">
+   515→                    {/* Gold left border section heading */}
+   516→                    <div className="mb-5 flex items-center gap-3">
+   517→                      <div className="h-8 w-1 rounded-full" style={{ background: `linear-gradient(180deg, ${GOLD}, ${GOLD_LIGHT})` }} />
+   518→                      <div className="flex items-center gap-2.5">
+   519→                        <div
+   520→                          className="flex h-8 w-8 items-center justify-center rounded-full"
+   521→                          style={{ backgroundColor: `${GOLD}15` }}
+   522→                        >
+   523→                          <Truck className="h-4 w-4" style={{ color: GOLD }} />
+   524→                        </div>
+   525→                        <h2 className="font-heading text-lg font-semibold">{t('checkout.expedition', lang)}</h2>
+   526→                      </div>
+   527→                    </div>
+   528→                    <RadioGroup value={expedition} onValueChange={setExpedition} className="grid gap-3">
+   529→                      {EXPEDITIONS.map((exp) => {
+   530→                        const isSelected = expedition === exp.id;
+   531→                        return (
+   532→                          <Label
+   533→                            key={exp.id}
+   534→                            htmlFor={exp.id}
+   535→                            className={
+   536→                              'flex cursor-pointer items-center gap-4 rounded-lg border p-4 transition-all ' +
+   537→                              (isSelected
+   538→                                ? 'shadow-md'
+   539→                                : 'border-border hover:border-[#D4AF37]/40')
+   540→                            }
+   541→                            style={
+   542→                              isSelected
+   543→                                ? { borderColor: GOLD, backgroundColor: `${GOLD}08`, boxShadow: `0 4px 16px -4px ${GOLD}20` }
+   544→                                : undefined
+   545→                            }
+   546→                          >
+   547→                            <RadioGroupItem value={exp.id} id={exp.id} />
+   548→                            <div
+   549→                              className="flex h-10 w-10 items-center justify-center rounded-full"
+   550→                              style={{ backgroundColor: isSelected ? `${GOLD}15` : undefined }}
+   551→                            >
+   552→                              <Truck
+   553→                                className="h-5 w-5"
+   554→                                style={{ color: isSelected ? GOLD : undefined }}
+   555→                              />
+   556→                            </div>
+   557→                            <div className="flex-1">
+   558→                              <p
+   559→                                className="text-sm font-semibold"
+   560→                                style={isSelected ? { color: GOLD } : undefined}
+   561→                              >
+   562→                                {exp.name}
+   563→                              </p>
+   564→                              <p className="text-xs text-muted-foreground">
+   565→                                {lang === 'en' ? exp.etaEn : exp.eta}
+   566→                              </p>
+   567→                            </div>
+   568→                            {/* Delivery estimate badge */}
+   569→                            <Badge
+   570→                              variant="secondary"
+   571→                              className="hidden sm:inline-flex text-[10px] font-medium shrink-0"
+   572→                              style={{
+   573→                                backgroundColor: isSelected ? `${GOLD}15` : undefined,
+   574→                                color: isSelected ? GOLD : undefined,
+   575→                              }}
+   576→                            >
+   577→                              <Clock className="h-3 w-3 mr-1" />
+   578→                              {lang === 'en' ? exp.etaEn : exp.eta}
+   579→                            </Badge>
+   580→                            <p
+   581→                              className="text-sm font-bold shrink-0"
+   582→                              style={isSelected ? { color: GOLD } : undefined}
+   583→                            >
+   584→                              {formatPrice(exp.price, lang)}
+   585→                            </p>
+   586→                          </Label>
+   587→                        );
+   588→                      })}
+   589→                    </RadioGroup>
+   590→
+   591→                    {/* Gold section divider */}
+   592→                    <Separator className="my-6" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)' }} />
+   593→
+   594→                    <div className="flex justify-between">
+   595→                      <Button
+   596→                        variant="outline"
+   597→                        onClick={() => goToStep(0)}
+   598→                        className="border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-[#D4AF37] transition-all"
+   599→                      >
+   600→                        <ArrowLeft className="mr-1 h-4 w-4" />
+   601→                        {t('general.back', lang)}
+   602→                      </Button>
+   603→                      <Button
+   604→                        onClick={() => goToStep(2)}
+   605→                        className="h-11 px-6 font-semibold text-white transition-all hover:shadow-lg hover:shadow-[#D4AF37]/20"
+   606→                        style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})` }}
+   607→                      >
+   608→                        {t('general.next', lang)}
+   609→                        <ChevronRight className="ml-1 h-4 w-4" />
+   610→                      </Button>
+   611→                    </div>
+   612→                  </CardContent>
+   613→                </Card>
+   614→
+   615→                {/* Payment Method */}
+   616→                <Card className="overflow-hidden" style={{ boxShadow: '0 4px 24px -4px rgba(212,175,55,0.08)' }}>
+   617→                  <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT}, ${GOLD})` }} />
+   618→                  <CardContent className="p-5 sm:p-6">
+   619→                    {/* Gold left border section heading */}
+   620→                    <div className="mb-5 flex items-center gap-3">
+   621→                      <div className="h-8 w-1 rounded-full" style={{ background: `linear-gradient(180deg, ${GOLD}, ${GOLD_LIGHT})` }} />
+   622→                      <div className="flex items-center gap-2.5">
+   623→                        <div
+   624→                          className="flex h-8 w-8 items-center justify-center rounded-full"
+   625→                          style={{ backgroundColor: `${GOLD}15` }}
+   626→                        >
+   627→                          <CreditCard className="h-4 w-4" style={{ color: GOLD }} />
+   628→                        </div>
+   629→                        <h2 className="font-heading text-lg font-semibold">{t('checkout.payment', lang)}</h2>
+   630→                      </div>
+   631→                    </div>
+   632→                    <RadioGroup value={payment} onValueChange={setPayment} className="grid gap-3 sm:grid-cols-2">
+   633→                      {PAYMENT_METHODS.map((method) => {
+   634→                        const Icon = method.icon;
+   635→                        const isSelected = payment === method.id;
+   636→                        return (
+   637→                          <Label
+   638→                            key={method.id}
+   639→                            htmlFor={method.id}
+   640→                            className={
+   641→                              'flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all ' +
+   642→                              (isSelected
+   643→                                ? 'shadow-md'
+   644→                                : 'border-border hover:border-[#D4AF37]/40')
+   645→                            }
+   646→                            style={
+   647→                              isSelected
+   648→                                ? { borderColor: GOLD, backgroundColor: `${GOLD}08`, boxShadow: `0 4px 16px -4px ${GOLD}20` }
+   649→                                : undefined
+   650→                            }
+   651→                          >
+   652→                            <RadioGroupItem value={method.id} id={method.id} />
+   653→                            <div
+   654→                              className="flex h-10 w-10 items-center justify-center rounded-full"
+   655→                              style={{ backgroundColor: isSelected ? `${GOLD}15` : undefined }}
+   656→                            >
+   657→                              <Icon
+   658→                                className="h-5 w-5"
+   659→                                style={{ color: isSelected ? GOLD : undefined }}
+   660→                              />
+   661→                            </div>
+   662→                            <div className="min-w-0">
+   663→                              <p
+   664→                                className="text-sm font-semibold"
+   665→                                style={isSelected ? { color: GOLD } : undefined}
+   666→                              >
+   667→                                {lang === 'en' && method.nameEn ? method.nameEn : method.name}
+   668→                              </p>
+   669→                              <p className="truncate text-xs text-muted-foreground">
+   670→                                {lang === 'en' && method.descEn ? method.descEn : method.desc}
+   671→                              </p>
+   672→                            </div>
+   673→                          </Label>
+   674→                        );
+   675→                      })}
+   676→                    </RadioGroup>
+   677→                  </CardContent>
+   678→                </Card>
+   679→              </motion.div>
+   680→            )}
+   681→          </AnimatePresence>
+   682→
+   683→          {/* Step 2: Order Confirmation */}
+   684→          <AnimatePresence mode="wait">
+   685→            {currentStep === 2 && (
+   686→              <motion.div
+   687→                key="step-confirm"
+   688→                ref={confirmRef}
+   689→                initial={{ opacity: 0, x: 20 }}
+   690→                animate={{ opacity: 1, x: 0 }}
+   691→                exit={{ opacity: 0, x: -20 }}
+   692→                transition={{ duration: 0.3 }}
+   693→                className="space-y-6"
+   694→              >
+   695→                <button
+   696→                  onClick={() => goToStep(1)}
+   697→                  className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-[#D4AF37]"
+   698→                  type="button"
+   699→                >
+   700→                  <ArrowLeft className="h-4 w-4" />
+   701→                  {t('general.back', lang)}
+   702→                </button>
+   703→
+   704→                {/* Address Summary */}
+   705→                <Card className="overflow-hidden" style={{ boxShadow: '0 4px 24px -4px rgba(212,175,55,0.08)' }}>
+   706→                  <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT}, ${GOLD})` }} />
+   707→                  <CardContent className="p-5 sm:p-6">
+   708→                    <div className="mb-4 flex items-center justify-between">
+   709→                      <div className="flex items-center gap-3">
+   710→                        <div className="h-8 w-1 rounded-full" style={{ background: `linear-gradient(180deg, ${GOLD}, ${GOLD_LIGHT})` }} />
+   711→                        <div className="flex items-center gap-2.5">
+   712→                          <div
+   713→                            className="flex h-8 w-8 items-center justify-center rounded-full"
+   714→                            style={{ backgroundColor: `${GOLD}15` }}
+   715→                          >
+   716→                            <MapPin className="h-4 w-4" style={{ color: GOLD }} />
+   717→                          </div>
+   718→                          <h2 className="font-heading text-lg font-semibold">{t('checkout.address', lang)}</h2>
+   719→                        </div>
+   720→                      </div>
+   721→                      <Button
+   722→                        variant="ghost"
+   723→                        size="sm"
+   724→                        onClick={() => goToStep(0)}
+   725→                        className="text-xs text-[#D4AF37] hover:text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-all"
+   726→                      >
+   727→                        {lang === 'id' ? 'Ubah' : 'Change'}
+   728→                      </Button>
+   729→                    </div>
+   730→                    <div className="rounded-lg p-4 border border-[#D4AF37]/10" style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.04), transparent)' }}>
+   731→                      <p className="font-semibold">{form.name}</p>
+   732→                      <p className="mt-1 text-sm text-muted-foreground">{form.phone}</p>
+   733→                      <p className="mt-1 text-sm text-muted-foreground">{form.address}</p>
+   734→                      <p className="text-sm text-muted-foreground">{form.city}, {form.postalCode}</p>
+   735→                    </div>
+   736→                  </CardContent>
+   737→                </Card>
+   738→
+   739→                {/* Shipping Summary */}
+   740→                <Card className="overflow-hidden" style={{ boxShadow: '0 4px 24px -4px rgba(212,175,55,0.08)' }}>
+   741→                  <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT}, ${GOLD})` }} />
+   742→                  <CardContent className="p-5 sm:p-6">
+   743→                    <div className="mb-4 flex items-center justify-between">
+   744→                      <div className="flex items-center gap-3">
+   745→                        <div className="h-8 w-1 rounded-full" style={{ background: `linear-gradient(180deg, ${GOLD}, ${GOLD_LIGHT})` }} />
+   746→                        <div className="flex items-center gap-2.5">
+   747→                          <div
+   748→                            className="flex h-8 w-8 items-center justify-center rounded-full"
+   749→                            style={{ backgroundColor: `${GOLD}15` }}
+   750→                          >
+   751→                            <Truck className="h-4 w-4" style={{ color: GOLD }} />
+   752→                          </div>
+   753→                          <h2 className="font-heading text-lg font-semibold">{t('checkout.expedition', lang)}</h2>
+   754→                        </div>
+   755→                      </div>
+   756→                      <Button
+   757→                        variant="ghost"
+   758→                        size="sm"
+   759→                        onClick={() => goToStep(1)}
+   760→                        className="text-xs text-[#D4AF37] hover:text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-all"
+   761→                      >
+   762→                        {lang === 'id' ? 'Ubah' : 'Change'}
+   763→                      </Button>
+   764→                    </div>
+   765→                    <div
+   766→                      className="flex items-center justify-between rounded-lg p-4 border border-[#D4AF37]/15"
+   767→                      style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.06), transparent)' }}
+   768→                    >
+   769→                      <div>
+   770→                        <p className="font-semibold">{selectedExpedition?.name}</p>
+   771→                        <div className="flex items-center gap-2 mt-0.5">
+   772→                          <Badge
+   773→                            variant="secondary"
+   774→                            className="text-[10px] font-medium"
+   775→                            style={{ backgroundColor: `${GOLD}15`, color: GOLD }}
+   776→                          >
+   777→                            <Clock className="h-3 w-3 mr-1" />
+   778→                            {selectedExpedition ? (lang === 'en' ? selectedExpedition.etaEn : selectedExpedition.eta) : ''}
+   779→                          </Badge>
+   780→                        </div>
+   781→                      </div>
+   782→                      <p className="font-bold" style={{ color: GOLD }}>
+   783→                        {formatPrice(shippingCost, lang)}
+   784→                      </p>
+   785→                    </div>
+   786→
+   787→                    <Separator className="my-4" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)' }} />
+   788→
+   789→                    {/* Payment Summary */}
+   790→                    <div className="flex items-center gap-2.5">
+   791→                      <div
+   792→                        className="flex h-8 w-8 items-center justify-center rounded-full"
+   793→                        style={{ backgroundColor: `${GOLD}15` }}
+   794→                      >
+   795→                        <CreditCard className="h-4 w-4" style={{ color: GOLD }} />
+   796→                      </div>
+   797→                      <div>
+   798→                        <h3 className="font-heading text-sm font-semibold">{t('checkout.payment', lang)}</h3>
+   799→                        <p className="text-xs text-muted-foreground">
+   800→                          {PAYMENT_METHODS.find((m) => m.id === payment)?.name}
+   801→                        </p>
+   802→                      </div>
+   803→                    </div>
+   804→                  </CardContent>
+   805→                </Card>
+   806→
+   807→                {/* Itemized Order Summary */}
+   808→                <Card className="overflow-hidden" style={{ boxShadow: '0 4px 24px -4px rgba(212,175,55,0.08)' }}>
+   809→                  <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT}, ${GOLD})` }} />
+   810→                  <CardContent className="p-5 sm:p-6">
+   811→                    <div className="mb-4 flex items-center gap-2.5">
+   812→                      <div className="h-8 w-1 rounded-full" style={{ background: `linear-gradient(180deg, ${GOLD}, ${GOLD_LIGHT})` }} />
+   813→                      <div className="flex items-center gap-2.5">
+   814→                        <div
+   815→                          className="flex h-8 w-8 items-center justify-center rounded-full"
+   816→                          style={{ backgroundColor: `${GOLD}15` }}
+   817→                        >
+   818→                          <ShoppingCart className="h-4 w-4" style={{ color: GOLD }} />
+   819→                        </div>
+   820→                        <h2 className="font-heading text-lg font-semibold">{t('checkout.items', lang)}</h2>
+   821→                      </div>
+   822→                      <Badge
+   823→                        variant="secondary"
+   824→                        className="ml-auto text-xs"
+   825→                        style={{ backgroundColor: `${GOLD}15`, color: GOLD }}
+   826→                      >
+   827→                        {items.reduce((sum, i) => sum + i.quantity, 0)} {t('checkout.qty', lang)}
+   828→                      </Badge>
+   829→                    </div>
+   830→                    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+   831→                      {items.map((item) => {
+   832→                        const price = item.book.discountPrice ?? item.book.price;
+   833→                        const lineTotal = price * item.quantity;
+   834→                        return (
+   835→                          <div
+   836→                            key={item.book.id}
+   837→                            className="flex items-center gap-3 rounded-lg border border-border/50 p-3 hover:border-[#D4AF37]/30 transition-colors"
+   838→                          >
+   839→                            <div className="relative h-16 w-12 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+   840→                              <img
+   841→                                src={item.book.coverImage}
+   842→                                alt={item.book.title}
+   843→                                className="h-full w-full object-cover"
+   844→                              />
+   845→                              {item.quantity > 1 && (
+   846→                                <div
+   847→                                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
+   848→                                  style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})` }}
+   849→                                >
+   850→                                  {item.quantity}
+   851→                                </div>
+   852→                              )}
+   853→                            </div>
+   854→                            <div className="min-w-0 flex-1">
+   855→                              <p className="line-clamp-1 text-sm font-medium leading-tight">
+   856→                                {item.book.title}
+   857→                              </p>
+   858→                              <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+   859→                                <span>{item.book.format}</span>
+   860→                                <span>×</span>
+   861→                                <span>{item.quantity}</span>
+   862→                                <span>×</span>
+   863→                                <span>{formatPrice(price, lang)}</span>
+   864→                              </div>
+   865→                            </div>
+   866→                            <p className="flex-shrink-0 text-sm font-bold" style={{ color: GOLD }}>
+   867→                              {formatPrice(lineTotal, lang)}
+   868→                            </p>
+   869→                          </div>
+   870→                        );
+   871→                      })}
+   872→                    </div>
+   873→                  </CardContent>
+   874→                </Card>
+   875→
+   876→                {/* Place Order Button with shimmer effect */}
+   877→                <motion.div whileHover={{ scale: 1.005 }} whileTap={{ scale: 0.995 }}>
+   878→                  <Button
+   879→                    onClick={handleSubmit}
+   880→                    disabled={submitting}
+   881→                    className="relative h-14 w-full overflow-hidden text-base font-bold text-black transition-all hover:shadow-xl hover:shadow-[#D4AF37]/25"
+   882→                    style={{ background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD_LIGHT} 50%, ${GOLD} 100%)` }}
+   883→                  >
+   884→                    {/* Shimmer overlay on hover */}
+   885→                    <motion.div
+   886→                      className="absolute inset-0 pointer-events-none"
+   887→                      style={{
+   888→                        background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%)',
+   889→                        backgroundSize: '200% 100%',
+   890→                      }}
+   891→                      animate={{
+   892→                        backgroundPosition: ['-200% 0', '200% 0'],
+   893→                      }}
+   894→                      transition={{
+   895→                        duration: 2.5,
+   896→                        repeat: Infinity,
+   897→                        ease: 'linear',
+   898→                      }}
+   899→                    />
+   900→                    {submitting ? (
+   901→                      <span className="relative z-10 flex items-center gap-2">
+   902→                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+   903→                        {t('general.loading', lang)}
+   904→                      </span>
+   905→                    ) : (
+   906→                      <span className="relative z-10 flex items-center gap-2">
+   907→                        <Check className="h-5 w-5" />
+   908→                        {t('checkout.placeOrder', lang)}
+   909→                        <span className="ml-1 text-sm font-normal opacity-80">
+   910→                          — {formatPrice(total, lang)}
+   911→                        </span>
+   912→                      </span>
+   913→                    )}
+   914→                  </Button>
+   915→                </motion.div>
+   916→              </motion.div>
+   917→            )}
+   918→          </AnimatePresence>
+   919→        </div>
+   920→
+   921→        {/* Right Column - Order Summary (Sticky) */}
+   922→        <div className="lg:col-span-1">
+   923→          <motion.div
+   924→            initial={{ opacity: 0, x: 20 }}
+   925→            animate={{ opacity: 1, x: 0 }}
+   926→            transition={{ delay: 0.15 }}
+   927→            className="lg:sticky lg:top-24"
+   928→          >
+   929→            <Card className="overflow-hidden" style={{ boxShadow: '0 8px 32px -8px rgba(212,175,55,0.12)' }}>
+   930→              {/* Gold gradient top border */}
+   931→              <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT}, ${GOLD})` }} />
+   932→              <CardContent className="p-5 sm:p-6">
+   933→                <h2 className="mb-4 font-heading text-lg font-semibold flex items-center gap-2">
+   934→                  <span className="h-5 w-1 rounded-full" style={{ background: `linear-gradient(180deg, ${GOLD}, ${GOLD_LIGHT})` }} />
+   935→                  {t('checkout.orderSummary', lang)}
+   936→                </h2>
+   937→
+   938→                {/* Compact Item List with gold dividers */}
+   939→                <div className="mb-4 max-h-60 space-y-0 overflow-y-auto pr-1">
+   940→                  {items.map((item, idx) => {
+   941→                    const price = item.book.discountPrice ?? item.book.price;
+   942→                    return (
+   943→                      <div
+   944→                        key={item.book.id}
+   945→                        className="flex gap-3 py-2.5"
+   946→                        style={{
+   947→                          borderBottom: idx < items.length - 1 ? '1px solid rgba(212,175,55,0.1)' : undefined,
+   948→                        }}
+   949→                      >
+   950→                        <div className="relative h-14 w-10 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+   951→                          <img
+   952→                            src={item.book.coverImage}
+   953→                            alt={item.book.title}
+   954→                            className="h-full w-full object-cover"
+   955→                          />
+   956→                          {item.quantity > 1 && (
+   957→                            <div
+   958→                              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#D4AF37] text-[9px] font-bold text-white"
+   959→                              style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})` }}
+   960→                            >
+   961→                              {item.quantity}
+   962→                            </div>
+   963→                          )}
+   964→                        </div>
+   965→                        <div className="min-w-0 flex-1">
+   966→                          <p className="line-clamp-1 text-xs font-medium">{item.book.title}</p>
+   967→                          <p className="text-[10px] text-muted-foreground">
+   968→                            {item.book.format} × {item.quantity}
+   969→                          </p>
+   970→                          <p className="text-xs font-semibold" style={{ color: GOLD }}>
+   971→                            {formatPrice(price * item.quantity, lang)}
+   972→                          </p>
+   973→                        </div>
+   974→                      </div>
+   975→                    );
+   976→                  })}
+   977→                </div>
+   978→
+   979→                <Separator style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)' }} className="my-4" />
+   980→
+   981→                {/* Voucher with gold focus ring & gold Apply button */}
+   982→                <div className="mb-4">
+   983→                  <div className="flex gap-2">
+   984→                    <div className="relative flex-1">
+   985→                      <Tag className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   986→                      <Input
+   987→                        value={voucherCode}
+   988→                        onChange={(e) => {
+   989→                          setVoucherCode(e.target.value);
+   990→                          if (voucherApplied) {
+   991→                            setVoucherApplied(false);
+   992→                            setVoucherDiscount(0);
+   993→                            setVoucherError('');
+   994→                          }
+   995→                        }}
+   996→                        placeholder={t('cart.voucher', lang)}
+   997→                        className={`pl-8 h-9 text-sm focus-visible:ring-[${GOLD}]/40 focus-visible:border-[${GOLD}]/50 transition-all ${voucherApplied ? 'border-[#D4AF37]/50' : ''}`}
+   998→                        disabled={voucherApplied}
+   999→                        onKeyDown={(e) => e.key === 'Enter' && handleApplyVoucher()}
+  1000→                      />
+  1001→                    </div>
+  1002→                    <Button
+  1003→                      variant="outline"
+  1004→                      size="sm"
+  1005→                      onClick={handleApplyVoucher}
+  1006→                      disabled={voucherLoading || voucherApplied || !voucherCode.trim()}
+  1007→                      className="h-9 shrink-0 px-3 transition-all"
+  1008→                      style={
+  1009→                        voucherApplied
+  1010→                          ? { borderColor: GOLD, backgroundColor: `${GOLD}15`, color: GOLD }
+  1011→                          : { borderColor: GOLD, color: GOLD }
+  1012→                      }
+  1013→                    >
+  1014→                      {voucherLoading
+  1015→                        ? t('general.loading', lang)
+  1016→                        : voucherApplied
+  1017→                          ? '✓'
+  1018→                          : t('cart.applyVoucher', lang)}
+  1019→                    </Button>
+  1020→                  </div>
+  1021→                  {voucherError && (
+  1022→                    <p className="mt-1 text-xs text-red-500">{voucherError}</p>
+  1023→                  )}
+  1024→                  {voucherApplied && voucherDiscount > 0 && (
+  1025→                    <motion.p
+  1026→                      initial={{ opacity: 0, y: -4 }}
+  1027→                      animate={{ opacity: 1, y: 0 }}
+  1028→                      className="mt-1.5 text-xs font-medium flex items-center gap-1"
+  1029→                      style={{ color: GOLD }}
+  1030→                    >
+  1031→                      <Tag className="h-3 w-3" />
+  1032→                      {lang === 'id' ? 'Voucher aktif' : 'Voucher active'}: -{formatPrice(voucherDiscount, lang)}
+  1033→                    </motion.p>
+  1034→                  )}
+  1035→                </div>
+  1036→
+  1037→                <Separator style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent)' }} className="my-4" />
+  1038→
+  1039→                {/* Price Breakdown */}
+  1040→                <div className="flex flex-col gap-2.5">
+  1041→                  <div className="flex items-center justify-between text-sm">
+  1042→                    <span className="text-muted-foreground">{t('cart.subtotal', lang)}</span>
+  1043→                    <span className="font-medium">{formatPrice(subtotal, lang)}</span>
+  1044→                  </div>
+  1045→                  {savings > 0 && (
+  1046→                    <div className="flex items-center justify-between text-sm">
+  1047→                      <span className="text-green-600 dark:text-green-400">{t('cart.discount', lang)}</span>
+  1048→                      <span className="font-medium text-green-600 dark:text-green-400">
+  1049→                        -{formatPrice(savings, lang)}
+  1050→                      </span>
+  1051→                    </div>
+  1052→                  )}
+  1053→                  {voucherApplied && voucherDiscount > 0 && (
+  1054→                    <div className="flex items-center justify-between text-sm">
+  1055→                      <span style={{ color: GOLD }}>Voucher</span>
+  1056→                      <span className="font-medium" style={{ color: GOLD }}>
+  1057→                        -{formatPrice(voucherDiscount, lang)}
+  1058→                      </span>
+  1059→                    </div>
+  1060→                  )}
+  1061→                  <div className="flex items-center justify-between text-sm">
+  1062→                    <span className="text-muted-foreground">{t('cart.shipping', lang)}</span>
+  1063→                    <span className="font-medium">{formatPrice(shippingCost, lang)}</span>
+  1064→                  </div>
+  1065→
+  1066→                  <Separator style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.3), transparent)' }} />
+  1067→
+  1068→                  {/* Gold total line */}
+  1069→                  <div
+  1070→                    className="flex items-center justify-between rounded-lg p-2 -mx-2"
+  1071→                    style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.06), rgba(212,175,55,0.02))' }}
+  1072→                  >
+  1073→                    <span className="font-semibold">{t('cart.total', lang)}</span>
+  1074→                    <span className="text-xl font-bold" style={{ color: GOLD }}>
+  1075→                      {formatPrice(total, lang)}
+  1076→                    </span>
+  1077→                  </div>
+  1078→                </div>
+  1079→              </CardContent>
+  1080→            </Card>
+  1081→          </motion.div>
+  1082→        </div>
+  1083→      </div>
+  1084→    </div>
+  1085→  );
+  1086→}
+  1087→

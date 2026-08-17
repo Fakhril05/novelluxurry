@@ -341,3 +341,26 @@ export function formatPrice(price: number, locale: Locale = 'id'): string {
     maximumFractionDigits: 0,
   }).format(actualPrice);
 }
+
+/**
+ * Format a full-rupiah amount (no *1000 conversion).
+ * Use this for shipping costs, voucher amounts from external APIs,
+ * or any value already in actual Rupiah (not DB "thousands" format).
+ */
+export function formatRupiah(amount: number, locale: Locale = 'id'): string {
+  const value = Math.round(amount);
+  if (locale === 'id') {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  }
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
